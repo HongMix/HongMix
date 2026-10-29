@@ -5,7 +5,7 @@
 <h1 align="center">HongMix</h1>
 
 <p align="center">
-  <b>The free vMix alternative for Mac. A full live production &amp; streaming switcher, native on Apple Silicon (M1–M4). No Windows box required.</b><br>
+  <b>A free live streaming &amp; broadcast switcher for Mac. Native on Apple Silicon (M1–M4). No Windows box required.</b><br>
   vMix-style layout · vMix-compatible API · SRT · RTMP · NDI® · DeckLink
 </p>
 
@@ -90,8 +90,8 @@ Confirmed working on Apple Silicon:
 
 ## FAQ
 
-**Can I run vMix on a Mac?**
-vMix runs on Windows. People usually try Boot Camp (gone on Apple Silicon), Parallels (no GPU passthrough, unstable for live video) or carry a second PC. HongMix is a native Mac switcher with a vMix-style layout and API, so you keep the workflow without the Windows box.
+**I use vMix on Windows. Can I work the same way on a Mac?**
+HongMix borrows vMix's layout and API with deep respect, so the workflow feels familiar on a Mac. It isn't meant to replace vMix, which is an excellent product. It's for the times when all you have is a MacBook.
 
 **Is there a free live switcher for MacBook with SRT and NDI?**
 Yes, that's exactly what HongMix is:
@@ -107,7 +107,7 @@ Yes. HongMix speaks the vMix HTTP (8088) and TCP (8099) API, so the Companion vM
 **Can I use LiveU / SRT feeds, capture cards, DeckLink or an iPhone as a camera?**
 - SRT feeds (e.g. LiveU): connect as caller or listener.
 - Blackmagic DeckLink: detected.
-- USB HDMI capture cards (Elgato, Magewell, generic UVC): detected.
+- USB HDMI capture cards: standard (UVC) cards show up as cameras. A low-cost USB card has been confirmed; Elgato, Magewell and others should work the same way, and reports are welcome.
 - iPhone: works via Continuity Camera.
 
 **Is it OBS?**
