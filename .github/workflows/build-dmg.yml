@@ -1,0 +1,51 @@
+# GitHub의 Apple Silicon macOS 러너에서 빌드하고 HongMix .dmg/.pkg를 아티팩트로 올립니다 (FFmpeg는 LGPL로 직접 빌드).
+# 저장소 Actions 탭 → "Build macOS DMG" → Run workflow, 끝나면 Artifacts에서 DMG 다운로드.
+name: Build macOS DMG
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: macos-15
+    env:
+      DECKLINK_SDK_URL: ${{ secrets.DECKLINK_SDK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Install dependencies
+        run: brew install dylibbundler pkgconf srt dav1d opus libvpx openssl@3
+
+      # Running this step accepts the NDI SDK License Agreement as the repository owner.
+      - name: Install NDI SDK for Apple (optional)
+        continue-on-error: true
+        run: |
+          curl -fsSL -o /tmp/ndi.pkg "https://downloads.ndi.tv/SDK/NDI_SDK_Mac/Install_NDI_SDK_v6_Apple.pkg"
+          sudo installer -pkg /tmp/ndi.pkg -target /
+
+      - name: Fetch DeckLink SDK headers (optional, needs DECKLINK_SDK_URL secret)
+        if: ${{ env.DECKLINK_SDK_URL != '' }}
+        run: |
+          curl -fsSL -o /tmp/dl.zip "$DECKLINK_SDK_URL"
+          unzip -q /tmp/dl.zip -d /tmp/dl
+          cp "$(dirname "$(find /tmp/dl -path '*Mac/include/DeckLinkAPI.h' | head -1)")"/* ThirdParty/DeckLinkSDK/include/
+
+      - name: Build LGPL FFmpeg
+        run: ./scripts/build-ffmpeg-lgpl.sh
+
+      - name: Build DMG
+        run: ./scripts/make-dmg.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HongMix
+          path: |
+            build/dist/*.dmg
+            build/dist/*.pkg
+            build/dist/*.txt
