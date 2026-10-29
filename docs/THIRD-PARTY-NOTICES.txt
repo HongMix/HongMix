@@ -1,0 +1,25 @@
+HongMix — Third-party software notices / 오픈소스 고지
+================================================================
+HongMix © 2026 Hong Seunghoon (홍승훈). HongMix is an independent program. It is not affiliated with
+or endorsed by StudioCoast Pty Ltd (vMix) — "vMix" is mentioned only to describe API compatibility.
+
+FFmpeg — LGPL v3 (configured with --enable-version3, WITHOUT --enable-gpl / --enable-nonfree)
+  libavcodec, libavformat, libavutil, libswscale, libswresample — dynamically linked
+  (HongMix.app/Contents/Frameworks). You may replace them with your own build of the same version.
+  Source: https://ffmpeg.org/releases/  · exact build options: scripts/build-ffmpeg-lgpl.sh in the
+  HongMix source repository. License texts: Contents/Resources/licenses/COPYING.LGPLv3, COPYING.GPLv3
+  Libraries used by this FFmpeg build:
+    SRT (MPL 2.0) https://github.com/Haivision/srt
+    dav1d (BSD-2-Clause) https://code.videolan.org/videolan/dav1d
+    Opus (BSD-3-Clause) https://opus-codec.org
+    libvpx (BSD-3-Clause) https://chromium.googlesource.com/webm/libvpx
+    OpenSSL (Apache 2.0) https://www.openssl.org
+Chromium Embedded Framework (BSD-3-Clause) — see CEF-LICENSE.txt and CREDITS.html (Chromium notices).
+NDI® — NDI® is a registered trademark of Vizrt NDI AB. https://ndi.video
+  HongMix is not a product of NDI; NDI is used only to be compatible with NDI products.
+  The NDI runtime (libndi.dylib), Copyright © NDI, Inc. / Vizrt NDI AB, is redistributed unmodified under the NDI SDK
+  License Agreement; see libndi_licenses.txt. Reverse engineering, modification or circumvention of
+  the NDI runtime or its protocols is prohibited. NDI and its licensors provide it WITHOUT WARRANTY and
+  disclaim liability for any damages arising from its use.
+Blackmagic DeckLink — built with the Blackmagic DeckLink SDK API files; needs Blackmagic Desktop Video
+  installed on the Mac. DeckLink is a trademark of Blackmagic Design Pty Ltd.

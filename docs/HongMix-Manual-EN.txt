@@ -1,0 +1,231 @@
+HongMix 1.2 — User Manual (English)
+================================================================
+A live production switcher for Apple Silicon Macs, with a vMix-style layout, shortcuts and API.
+Made by Hong Seunghoon (홍승훈) · 2026-10-28 · Korea
+Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)
+
+
+1. Installation
+----------------------------------------------------------------
+Requirements: an Apple Silicon Mac (M1–M4 …), macOS 14 or later.
+Everything (FFmpeg, SRT, NDI runtime, Chromium web engine) is bundled inside the app — nothing else to install.
+
+[Option A — recommended] Double-click HongMix-1.2.pkg
+  1) If macOS says "unidentified developer": right-click the file → Open → Open
+     (or System Settings → Privacy & Security → "Open Anyway").
+  2) Continue → Install. HongMix is installed in Applications.
+  3) First launch: if macOS warns, right-click HongMix in Applications → Open → Open (once).
+     (HongMix is not notarized by Apple yet, so macOS asks once.)
+
+[Option B] Open HongMix-1.2.dmg → drag HongMix into Applications
+  - If warned on first launch, right-click the app → Open (once).
+
+On first use macOS asks for permissions:
+  - Camera / Microphone — allow when using camera or mic inputs
+  - Screen Recording — only for Screen/Window capture inputs
+  - Local Network — allow so NDI and SRT devices can be found
+
+
+2. Layout (same as vMix)
+----------------------------------------------------------------
+  [ Preview (orange) | transitions · T-bar · FTB | Output (green) ]
+  [ inputs ................................ | audio mixer ]
+  [ Add Input · Record · External · Stream · MultiCorder · Fullscreen · Overlay · Schedule … ]
+
+- Preview (orange) = what goes next; Output (green) = what is on air.
+- Input box: click = to Preview, double-click = properties, right-click the title = collapse/expand, drag = reorder.
+- Buttons: × close · Quick Play · Cut · Loop · 1–4 overlays · speaker (audio on/off).
+  Closed one by mistake? Press [Undo] at the top.
+- Under each monitor (video files): restart · play/pause · position bar (click/drag) · time.
+  Right-click the bar → Mark In / Mark Out (green/red markers; only that range plays).
+  Click the time to toggle elapsed/remaining; it turns red in the last 10 seconds.
+
+
+3. Basic controls / shortcuts
+----------------------------------------------------------------
+  Space        Cut
+  Return       Quick Play (0.5 s fade by default)
+  1 – 9        input to Preview
+  ⌘1 – ⌘9      input straight to Output (Cut)
+  ⌥1 – ⌥4      transition buttons 1–4
+  ⇧⌘B          FTB (Fade To Black)
+  ⌘I           Add Input
+  ⌘N / ⌘O / ⌘S New / Open / Save project (autosaves every 5 s)
+Settings (⌘,) → Shortcuts lets you map any key to any function (vMix default set included).
+
+- Four transition buttons: button = run, ▾ = effect (Fade/Merge/Wipe/Fly …), number = duration (ms).
+- T-bar: push up for a manual transition with the first effect.
+- Stinger 1·2: transitions with transparent animations (ProRes 4444 MOV …); set media and cut point in ▾.
+
+
+4. Adding inputs
+----------------------------------------------------------------
+- Camera/Capture: built-in camera, USB/Thunderbolt capture (UltraStudio, Magewell, Elgato …).
+  Format: "Automatic" matches the program rate; or pick the exact resolution · frame rate the device offers.
+- Media file: MP4, MOV (incl. ProRes 4444 alpha), MXF, TS, MKV, MP3, WAV …
+- Stream: SRT (Caller/Listener/Rendezvous, passphrase, Stream ID), RTMP (receive), UDP, URL.
+  SRT latency: same as the other side, at least 4× the ping. LiveU etc. connect as Caller to srt://your-IP:port.
+- NDI: sources on the network are found automatically (other subnets: Settings → Network).
+- Colour: bars, black, white, custom colour (with opacity), transparent.
+- Image: PNG (with transparency), JPG …
+- Title: 24 title templates (chapter 6).
+- Screen/Window capture, Web Browser (built-in Chromium, mouse & keyboard), Audio input.
+
+Signal loss / backup: in input Properties → General choose "Picture when lost" and a "Backup input".
+If a live input (SRT/NDI/camera) drops on air, HongMix cuts to the backup and returns when the signal is back.
+
+
+5. Position · split screens (Layers)
+----------------------------------------------------------------
+[Drag to position] Press [Position] at the top right of a monitor → drag a box to move it, the yellow
+  corners to resize. Green guides snap to the centre, edges and safe areas. On Output you can move on-air overlays too.
+  Right-click: reset position · centre · fit to screen.
+[Safe Areas] dashed-rectangle button on Preview: 90 % / 80 % guides.
+
+[Split screens — 4-split, 9-split …]
+  1) Add Input → Colour → "Transparent" (or any background colour)
+  2) That input's ⚙ → Properties → Layers tab
+  3) [Apply Template]: 2-split · 3-split · 4-split (2×2) · 9-split (3×3) · 16-split · 1+3 · 1+5 · PIP …
+  4) Pick an input per box (or [Auto-assign Inputs]), Fill/Fit, gap and border
+  5) Fine-tune by dragging boxes in the preview → send this input to Output or an overlay
+  API: SetLayer Input=split Value=box,input  /  LayerLayout Input=split Value=quad|nine|…
+
+
+6. Titles (templates)
+----------------------------------------------------------------
+Add Input → Title shows every template with a live preview:
+  7 lower thirds · 4 poker · 5 full screen · LIVE/social/logo · countdown/clock/scoreboard · 2 tickers
+⚙ → Edit Title:
+  - drag text and boxes in the big preview to move/resize them
+  - text, colour, gradient, shadow, outline, font, in/out effect (fade · slide · wipe · pop)
+  - add/remove fields, presets, countdown start/stop
+  - [Save as My Template] → appears with ★ in Add Input; [Export to File] to share with other Macs
+API: SetText Input=number SelectedName=Headline.Text Value=text
+
+
+7. Audio
+----------------------------------------------------------------
+- The mixer shows Master plus only the buses in use. [+ Bus] adds buses A–G.
+- Grid icon = Audio Bus Manager (inputs × buses on one screen).
+- Per channel: fader, mute, M/A/B buses, Solo (headphones), → (Audio Auto: audio only while in Output),
+  ⚙ audio settings (EQ, compressor, gate, delay, channel mode).
+- LUFS next to the mixer title: program loudness (EBU R128). S = short-term, I = integrated.
+  Click for targets (−23/−24/−14/−16) and reset.
+- Headphones volume + [Monitor] to listen on the Mac's default output.
+
+
+8. Outputs · recording · streaming
+----------------------------------------------------------------
+- Stream: RTMP (YouTube, Twitch …), SRT (Caller/Listener), custom URL — hardware encoder.
+- Record: MP4/MOV/MKV/MPEG-TS, H.264/HEVC/ProRes, new file every N minutes.
+- External: DeckLink (SDI/HDMI) output.  NDI output: program over the network.
+- MultiCorder: ISO recording per input.
+- Fullscreen: Output/Preview/MultiView on another display (Esc, double-click or right-click to close).
+- Overlay: overlay 1–4 effects, duration, PIP position; stinger setup.
+- Schedule: run any function (start streaming, record, cut …) at set times/days.
+- Snapshot (camera icon): saves the current Output as PNG.
+
+
+9. Health
+----------------------------------------------------------------
+- Top bar: FPS · Render · Max · Drop. Render below the frame time (59.94p ≈ 16.7 ms) is fine.
+- Statistics (bar-chart icon): real fps, jitter and late frames per input; SRT (RTT, loss, buffer);
+  output bitrates; 2-minute health graphs.
+- Output alerts (on screen only, never in the stream): FADE TO BLACK, LOW VOLUME (silent for 5 s while streaming/recording).
+
+
+10. Remote control (vMix-compatible API)
+----------------------------------------------------------------
+- Web remote: http://mac-ip:8088/
+- Phone tally: http://mac-ip:8088/tally
+- vMix Web API: http://mac-ip:8088/api/?Function=Cut  ·  TCP 8099 (vMix TCP API)
+  Companion, Stream Deck and vMix controllers work as they are.
+- Security: Settings › Network › Remote control security — allow network / this Mac only / off, allowed IPs,
+  web/HTTP password. Requests from other websites through a browser are always blocked.
+
+
+11. Language
+----------------------------------------------------------------
+Settings (⌘,) → General → 언어 / Language: 한국어 / English. Switches instantly; streaming and recording continue.
+
+
+12. Troubleshooting
+----------------------------------------------------------------
+- Won't open: right-click → Open (chapter 1).
+- No camera/mic: System Settings → Privacy & Security → Camera/Microphone → allow HongMix.
+- Slow screen capture: allow Screen & System Audio Recording.
+- No NDI sources: allow Local Network; for other subnets add IPs in Settings → Network.
+- SRT glitches: check RTT and loss in Statistics → set latency to at least 4× RTT.
+
+13. Show tools (added in 1.1)
+----------------------------------------------------------------
+[Broadcast delay + DUMP]
+  Stream/Record output settings › Encoding › "Broadcast delay" (5 s – 15 min). The encoded output goes out that much
+  later (no quality loss). The top bar shows "DELAY name · seconds"; in an emergency press the red [DUMP] to throw the
+  delayed part away and go live immediately.  API: SetDelay Value=seconds / DelayDump
+
+[Pre-flight check] checklist icon at the bottom
+  Output signal, live inputs, backups, SRT quality (loss/latency), stream URL/key, recording disk time, audio
+  (silence/clipping/LUFS), renderer and FTB — green/yellow/red. Opens automatically when you press Stream and something is off.
+
+[Rundown (cue sheet)] [Rundown] at the bottom
+  The show's running order: title, length, notes and any number of actions (Fade, overlays, SetText, start recording …).
+  [NEXT] runs the next item. Shows time left/over per item and whether the show is early or late against the plan.
+  "Add from Current Screen" captures the current Output + overlays. Optional auto-advance when time is up.
+  API: RundownNext / RundownPrevious / RundownGo Value=n / RundownReset (Stream Deck, Companion)
+
+[Live captions (CC)] [CC] at the bottom
+  Recognises the programme audio (Master or bus A–G) on this Mac and shows it in a caption input — Korean, English,
+  Spanish, Japanese and more. Optional translation line (download the macOS translation languages once).
+  [Add Caption Input] → put the new 'Live Captions' input on an overlay. An .srt file is saved to ~/Movies/HongMix.
+  Allow 'Speech Recognition' the first time.
+
+[Status board] heartbeat icon at the bottom (colour = worst SRT link)
+  SRT links: traffic light per input/output, 2-minute RTT/loss/rate graphs, recommended latency, loss/drop events.
+  Incidents (blackbox): while streaming/recording, signal loss, frame drops, silence, SRT loss and output errors are
+  saved with the Output pictures ~10 s before and after to ~/Movies/HongMix/Incidents. [Save Report] writes a text report.
+
+[Categories · search] colour tabs left of the inputs
+  ALL + 6 colours. Assign via an input's ⚙ menu › Category; click a tab to filter; right-click a tab to rename;
+  magnifier = search by name/number.
+
+[Recording time left] while recording the top bar shows "x h of recording left" (free disk ÷ current bitrate).
+
+14. New in 1.2
+----------------------------------------------------------------
+[Countdown auto-start] A countdown title starts counting as soon as it goes to Output or an overlay
+  (a finished one starts over). Turn off in ⚙ › Edit Title › Countdown › "Start automatically".
+
+[Triggers] input ⚙ › Properties › Triggers tab
+  Run functions automatically: goes to / leaves Output, goes to / leaves an overlay, video finished (OnCompletion),
+  countdown reached 0. E.g. opener ends → Fade to Camera 1 · countdown 0 → Cut to the opener ·
+  lower third in → SetVolume 40 on the music. Pick "This input" to target itself, "after … ms" to delay, ▶ to test.
+
+[List input] Add Input › Video › Browse…: select several files (⌘/⇧-click) and they play one after another.
+  Properties › List tab: add · remove · move ↑↓ · shuffle · double-click = play that item · "Loop list".
+  API: NextItem · PreviousItem · SelectIndex Value=n · ListAdd Value=path · ListRemove Value=n · ListShuffle
+
+[SRT dual path · return feed] output settings (Stream ⚙)
+  - "Add Backup Path": duplicates the output — change its address to a second server/line and one press of
+    Stream sends both (the show stays up if one line fails).
+  - Add Output › "Return feed": an SRT listener (port 9998, 2.5 Mbps, 300 ms latency) that sends the programme
+    back to the field. Connect from the field as caller to srt://this-Mac-IP:9998. It runs independently of Stream.
+
+[Auto ducking] input ⚙ › Properties › Audio Settings › Auto Ducking
+  On the presenter mic tick "When this input speaks, lower the others"; on music/video tick "Lower this input".
+  Amount (−15 dB), threshold (−38 dB), release (0.9 s). "DUCK" shows next to LUFS while ducking.
+  API: DuckingOn / DuckingOff / SetDuckTrigger · SetDucked Input=… Value=On|Off
+
+[Multitrack recording] Record ⚙ › Multitrack audio › switch on buses (M, A–G) as extra tracks.
+  Track 1 = the audio bus (usually Master), then the extra buses in order — remix mics/music in the edit.
+  API: SetRecordAudioTracks Value=AB
+
+[LUT] input ⚙ › Properties › Colour Adjust › LUT (3D .cube) → choose a file, strength 0–100 %.
+  Converts Log cameras (S-Log3, V-Log, C-Log …) to Rec.709 or applies a look, on the GPU.
+  API: SetLUT Input=… Value=/path/file.cube · SetLUTStrength Value=0–1
+
+[Scopes] waveform icon at the bottom → its own window (good on a second display)
+  Waveform (luma, 0/25/50/75/100 % lines) · RGB parade · vectorscope (75 % bar targets, skin-tone line) · histogram.
+  Source: Output / Preview / any input. Top right: clipping (≥100 %) and black (0 %) percentages.
+
+Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)
