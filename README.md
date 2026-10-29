@@ -5,7 +5,7 @@
 <h1 align="center">HongMix</h1>
 
 <p align="center">
-  <b>A full live production switcher. Native on Apple Silicon. No Windows box required.</b><br>
+  <b>The free vMix alternative for Mac. A full live production &amp; streaming switcher, native on Apple Silicon (M1–M4). No Windows box required.</b><br>
   vMix-style layout · vMix-compatible API · SRT · RTMP · NDI® · DeckLink
 </p>
 
@@ -14,6 +14,12 @@
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
+
+
+<p align="center">
+  <img src="docs/screenshots/hongmix-main.jpg" alt="HongMix main window: multi-camera split with lower third, LIVE bug and ticker on air" width="100%">
+</p>
+<p align="center"><sub>HongMix main window: multi-camera split with lower third, LIVE bug and ticker on air</sub></p>
 
 ---
 
@@ -43,6 +49,8 @@ I love the Mac. And I love **vMix**. For many of us it's the tool that taught us
 I didn't build this to sell anything. I built it **for broadcast engineers around the world** who have wished, at least once, that their Mac could do the job. Now it's in your hands. Please break it, push it, and tell me what you think.
 
 > I love broadcasting, and I love technology. I respect your opinions. — Hong Seunghoon
+
+<p align="center"><img src="docs/screenshots/hongmix-program.jpg" alt="Program output (1080p59.94)" width="80%"><br><sub>Program output (1080p59.94)</sub></p>
 
 ## What's inside
 
@@ -79,6 +87,33 @@ Confirmed working on Apple Silicon:
 - Other Mac models
 
 "It works on my M2 Air with an Elgato" is a great report too. → **[Open an issue](https://github.com/HongMix/HongMix/issues/new/choose)**
+
+## FAQ
+
+**Can I run vMix on a Mac?**
+vMix runs on Windows. People usually try Boot Camp (gone on Apple Silicon), Parallels (no GPU passthrough, unstable for live video) or carry a second PC. HongMix is a native Mac switcher with a vMix-style layout and API, so you keep the workflow without the Windows box.
+
+**Is there a free live switcher for MacBook with SRT and NDI?**
+Yes, that's exactly what HongMix is:
+- SRT listener/caller in and out, with link stats
+- NDI® in/out
+- RTMP in/out
+- Recording
+- All in one free installer
+
+**Does it work with Bitfocus Companion and Stream Deck?**
+Yes. HongMix speaks the vMix HTTP (8088) and TCP (8099) API, so the Companion vMix module connects by pointing it at your Mac's IP.
+
+**Can I use LiveU / SRT feeds, capture cards, DeckLink or an iPhone as a camera?**
+- SRT feeds (e.g. LiveU): connect as caller or listener.
+- Blackmagic DeckLink: detected.
+- USB HDMI capture cards (Elgato, Magewell, generic UVC): detected.
+- iPhone: works via Continuity Camera.
+
+**Is it OBS?**
+No. OBS is a great streaming encoder. HongMix is a production switcher in the vMix tradition: Preview/Program, transitions, overlays, multi-bus audio, titles and a control API.
+
+**Which Macs?** Any Apple Silicon Mac on macOS 14 or later. Intel Macs are not supported.
 
 ## Install
 

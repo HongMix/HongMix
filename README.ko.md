@@ -5,7 +5,7 @@
 <h1 align="center">HongMix</h1>
 
 <p align="center">
-  <b>맥북 하나로 라이브 방송 스위처. 윈도우 PC는 이제 필요 없습니다.</b><br>
+  <b>맥용 무료 vMix 대안. 맥북(M1~M4) 하나로 라이브 방송·송출 스위처. 윈도우 PC는 이제 필요 없습니다.</b><br>
   vMix 스타일 화면 · vMix 호환 API · SRT · RTMP · NDI® · DeckLink
 </p>
 
@@ -14,6 +14,12 @@
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
+
+
+<p align="center">
+  <img src="docs/screenshots/hongmix-main.jpg" alt="HongMix 메인 화면: 4분할 멀티캠 + 하단 자막·LIVE 표시·티커 온에어" width="100%">
+</p>
+<p align="center"><sub>HongMix 메인 화면: 4분할 멀티캠 + 하단 자막·LIVE 표시·티커 온에어</sub></p>
 
 ---
 
@@ -43,6 +49,8 @@ HongMix는 그 답을 바꾸려고 만든 프로그램입니다. Apple Silicon�
 팔려고 만든 프로그램이 아닙니다. "내 맥으로도 이게 됐으면…" 하고 한 번쯤 생각해 본 **전 세계의 방송 기술자들을 위해** 만들었습니다. 이제 여러분 손에 드립니다. 마음껏 써 보시고, 부숴 보시고, 의견을 들려주세요.
 
 > 나는 방송을 사랑하고, 기술을 사랑합니다. 당신들의 의견을 존중합니다. — 홍승훈
+
+<p align="center"><img src="docs/screenshots/hongmix-program.jpg" alt="프로그램 출력 (1080p59.94)" width="80%"><br><sub>프로그램 출력 (1080p59.94)</sub></p>
 
 ## 들어 있는 기능
 
@@ -81,6 +89,38 @@ Apple Silicon 맥에서 동작을 확인했습니다.
 - 다른 맥 모델
 
 "M2 Air + 엘가토에서 잘 됨" 같은 짧은 제보도 큰 도움이 됩니다. → **[의견 남기기 (Issues)](https://github.com/HongMix/HongMix/issues/new/choose)**
+
+## 자주 묻는 질문
+
+**맥에서 vMix 쓸 수 있나요?**
+vMix는 윈도우용입니다. 그동안 방법은 이 정도였습니다.
+- 부트캠프: Apple Silicon에서는 불가
+- Parallels: GPU를 제대로 못 써서 라이브 영상이 불안정
+- 노트북 두 대를 들고 다니기
+
+HongMix는 vMix와 같은 화면 구성과 API를 가진 맥 네이티브 스위처라서, 윈도우 PC 없이 같은 흐름으로 운영할 수 있습니다.
+
+**맥북에서 쓸 수 있는 무료 라이브 스위처, SRT·NDI 되는 거 없나요?**
+HongMix가 바로 그겁니다.
+- SRT 리스너/콜러 입·출력(링크 통계 포함)
+- NDI® 입·출력
+- RTMP 입·출력
+- 녹화
+- 이 모든 게 무료 설치 파일 하나에 들어 있습니다.
+
+**Companion · Stream Deck 연결되나요?**
+됩니다. vMix HTTP(8088)/TCP(8099) API를 그대로 지원합니다. Companion의 vMix 모듈에서 IP만 이 맥으로 바꾸면 연결됩니다.
+
+**LiveU·SRT 피드, 캡처카드, DeckLink, 아이폰 카메라도 되나요?**
+- SRT 피드(LiveU 등): 콜러·리스너로 연결됩니다.
+- Blackmagic DeckLink: 인식됩니다.
+- USB HDMI 캡처카드(엘가토, 매직웰, 하기비전 등 UVC): 인식됩니다.
+- 아이폰: 연속성 카메라로 바로 쓸 수 있습니다.
+
+**OBS랑 뭐가 달라요?**
+OBS는 훌륭한 송출 프로그램입니다. HongMix는 vMix 계열의 프로덕션 스위처입니다. Preview/Program, 전환, 오버레이, 멀티 버스 오디오, 자막, 제어 API 중심이라 쓰는 방식이 다릅니다.
+
+**어떤 맥에서 되나요?** macOS 14 이상의 Apple Silicon 맥(M1~M4)입니다. 인텔 맥은 지원하지 않습니다.
 
 ## 설치
 
