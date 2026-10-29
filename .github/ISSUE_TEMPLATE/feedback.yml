@@ -1,0 +1,14 @@
+name: 💡 의견 · 기능 요청 / Feedback & ideas
+description: 써 보신 소감, 불편한 점, 있었으면 하는 기능
+labels: [feedback]
+body:
+  - type: textarea
+    attributes:
+      label: 의견 / Your feedback
+      description: 어떤 방송(현장)에서 어떻게 쓰셨는지 같이 적어 주시면 큰 도움이 됩니다
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: 분야 / Area
+      options: [입력(SRT·NDI·카메라 등), 스위칭·전환, 자막·그래픽, 오디오, 송출·녹화, 원격 제어(API·Companion), 화면·사용성, 기타]

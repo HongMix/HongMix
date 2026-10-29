@@ -1,0 +1,28 @@
+name: 🐞 버그 제보 / Bug report
+description: 안 되거나 이상하게 동작하는 것을 알려 주세요
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: 무슨 일이 있었나요? / What happened?
+      description: 무엇을 하다가 어떤 결과가 나왔는지, 원래는 어떻게 되어야 하는지
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: 다시 해 보는 방법 / Steps to reproduce
+      placeholder: "1. SRT 입력 추가 (리스너 9000)\n2. Output으로 Cut\n3. ..."
+  - type: input
+    attributes:
+      label: 맥 기종과 macOS / Mac model & macOS
+      placeholder: "MacBook Pro M3 Max, macOS 15.1"
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: HongMix 버전 / Version
+      placeholder: "1.2 (설정 › 정보에서 확인)"
+  - type: textarea
+    attributes:
+      label: 스크린샷·영상 / Screenshots
+      description: 끌어다 놓으면 첨부됩니다
