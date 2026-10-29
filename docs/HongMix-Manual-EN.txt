@@ -7,7 +7,7 @@ Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)
 
 1. Installation
 ----------------------------------------------------------------
-Requirements: an Apple Silicon Mac (M1–M4 …), macOS 14 or later.
+Requirements: an Apple Silicon Mac (M1 and later), macOS 14 or later.
 Everything (FFmpeg, SRT, NDI runtime, Chromium web engine) is bundled inside the app — nothing else to install.
 
 [Option A — recommended] Double-click HongMix-1.2.pkg
