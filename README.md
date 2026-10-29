@@ -5,7 +5,7 @@
 <h1 align="center">HongMix</h1>
 
 <p align="center">
-  <b>A free live streaming &amp; broadcast switcher for Mac. Native on Apple Silicon (M1–M4). No Windows box required.</b><br>
+  <b>A free live streaming &amp; broadcast switcher for Mac. Native on every Apple Silicon Mac (M1 and later). No Windows box required.</b><br>
   vMix-style layout · vMix-compatible API · SRT · RTMP · NDI® · DeckLink
 </p>
 
@@ -32,7 +32,7 @@ HongMix changes that. It is a live production switcher written from scratch for 
 - VideoToolbox for encoding
 - CoreAudio for the sound
 
-No Boot Camp. No virtual machine. No Rosetta.
+No Windows PC. No virtual machine. No Rosetta.
 
 Open the lid. Plug in your camera, your SRT feed and your NDI sources. Go live.
 
