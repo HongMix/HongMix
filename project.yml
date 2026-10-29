@@ -1,0 +1,65 @@
+name: BraceletMix
+options:
+  bundleIdPrefix: com.hongseunghoon
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    ARCHS: arm64
+targets:
+  BraceletMix:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/App
+      - path: Sources/Core
+      - path: Sources/Shaders
+      - path: ThirdParty/DeckLinkSDK/include/DeckLinkAPIDispatch.cpp
+        optional: true
+    settings:
+      base:
+        PRODUCT_NAME: BraceletMix
+        PRODUCT_BUNDLE_IDENTIFIER: com.hongseunghoon.HongMix
+        INFOPLIST_FILE: Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/Core/BraceletMix-Bridging-Header.h
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/Sources/Core"
+          - "$(SRCROOT)/ThirdParty/DeckLinkSDK/include"
+          - "\"/Library/NDI SDK for Apple/include\""
+          - "${HOMEBREW_PREFIX}/include"
+        LIBRARY_SEARCH_PATHS:
+          - "${HOMEBREW_PREFIX}/lib"
+        OTHER_LDFLAGS:
+          - "-lavformat"
+          - "-lavcodec"
+          - "-lavutil"
+          - "-lswscale"
+          - "-lswresample"
+          - "-framework CoreFoundation"
+          - "-framework CoreVideo"
+          - "-framework CoreMedia"
+          - "-framework VideoToolbox"
+        GCC_C_LANGUAGE_STANDARD: gnu11
+        CLANG_CXX_LANGUAGE_STANDARD: c++17
+        GCC_OPTIMIZATION_LEVEL: "2"
+        GCC_WARN_INHIBIT_ALL_WARNINGS: NO
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        MTL_FAST_MATH: YES
+schemes:
+  BraceletMix:
+    build:
+      targets:
+        BraceletMix: all
+    run:
+      config: Debug
+    archive:
+      config: Release

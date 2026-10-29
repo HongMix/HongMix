@@ -1,0 +1,9 @@
+*.xcodeproj/
+build/
+DerivedData/
+.DS_Store
+ThirdParty/DeckLinkSDK/include/*
+!ThirdParty/DeckLinkSDK/include/.gitkeep
+ThirdParty/cef/
+*.dmg
+*.pkg
