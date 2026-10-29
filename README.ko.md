@@ -5,7 +5,7 @@
 <h1 align="center">HongMix</h1>
 
 <p align="center">
-  <b>맥용 무료 라이브 방송·송출 스위처. 맥북(M1~M4) 하나로 충분합니다. 윈도우 PC는 이제 필요 없습니다.</b><br>
+  <b>맥용 무료 라이브 방송·송출 스위처. M1 이후 모든 맥북 하나로 충분합니다. 윈도우 PC는 이제 필요 없습니다.</b><br>
   vMix 스타일 화면 · vMix 호환 API · SRT · RTMP · NDI® · DeckLink
 </p>
 
@@ -32,7 +32,7 @@ HongMix는 그 답을 바꾸려고 만든 프로그램입니다. Apple Silicon�
 - 인코딩은 VideoToolbox를 씁니다.
 - 소리는 CoreAudio로 다룹니다.
 
-부트캠프도, 가상머신도, Rosetta도 필요 없습니다.
+윈도우 PC도, 가상머신도, Rosetta도 필요 없습니다.
 
 뚜껑을 열고 카메라, SRT, NDI를 꽂으면 바로 온에어입니다.
 
@@ -115,7 +115,7 @@ HongMix가 바로 그겁니다.
 **OBS랑 뭐가 달라요?**
 OBS는 훌륭한 송출 프로그램입니다. HongMix는 vMix 계열의 프로덕션 스위처입니다. Preview/Program, 전환, 오버레이, 멀티 버스 오디오, 자막, 제어 API 중심이라 쓰는 방식이 다릅니다.
 
-**어떤 맥에서 되나요?** macOS 14 이상의 Apple Silicon 맥(M1~M4)입니다. 인텔 맥은 지원하지 않습니다.
+**어떤 맥에서 되나요?** macOS 14 이상의 Apple Silicon 맥(M1 이후 전 모델)입니다. 인텔 맥은 지원하지 않습니다.
 
 ## 설치
 
