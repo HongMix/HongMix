@@ -20,6 +20,17 @@
 - 탭을 눌러 프리뷰를 선택하고, 화살표로 타일을 다시 펼칠 수 있습니다.
 - 미디어 재생·오디오 처리와 입력 모니터 표시를 포함한 안정성 개선을 이어가고 있습니다. 세부 변경은 [릴리스 노트](docs/RELEASE-NOTES-1.3.26.md)를 참고하세요.
 
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-main-switcher.jpg" alt="HongMix 1.3.26 메인 스위처와 접힌 입력 탭" width="100%"><br><sub>입력 타일을 번호가 유지되는 세로 탭으로 접기</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-audio-mixer.jpg" alt="HongMix 1.3.26 오디오 믹서" width="100%"><br><sub>오디오 믹서와 채널 조작 화면</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-media-demo.jpg" alt="HongMix 미디어 입력과 재생 조작" width="100%"><br><sub>미디어 입력 및 재생 흐름</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-replay.jpg" alt="HongMix 리플레이 화면" width="100%"><br><sub>리플레이 화면과 타임코드 조작</sub></td>
+  </tr>
+</table>
+
 
 <p align="center">
   <img src="docs/screenshots/hongmix-main.jpg" alt="HongMix 메인 화면: 4분할 멀티캠 + 하단 자막·LIVE 표시·티커 온에어" width="100%">
