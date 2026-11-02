@@ -20,6 +20,17 @@
 - Select a tab to load it into Preview; use its arrow to restore the full tile.
 - Ongoing reliability work covers media playback, audio handling, and input-monitor rendering. See the [release notes](docs/RELEASE-NOTES-1.3.26.md) for details.
 
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-main-switcher.jpg" alt="HongMix 1.3.26 main switcher with folded input tabs" width="100%"><br><sub>Input tiles fold into numbered vertical tabs</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-audio-mixer.jpg" alt="HongMix 1.3.26 audio mixer" width="100%"><br><sub>Audio mixer and channel controls</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-media-demo.jpg" alt="HongMix media input and playback controls" width="100%"><br><sub>Media input and playback workflow</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-replay.jpg" alt="HongMix replay interface" width="100%"><br><sub>Replay interface and timecode controls</sub></td>
+  </tr>
+</table>
+
 
 <p align="center">
   <img src="docs/screenshots/hongmix-main.jpg" alt="HongMix main window: multi-camera split with lower third, LIVE bug and ticker on air" width="100%">
