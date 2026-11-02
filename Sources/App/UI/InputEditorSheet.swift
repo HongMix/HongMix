@@ -29,7 +29,7 @@ struct InputEditorSheet: View {
         var id: String { rawValue }
         var available: Bool {
             switch self {
-            case .list, .photos, .powerpoint, .videoCall, .virtualSet, .replay: return false
+            case .photos, .powerpoint, .videoCall, .virtualSet: return false
             default: return true
             }
         }
@@ -63,6 +63,7 @@ struct InputEditorSheet: View {
             case .stream: return .stream
             case .browser: return .browser
             case .audio: return .audio
+            case .replay: return .replay
             }
         }
     }
@@ -113,7 +114,7 @@ struct InputEditorSheet: View {
         self.editing = editing
         let c = editing?.currentConfig() ?? InputConfig(kind: kind, name: InputEditorSheet.defaultName(kind))
         _cfg = ViewState(initialValue: c)
-        _category = ViewState(initialValue: Category.of(kind))
+        _category = ViewState(initialValue: c.playlist.count > 1 ? .list : Category.of(kind))
         _ndiMode = ViewState(initialValue: kind == .screen ? 1 : 0)
         _nameEdited = ViewState(initialValue: editing != nil)
     }
@@ -131,12 +132,14 @@ struct InputEditorSheet: View {
         case .screen: return "Desktop Capture"
         case .browser: return "Web Browser"
         case .audio: return "Audio Input"
+        case .replay: return "Replay A"
         }
     }
 
     private var kind: InputKind {
         switch category {
         case .video: return .media
+        case .list: return .media
         case .colour: return .color
         case .ndiDesktop: return ndiMode == 1 ? .screen : .ndi
         case .image: return .image
@@ -145,6 +148,7 @@ struct InputEditorSheet: View {
         case .stream: return .stream
         case .browser: return .browser
         case .audio: return .audio
+        case .replay: return .replay
         default: return .media
         }
     }
@@ -209,6 +213,7 @@ struct InputEditorSheet: View {
     @ViewBuilder private var content: some View {
         switch category {
         case .video: videoSection
+        case .list: listSection
         case .colour: colourSection
         case .ndiDesktop: ndiDesktopSection
         case .image: imageSection
@@ -217,6 +222,7 @@ struct InputEditorSheet: View {
         case .stream: streamSection
         case .browser: browserSection
         case .audio: audioSection
+        case .replay: replaySection
         default:
             Section {
                 Text(Lf("%@ 입력은 HongMix에서 아직 지원하지 않습니다.", "\(category.rawValue)"))
@@ -232,22 +238,16 @@ struct InputEditorSheet: View {
             HStack {
                 TextField(L("파일"), text: $cfg.url)
                 Button("Browse…") {
-                    let ps = pickFiles(types: [.movie, .audiovisualContent, .audio, .mpeg4Movie, .quickTimeMovie])
-                    if let p = ps.first {
+                    if let p = pickFile(types: [.movie, .audiovisualContent, .audio, .mpeg4Movie, .quickTimeMovie]) {
                         cfg.url = p
-                        cfg.playlist = ps.count > 1 ? ps : []
+                        cfg.playlist = []
                         cfg.playlistIndex = 0
-                        if !nameEdited { cfg.name = ps.count > 1 ? Lf("리스트 (%@개)", "\(ps.count)") : (p as NSString).lastPathComponent }
+                        if !nameEdited { cfg.name = (p as NSString).lastPathComponent }
                     }
                 }
             }
-            if cfg.playlist.count > 1 {
-                Text(Lf("리스트 입력: %@개 파일을 차례로 재생합니다 (속성 › List 탭에서 순서 변경·추가).", "\(cfg.playlist.count)"))
-                    .font(.caption).foregroundColor(.secondary)
-            } else {
-                Text(L("여러 파일을 한꺼번에 고르면 차례로 재생되는 리스트 입력이 됩니다 (⌘ 또는 ⇧ 클릭)."))
-                    .font(.caption).foregroundColor(.secondary)
-            }
+            Text(L("비디오 입력 하나에는 파일 하나만 연결됩니다. 여러 파일을 차례로 재생하려면 왼쪽의 List 입력을 선택하세요."))
+                .font(.caption).foregroundColor(.secondary)
             Toggle("Loop", isOn: $cfg.loop)
             Toggle(L("Auto Play (Output으로 갈 때 재생)"), isOn: $cfg.autoPlay)
             Toggle(L("Auto Pause (Output에서 빠질 때 일시정지)"), isOn: $cfg.autoPause)
@@ -255,6 +255,52 @@ struct InputEditorSheet: View {
             Toggle(L("하드웨어 디코더 사용 (VideoToolbox)"), isOn: $cfg.hardwareDecode)
             Text(L("MP4, MOV(ProRes 4444 알파 포함), MXF, TS, MKV, AVI, MP3, WAV 등 FFmpeg가 읽는 형식"))
                 .font(.caption).foregroundColor(.secondary)
+        }
+    }
+
+    @ViewBuilder private var listSection: some View {
+        Section(L("List 입력 — 여러 파일을 하나의 재생 순서로 묶기")) {
+            HStack {
+                Button(L("비디오 파일 여러 개 선택…")) {
+                    let paths = pickFiles(types: [.movie, .audiovisualContent, .audio, .mpeg4Movie, .quickTimeMovie])
+                    guard !paths.isEmpty else { return }
+                    cfg.playlist.append(contentsOf: paths)
+                    if cfg.url.isEmpty { cfg.url = cfg.playlist[0] }
+                    cfg.playlistIndex = 0
+                    if !nameEdited { cfg.name = Lf("List (%@)", "\(cfg.playlist.count)") }
+                }
+                if !cfg.playlist.isEmpty {
+                    Button(L("목록 비우기")) { cfg.playlist = []; cfg.url = ""; cfg.playlistIndex = 0 }
+                }
+            }
+            if cfg.playlist.isEmpty {
+                Text(L("여러 파일을 선택하면 이 입력 하나에서 위에서 아래 순서로 재생합니다. 각 파일을 별도 Video 입력으로 만들려면 Video 탭을 사용하세요."))
+                    .font(.caption).foregroundColor(.secondary)
+            } else {
+                List {
+                    ForEach(Array(cfg.playlist.enumerated()), id: \.offset) { index, path in
+                        HStack(spacing: 8) {
+                            Text("\(index + 1)").monospacedDigit().foregroundColor(.secondary).frame(width: 26, alignment: .trailing)
+                            Image(systemName: index == cfg.playlistIndex ? "play.fill" : "film")
+                                .foregroundColor(index == cfg.playlistIndex ? Theme.program : .secondary)
+                            Text((path as NSString).lastPathComponent).lineLimit(1)
+                            Spacer()
+                            Button { if index > 0 { cfg.playlist.swapAt(index, index - 1) } } label: { Image(systemName: "arrow.up") }
+                                .disabled(index == 0)
+                            Button { if index + 1 < cfg.playlist.count { cfg.playlist.swapAt(index, index + 1) } } label: { Image(systemName: "arrow.down") }
+                                .disabled(index + 1 >= cfg.playlist.count)
+                            Button(role: .destructive) { cfg.playlist.remove(at: index) } label: { Image(systemName: "minus.circle") }
+                        }
+                    }
+                }
+                .frame(minHeight: 170)
+                Text(Lf("재생 순서: %@개 파일 · 속성 › List에서 재생 중인 항목과 순서를 관리할 수 있습니다.", "\(cfg.playlist.count)"))
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            Toggle(L("리스트 반복"), isOn: $cfg.loop)
+            Toggle(L("출력 전환 시 자동 재생"), isOn: $cfg.autoPlay)
+            Toggle(L("출력에서 빠질 때 자동 일시정지"), isOn: $cfg.autoPause)
+            Toggle(L("하드웨어 디코더 사용 (VideoToolbox)"), isOn: $cfg.hardwareDecode)
         }
     }
 
@@ -379,7 +425,7 @@ struct InputEditorSheet: View {
                     }
                 }
             }
-            Text(L("투명 PNG는 오버레이(1~4)로 하단 자막·로고에 사용할 수 있습니다."))
+            Text(L("투명 PNG는 오버레이(1~8)로 하단 자막·로고에 사용할 수 있습니다."))
                 .font(.caption).foregroundColor(.secondary)
         }
     }
@@ -519,6 +565,21 @@ struct InputEditorSheet: View {
 
     // MARK: Audio Input
 
+    @ViewBuilder private var replaySection: some View {
+        Section("Instant Replay") {
+            Picker(L("채널"), selection: Binding(get: { cfg.replayChannel }, set: { v in
+                cfg.replayChannel = v
+                if !nameEdited { cfg.name = v == 0 ? "Replay A" : "Replay B" }
+            })) {
+                Text("Replay A").tag(0)
+                Text("Replay B").tag(1)
+            }
+            .pickerStyle(.segmented)
+            Text(L("리플레이 채널 입력입니다. 녹화할 카메라, 화질, 저장 위치는 Replay 창(아래쪽 ⟲ 버튼)에서 정합니다. A·B 두 채널을 모두 추가하면 서로 다른 앵글을 동시에 재생할 수 있습니다."))
+                .font(.caption).foregroundColor(.secondary)
+        }
+    }
+
     @ViewBuilder private var audioSection: some View {
         Section("Audio Input") {
             ForEach(CameraInput.audioDevices(), id: \.uniqueID) { d in
@@ -542,7 +603,7 @@ struct InputEditorSheet: View {
     private var isValid: Bool {
         guard category.available else { return false }
         switch kind {
-        case .media: return !cfg.url.isEmpty
+        case .media: return category == .list ? cfg.playlist.count > 1 : !cfg.url.isEmpty
         case .stream:
             if streamType.needsURL { return !pullURL.isEmpty }
             if streamType.needsHost { return !host.isEmpty }
@@ -663,7 +724,16 @@ struct InputEditorSheet: View {
         c.kind = kind
         switch kind {
         case .stream: c.url = buildStreamURL()
-        case .media: c.lowLatency = false
+        case .media:
+            c.lowLatency = false
+            if category == .list {
+                c.playlistIndex = 0
+                c.url = c.playlist.first ?? ""
+                if !nameEdited { c.name = Lf("List (%@)", "\(c.playlist.count)") }
+            } else {
+                c.playlist = []
+                c.playlistIndex = 0
+            }
         case .title: if c.title == nil { c.title = TitleDocument(template: .lowerThird) }
         case .audio: c.audioFollowsVideo = false
         default: break

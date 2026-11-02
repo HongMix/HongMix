@@ -48,6 +48,7 @@ struct MixParams {
     int transition;   // 0 none, 1 fade, 2 wipe, 3 slide, 4 dip, 5 merge, 6 fly, 7 crosszoom, 8 zoom
     float ftb;
     float outW, outH;
+    int alphaOut;     // 0 opaque (normal), 1 premultiplied alpha, 2 straight alpha (overlay-only key bus)
 };
 
 // Must match `TileParams` in MetalMixer.swift.
@@ -151,22 +152,39 @@ static float3 overlayOver(float3 c, texture2d<float> tex, texture2d<float> texC,
     return o.rgb * a + c * (1.0 - a);
 }
 
-// layers: 0 = A (program), 1 = B (preview/next), 2..5 = overlay 1..4, 6 = stinger
+/// Premultiplied "over" that also accumulates alpha (alpha output buses).
+static float4 overlayOver4(float4 acc, texture2d<float> tex, texture2d<float> texC, sampler smp, float2 uv, constant LayerParams &L,
+                           float dw, float dh) {
+    if (L.has == 0 || L.mixAlpha <= 0.0) return acc;
+    float4 o = sampleLayer(tex, texC, smp, uv, L, dw, dh);
+    float a = o.a * L.mixAlpha;
+    return float4(o.rgb * a + acc.rgb * (1.0 - a), a + acc.a * (1.0 - a));
+}
+
+// layers: 0 = A, 1 = B, 2..9 = overlays 1..8, 10 = stinger
 kernel void mixKernel(texture2d<float> texA [[texture(0)]],
                       texture2d<float> texB [[texture(1)]],
                       texture2d<float> texO1 [[texture(2)]],
                       texture2d<float> texO2 [[texture(3)]],
                       texture2d<float> texO3 [[texture(4)]],
                       texture2d<float> texO4 [[texture(5)]],
-                      texture2d<float> texS [[texture(6)]],
-                      texture2d<float, access::write> outTex [[texture(7)]],
-                      texture2d<float> cA [[texture(8)]],
-                      texture2d<float> cB [[texture(9)]],
-                      texture2d<float> cO1 [[texture(10)]],
-                      texture2d<float> cO2 [[texture(11)]],
-                      texture2d<float> cO3 [[texture(12)]],
-                      texture2d<float> cO4 [[texture(13)]],
-                      texture2d<float> cS [[texture(14)]],
+                      texture2d<float> texO5 [[texture(6)]],
+                      texture2d<float> texO6 [[texture(7)]],
+                      texture2d<float> texO7 [[texture(8)]],
+                      texture2d<float> texO8 [[texture(9)]],
+                      texture2d<float> texS [[texture(10)]],
+                      texture2d<float, access::write> outTex [[texture(11)]],
+                      texture2d<float> cA [[texture(12)]],
+                      texture2d<float> cB [[texture(13)]],
+                      texture2d<float> cO1 [[texture(14)]],
+                      texture2d<float> cO2 [[texture(15)]],
+                      texture2d<float> cO3 [[texture(16)]],
+                      texture2d<float> cO4 [[texture(17)]],
+                      texture2d<float> cO5 [[texture(18)]],
+                      texture2d<float> cO6 [[texture(19)]],
+                      texture2d<float> cO7 [[texture(20)]],
+                      texture2d<float> cO8 [[texture(21)]],
+                      texture2d<float> cS [[texture(22)]],
                       constant MixParams &p [[buffer(0)]],
                       constant LayerParams *layers [[buffer(1)]],
                       uint2 gid [[thread_position_in_grid]]) {
@@ -233,13 +251,21 @@ kernel void mixKernel(texture2d<float> texA [[texture(0)]],
         }
     }
 
-    c = overlayOver(c, texO1, cO1, smp, uv, layers[2], W, H);
-    c = overlayOver(c, texO2, cO2, smp, uv, layers[3], W, H);
-    c = overlayOver(c, texO3, cO3, smp, uv, layers[4], W, H);
-    c = overlayOver(c, texO4, cO4, smp, uv, layers[5], W, H);
-    c *= (1.0 - clamp(p.ftb, 0.0, 1.0));
-    c = overlayOver(c, texS, cS, smp, uv, layers[6], W, H);   // stinger sits above everything
-    outTex.write(float4(c, 1.0), gid);
+    // alpha buses start from a transparent background (layers 0/1 are empty there)
+    float4 acc = p.alphaOut != 0 ? float4(0.0) : float4(c, 1.0);
+    acc = overlayOver4(acc, texO1, cO1, smp, uv, layers[2], W, H);
+    acc = overlayOver4(acc, texO2, cO2, smp, uv, layers[3], W, H);
+    acc = overlayOver4(acc, texO3, cO3, smp, uv, layers[4], W, H);
+    acc = overlayOver4(acc, texO4, cO4, smp, uv, layers[5], W, H);
+    acc = overlayOver4(acc, texO5, cO5, smp, uv, layers[6], W, H);
+    acc = overlayOver4(acc, texO6, cO6, smp, uv, layers[7], W, H);
+    acc = overlayOver4(acc, texO7, cO7, smp, uv, layers[8], W, H);
+    acc = overlayOver4(acc, texO8, cO8, smp, uv, layers[9], W, H);
+    acc *= (1.0 - clamp(p.ftb, 0.0, 1.0));      // FTB fades key and fill together
+    acc = overlayOver4(acc, texS, cS, smp, uv, layers[10], W, H);   // stinger sits above everything
+    if (p.alphaOut == 0) acc.a = 1.0;
+    else if (p.alphaOut == 2 && acc.a > 0.0001) acc.rgb = clamp(acc.rgb / acc.a, 0.0, 1.0);
+    outTex.write(acc, gid);
 }
 
 /// Draws one source into a rectangle of the output (Output 2-4 buses, MultiView tiles).
@@ -349,4 +375,47 @@ kernel void lutKernel(texture2d<float> src [[texture(0)]],
     float3 g = lut.sample(smp, t * ((n - 1.0) / n) + 0.5 / n).rgb;
     rgb = mix(rgb, clamp(g, 0.0, 1.0), clamp(lp.strength, 0.0, 1.0));
     outTex.write(float4(rgb * a, a), gid);
+}
+
+
+// ---- Alpha / Fill & Key per input: fill (+ key from another input) → premultiplied BGRA ----
+
+struct AlphaKeyParams {
+    int mode;        // 1 = opaque (ignore alpha), 2 = key from another input
+    int keyAlpha;    // key signal: 0 = luma of the key input, 1 = its alpha channel
+    int invert;
+    int shaped;      // fill is already multiplied by the key (shaped / premultiplied fill)
+    float clipLow, clipHigh;
+};
+
+kernel void alphaKeyKernel(texture2d<float> fill [[texture(0)]],
+                           texture2d<float, access::write> outTex [[texture(1)]],
+                           texture2d<float> fillC [[texture(2)]],
+                           texture2d<float> key [[texture(3)]],
+                           texture2d<float> keyC [[texture(4)]],
+                           constant LayerParams &LF [[buffer(0)]],
+                           constant LayerParams &LK [[buffer(1)]],
+                           constant AlphaKeyParams &kp [[buffer(2)]],
+                           uint2 gid [[thread_position_in_grid]]) {
+    uint W = outTex.get_width(), H = outTex.get_height();
+    if (gid.x >= W || gid.y >= H) return;
+    constexpr sampler smp(coord::normalized, address::clamp_to_edge, filter::linear);
+    float2 uv = (float2(gid) + 0.5) / float2(W, H);
+    float4 f = srcSample(fill, fillC, smp, uv, LF);
+    if (kp.mode == 1) {                                   // opaque: drop the source alpha
+        float3 rgb = (LF.premul != 0 && f.a > 0.0001) ? f.rgb / f.a : f.rgb;
+        outTex.write(float4(clamp(rgb, 0.0, 1.0), 1.0), gid);
+        return;
+    }
+    float a = 1.0;
+    if (LK.has != 0) {
+        float4 k = srcSample(key, keyC, smp, uv, LK);
+        a = kp.keyAlpha != 0 ? k.a : dot(k.rgb, float3(0.2126, 0.7152, 0.0722));
+        a = clamp((a - kp.clipLow) / max(kp.clipHigh - kp.clipLow, 0.001), 0.0, 1.0);
+        if (kp.invert != 0) a = 1.0 - a;
+    }
+    float3 rgb = (LF.premul != 0 && f.a > 0.0001) ? f.rgb / f.a : f.rgb;    // fill as delivered (no own alpha)
+    // shaped fill already carries the key in its colour → use as premultiplied as-is (clamped to the key)
+    float3 pm = kp.shaped != 0 ? min(rgb, float3(a)) : rgb * a;
+    outTex.write(float4(pm, a), gid);
 }

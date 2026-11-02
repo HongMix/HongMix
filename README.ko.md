@@ -10,10 +10,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 1.2 (베타) 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 1.3.26 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
+
+### 최신 업데이트 · 1.3.26
+- 입력을 접으면 왼쪽의 좁은 세로 탭으로 정리해 빈 타일 공간을 줄입니다. 번호와 입력 순서는 유지됩니다.
+- 탭을 눌러 프리뷰를 선택하고, 화살표로 타일을 다시 펼칠 수 있습니다.
+- 미디어 재생·오디오 처리와 입력 모니터 표시를 포함한 안정성 개선을 이어가고 있습니다. 세부 변경은 [릴리스 노트](docs/RELEASE-NOTES-1.3.26.md)를 참고하세요.
 
 
 <p align="center">
@@ -130,7 +135,7 @@ OBS는 훌륭한 송출 프로그램입니다. HongMix는 vMix 계열의 프로�
 ```bash
 xcode-select --install                 # Command Line Tools (Xcode 없어도 됨)
 ./scripts/build-ffmpeg-lgpl.sh         # LGPL FFmpeg → build/ffmpeg-lgpl (한 번만)
-./scripts/build-cli.sh                 # → build/cli/BraceletMix.app
+./scripts/build-cli.sh                 # → build/cli/HongMix.app
 ./scripts/make-dmg.sh                  # → build/dist/HongMix-<버전>.dmg / .pkg
 ```
 

@@ -9,21 +9,30 @@ class CallbackInput: InputSource {
     func makeCallbacks() -> mc_callbacks {
         var cb = mc_callbacks()
         cb.user = Unmanaged.passUnretained(self).toOpaque()
-        cb.on_video = { user, data, w, h, stride, _ in
+        cb.on_video = { user, data, w, h, stride, pts in
             guard let user = user, let data = data else { return }
             let me = Unmanaged<CallbackInput>.fromOpaque(user).takeUnretainedValue()
-            me.video.ingest(bgra: data, width: Int(w), height: Int(h), stride: Int(stride))
+            me.video.ingest(bgra: data, width: Int(w), height: Int(h), stride: Int(stride), ptsUs: Int64(pts))
         }
-        cb.on_pixelbuffer = { user, pb, _ in
+        cb.on_pixelbuffer = { user, pb, pts in
             guard let user = user, let pb = pb else { return }
             let me = Unmanaged<CallbackInput>.fromOpaque(user).takeUnretainedValue()
             let buffer = Unmanaged<CVPixelBuffer>.fromOpaque(pb).takeUnretainedValue()
-            me.video.ingest(pixelBuffer: buffer)
+            me.video.ingest(pixelBuffer: buffer, ptsUs: Int64(pts))
+        }
+        cb.on_video_drop = { user in
+            guard let user = user else { return }
+            Unmanaged<CallbackInput>.fromOpaque(user).takeUnretainedValue().video.countSourceDrop()
         }
         cb.on_audio = { user, data, frames in
             guard let user = user, let data = data else { return }
             let me = Unmanaged<CallbackInput>.fromOpaque(user).takeUnretainedValue()
+            me.noteAudioFrame()
             me.audio.write(data, frames: Int(frames))
+        }
+        cb.on_audio_presence = { user, present in
+            guard let user = user else { return }
+            Unmanaged<CallbackInput>.fromOpaque(user).takeUnretainedValue().noteAudioTrack(present != 0)
         }
         cb.on_status = { user, state, msg in
             guard let user = user else { return }
@@ -48,6 +57,7 @@ final class FFmpegInput: CallbackInput {
     @Published private(set) var playlistIndex = 0
     var isList: Bool { playlist.count > 1 }
     private let listQueue = DispatchQueue(label: "list.switch", qos: .userInitiated)
+    private var queuedListIndex: Int?
 
     override init(config: InputConfig) {
         super.init(config: config)
@@ -130,6 +140,17 @@ final class FFmpegInput: CallbackInput {
         return ok != 0 ? SRTStats(st) : nil
     }
 
+    /// Decoder that is actually delivering frames, not merely the requested hardware preference.
+    func videoDecodeModeName() -> String {
+        var mode: Int32 = 0
+        withHandle { h in mode = Int32(mc_input_video_decode_mode(h)) }
+        switch mode {
+        case 1: return "VideoToolbox"
+        case 2: return "Software"
+        default: return "Pending"
+        }
+    }
+
     private func withHandle(_ body: (OpaquePointer) -> Void) {
         handleLock.lock()
         if let h = handle { body(h) }
@@ -140,6 +161,7 @@ final class FFmpegInput: CallbackInput {
         let paused = !playing, loop = looping && !isList, rate = self.rate
         let mi = markIn >= 0 ? Int64(markIn * 1_000_000) : -1
         let mo = markOut > 0 ? Int64(markOut * 1_000_000) : -1
+        if paused { audio.clear() }
         withHandle { h in
             mc_input_set_paused(h, paused ? 1 : 0)
             mc_input_set_loop(h, loop ? 1 : 0)
@@ -162,9 +184,25 @@ final class FFmpegInput: CallbackInput {
         var finished: Int32 = 0
         withHandle { h in mc_input_get_position(h, &pos, &dur, &finished) }
         let p = Double(pos) / 1_000_000, d = Double(dur) / 1_000_000
+        // Gapless list hand-off: let the existing FFmpeg thread know the next URL before EOF. It keeps
+        // the same callbacks and audio ring, so opening the next demuxer does not pay a thread/UI restart.
+        // Mixed 4K/1080p and 44.1/48 kHz lists need enough time to open the next demuxer, create
+        // VideoToolbox/audio converters and warm the disk cache before the on-air hand-off.
+        if isList, playing, d > 0, d - p < 5.0, queuedListIndex == nil {
+            let next = playlistIndex + 1 < playlist.count ? playlistIndex + 1 : (looping ? 0 : -1)
+            if next >= 0 {
+                queuedListIndex = next
+                playlist[next].withCString { path in withHandle { mc_input_queue_next($0, path) } }
+            }
+        }
+        if let queued = queuedListIndex, p < 0.5, position > 1.0 {
+            playlistIndex = queued
+            config.url = playlist[queued]
+            queuedListIndex = nil
+        }
         if abs(position - p) > 0.05 { position = p }
         if duration != d { duration = d }
-        if finished != 0 && playing {
+        if finished != 0 && playing && queuedListIndex == nil {
             if isList && (playlistIndex + 1 < playlist.count || looping) {
                 nextItem()            // List input: next file
             } else {
@@ -176,6 +214,7 @@ final class FFmpegInput: CallbackInput {
 
     override func seek(seconds: Double) {
         let us = Int64(max(0, seconds) * 1_000_000)
+        audio.clear() // discard pre-seek PCM; the C scheduler restarts from the requested media PTS
         withHandle { h in mc_input_seek(h, us) }
     }
 
@@ -252,6 +291,12 @@ final class NDIInput: CallbackInput {
         tallyLock.lock()
         if let h = handle { mc_ndi_recv_set_tally(h, program ? 1 : 0, preview ? 1 : 0) }
         tallyLock.unlock()
+    }
+
+    override var linkAlive: Bool {
+        tallyLock.lock()
+        defer { tallyLock.unlock() }
+        return handle.map { mc_ndi_recv_link($0) != 0 } ?? false
     }
 }
 

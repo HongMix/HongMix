@@ -18,7 +18,7 @@ struct OverlaySettingsButton: View {
                 .clipShape(RoundedRectangle(cornerRadius: 3))
         }
         .buttonStyle(.plain)
-        .help(L("오버레이 채널 1~4 / Stinger 설정"))
+        .help(L("오버레이 채널 1~8 / Stinger 설정"))
         .sheet(isPresented: $show) {
             OverlaySettingsSheet().environmentObject(engine)
         }
@@ -34,17 +34,17 @@ struct OverlaySettingsSheet: View {
         VStack(spacing: 0) {
             Text("Overlay Settings").font(.headline).padding()
             Picker("Number", selection: $number) {
-                ForEach(1...4, id: \.self) { Text("Overlay \($0)").tag($0) }
-                ForEach(1...4, id: \.self) { Text("Stinger \($0)").tag(10 + $0) }
+                ForEach(1...SwitcherEngine.overlayCount, id: \.self) { Text("Overlay \($0)").tag($0) }
+                Text("Stinger 1").tag(SwitcherEngine.overlayCount + 1)
             }
             .pickerStyle(.menu)
             .frame(width: 260)
 
             Form {
-                if number <= 4 {
+                if number <= SwitcherEngine.overlayCount {
                     overlaySection(number - 1)
                 } else {
-                    stingerSection(number - 11)
+                    stingerSection(0)
                 }
             }
             .formStyle(.grouped)
@@ -117,7 +117,7 @@ struct OverlaySettingsSheet: View {
             }
             Stepper("Cut Point: \(engine.stingers[i].cutPointMs) ms", value: $engine.stingers[i].cutPointMs,
                     in: 0...10000, step: 50)
-            Text(L("투명 배경 애니메이션(ProRes 4444 MOV 등)을 미디어 입력으로 추가한 뒤 지정하세요. 컷 지점에서 Preview가 Output으로 바뀝니다. Stinger 1·2 버튼은 전환 영역에, 3·4는 API(Stinger3/Stinger4)로 실행합니다."))
+            Text(L("투명 배경 애니메이션(ProRes 4444 MOV 등)을 미디어 입력으로 추가한 뒤 지정하세요. Stinger 1 버튼을 누르면 설정한 컷 지점에서 Preview가 Output으로 전환됩니다."))
                 .font(.caption).foregroundColor(.secondary)
         }
     }

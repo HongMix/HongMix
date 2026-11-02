@@ -1,4 +1,4 @@
-// "BraceletMix Helper" — Chromium sub-process (renderer, GPU, network, audio …) for the embedded browser.
+// "HongMix Helper" — Chromium sub-process (renderer, GPU, network, audio …) for the embedded browser.
 #include "include/cef_app.h"
 #include "include/wrapper/cef_library_loader.h"
 

@@ -30,8 +30,9 @@ final class LayerMeterView: NSView {
         wantsLayer = true
         layer?.backgroundColor = NSColor.black.cgColor
         for (b, m) in zip(bars, masks) {
-            b.colors = [NSColor.systemGreen.cgColor, NSColor.systemGreen.cgColor, NSColor.systemYellow.cgColor, NSColor.systemRed.cgColor]
-            b.locations = [0, 0.7, 0.85, 1]
+            b.colors = [NSColor.systemGreen.cgColor, NSColor.systemYellow.cgColor,
+                        NSColor.systemOrange.cgColor, NSColor.systemRed.cgColor]
+            b.locations = [0, 0.68, 0.84, 0.96]
             b.startPoint = CGPoint(x: 0.5, y: 0); b.endPoint = CGPoint(x: 0.5, y: 1)
             m.backgroundColor = NSColor.white.cgColor
             m.anchorPoint = .zero

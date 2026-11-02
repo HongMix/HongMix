@@ -32,10 +32,11 @@ final class ShortcutManager: ObservableObject {
     private weak var engine: SwitcherEngine?
 
     static let commonFunctions = [
-        "Cut", "Fade", "Merge", "Wipe", "Slide", "Fly", "CrossZoom", "Zoom", "Stinger1", "Stinger2",
+        "Cut", "Fade", "Merge", "Wipe", "Slide", "Fly", "CrossZoom", "Zoom", "Stinger1",
         "QuickPlay", "PreviewInput", "CutDirect", "PreviewInputNext", "PreviewInputPrevious",
         "OverlayInput1", "OverlayInput1In", "OverlayInput1Out", "OverlayInput2", "OverlayInput2In", "OverlayInput2Out",
-        "OverlayInput3", "OverlayInput4", "OverlayInputAllOff", "FadeToBlack",
+        "OverlayInput3", "OverlayInput4", "OverlayInput5", "OverlayInput6", "OverlayInput7", "OverlayInput8",
+        "OverlayInputAllOff", "FadeToBlack",
         "StartStopRecording", "StartStopStreaming", "StartStopExternal", "StartStopMultiCorder", "Fullscreen",
         "Snapshot", "AudioOn", "AudioOff", "Audio", "MasterAudio", "SetVolumeFade",
         "Play", "Pause", "PlayPause", "Restart", "SetText", "StartCountdown", "StopCountdown",

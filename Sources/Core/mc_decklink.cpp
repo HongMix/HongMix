@@ -299,6 +299,7 @@ struct mc_dl_out {
     IDeckLink *device = nullptr;
     IDeckLinkOutput *output = nullptr;
     IDeckLinkMutableVideoFrame *frames[2] = {nullptr, nullptr};
+    IDeckLinkKeyer *keyer = nullptr;   // Fill & Key: frames are BGRA, alpha goes out as the key signal
     int which = 0;
     int width = 0, height = 0;
     pthread_t thread;
@@ -330,7 +331,13 @@ static void *dl_out_thread(void *arg) {
         {
             FrameAccess access(f, true);
             uint8_t *dst = (uint8_t *)access.bytes();
-            if (dst) mc_bgra_to_uyvy(local.data(), o->width * 4, dst, (int)f->GetRowBytes(), o->width, o->height);
+            if (dst && o->keyer) {
+                int rb = (int)f->GetRowBytes();
+                for (int y = 0; y < o->height; y++)
+                    memcpy(dst + (size_t)y * rb, local.data() + (size_t)y * o->width * 4, (size_t)o->width * 4);
+            } else if (dst) {
+                mc_bgra_to_uyvy(local.data(), o->width * 4, dst, (int)f->GetRowBytes(), o->width, o->height);
+            }
         }
         o->output->DisplayVideoFrameSync(f);
 
@@ -350,7 +357,7 @@ static void *dl_out_thread(void *arg) {
 }
 
 extern "C" mc_dl_out *mc_decklink_out_open(int device_index, int width, int height, int fps_num, int fps_den,
-                                           char *err, int errlen) {
+                                           int external_key, char *err, int errlen) {
     auto fail = [&](const char *msg) -> mc_dl_out * {
         if (err && errlen > 0) snprintf(err, errlen, "%s", msg);
         return nullptr;
@@ -386,7 +393,27 @@ extern "C" mc_dl_out *mc_decklink_out_open(int device_index, int width, int heig
         dev->Release();
         return fail("이 장치가 현재 프로그램 포맷을 지원하지 않음");
     }
+    IDeckLinkKeyer *keyer = nullptr;
+    if (external_key) {
+        bool supported = false;
+#if defined(BLACKMAGIC_DECKLINK_API_VERSION) && BLACKMAGIC_DECKLINK_API_VERSION >= 0x0b000000
+        IDeckLinkProfileAttributes *attr = nullptr;
+        if (dev->QueryInterface(IID_IDeckLinkProfileAttributes, (void **)&attr) == S_OK && attr) {
+#else
+        IDeckLinkAttributes *attr = nullptr;
+        if (dev->QueryInterface(IID_IDeckLinkAttributes, (void **)&attr) == S_OK && attr) {
+#endif
+            attr->GetFlag(BMDDeckLinkSupportsExternalKeying, &supported);
+            attr->Release();
+        }
+        if (!supported || dev->QueryInterface(IID_IDeckLinkKeyer, (void **)&keyer) != S_OK || !keyer) {
+            out->Release();
+            dev->Release();
+            return fail("이 DeckLink는 외부 키(Fill & Key)를 지원하지 않음 — Duo 2/Quad 2는 Desktop Video Setup에서 SDI 1·2를 묶어야 합니다");
+        }
+    }
     if (out->EnableVideoOutput(chosen, bmdVideoOutputFlagDefault) != S_OK) {
+        if (keyer) keyer->Release();
         out->Release();
         dev->Release();
         return fail("비디오 출력 활성화 실패 (다른 앱이 사용 중일 수 있음)");
@@ -398,10 +425,17 @@ extern "C" mc_dl_out *mc_decklink_out_open(int device_index, int width, int heig
     o->output = out;
     o->width = width;
     o->height = height;
+    o->keyer = keyer;
+    if (keyer) {
+        keyer->Enable(true);        // external: fill on SDI A, key on SDI B
+        keyer->SetLevel(255);
+    }
     for (int i = 0; i < 2; i++) {
-        if (out->CreateVideoFrame(width, height, width * 2, bmdFormat8BitYUV, bmdFrameFlagDefault, &o->frames[i]) !=
-            S_OK) {
+        BMDPixelFormat pf = keyer ? bmdFormat8BitBGRA : bmdFormat8BitYUV;
+        int rowBytes = keyer ? width * 4 : width * 2;
+        if (out->CreateVideoFrame(width, height, rowBytes, pf, bmdFrameFlagDefault, &o->frames[i]) != S_OK) {
             for (int j = 0; j < i; j++) o->frames[j]->Release();
+            if (keyer) { keyer->Disable(); keyer->Release(); }
             out->DisableAudioOutput();
             out->DisableVideoOutput();
             out->Release();
@@ -435,6 +469,10 @@ extern "C" void mc_decklink_out_close(mc_dl_out *o) {
     pthread_cond_signal(&o->box.cond);
     pthread_mutex_unlock(&o->box.lock);
     pthread_join(o->thread, nullptr);
+    if (o->keyer) {
+        o->keyer->Disable();
+        o->keyer->Release();
+    }
     o->output->DisableAudioOutput();
     o->output->DisableVideoOutput();
     for (auto *f : o->frames)
@@ -459,7 +497,7 @@ extern "C" mc_dl_in *mc_decklink_in_open(int, mc_callbacks, char *err, int errle
     return nullptr;
 }
 extern "C" void mc_decklink_in_close(mc_dl_in *) {}
-extern "C" mc_dl_out *mc_decklink_out_open(int, int, int, int, int, char *err, int errlen) {
+extern "C" mc_dl_out *mc_decklink_out_open(int, int, int, int, int, int, char *err, int errlen) {
     if (err && errlen > 0) snprintf(err, errlen, "DeckLink SDK 없이 빌드됨");
     return nullptr;
 }

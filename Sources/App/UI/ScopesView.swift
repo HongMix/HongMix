@@ -59,7 +59,7 @@ final class ScopeAnalyzer: ObservableObject {
 
     struct Result { let wave, parade, vector, hist: CGImage?; let hi, lo: Double }
 
-    static let cols = 256, rows = 144
+    static let cols = 480, rows = 216     // ~100k samples: smooth traces without costing much
 
     static func analyze(_ pb: CVPixelBuffer, gain: Double) -> Result? {
         let fmt = CVPixelBufferGetPixelFormatType(pb)
@@ -206,7 +206,7 @@ final class ScopeAnalyzer: ObservableObject {
     }
 
     private static func histImage(_ h: [UInt32]) -> CGImage? {
-        let W = 256, H = 128
+        let W = 256, H = 200
         var px = [UInt8](repeating: 0, count: W * H * 4)
         for i in 0..<(W * H) { px[i * 4 + 3] = 255 }
         let m = Float(max(1, (h.max() ?? 1)))
@@ -235,57 +235,137 @@ final class ScopeAnalyzer: ObservableObject {
 struct ScopesView: View {
     @EnvironmentObject var engine: SwitcherEngine
     @StateObject private var scopes = ScopeAnalyzer()
+    @AppStorage("scopesLayout") private var layout = "quad"
+
+    private var sourceName: String {
+        switch scopes.source {
+        case .output: return "Output (Program)"
+        case .preview: return "Preview"
+        case .input(let id):
+            guard let i = engine.input(withID: id) else { return "Output (Program)" }
+            return "\(engine.number(of: i)). \(i.name)"
+        }
+    }
 
     var body: some View {
         VStack(spacing: 8) {
-            HStack {
-                Picker(L("소스"), selection: $scopes.source) {
-                    Text("Output").tag(ScopeAnalyzer.Source.output)
-                    Text("Preview").tag(ScopeAnalyzer.Source.preview)
-                    ForEach(engine.inputs) { i in
-                        Text("\(engine.number(of: i)). \(i.name)").tag(ScopeAnalyzer.Source.input(i.id))
-                    }
-                }
-                .frame(width: 260)
-                Text(L("밝기")).foregroundColor(.secondary)
-                Slider(value: $scopes.gain, in: 0.3...6).frame(width: 120)
-                Spacer()
-                Text(String(format: L("클리핑 %.1f%% · 블랙 %.1f%%"), scopes.clipHigh, scopes.clipLow))
-                    .font(.system(size: 11).monospacedDigit())
-                    .foregroundColor(scopes.clipHigh > 1 ? .orange : .secondary)
-            }
+            toolbar
             GeometryReader { geo in
-                let w = (geo.size.width - 8) / 2, h = (geo.size.height - 8) / 2
-                VStack(spacing: 8) {
-                    HStack(spacing: 8) {
-                        panel(L("웨이브폼 (휘도)"), scopes.waveform).frame(width: w, height: h)
-                        panel(L("RGB 퍼레이드"), scopes.parade).frame(width: w, height: h)
-                    }
-                    HStack(spacing: 8) {
-                        panel(L("벡터스코프"), scopes.vector, square: true).frame(width: w, height: h)
-                        panel(L("히스토그램"), scopes.histogram).frame(width: w, height: h)
-                    }
-                }
+                content(size: geo.size)
             }
         }
         .padding(10)
         .background(Color(white: 0.08))
+        .frame(minWidth: 760, minHeight: 460)
         .onAppear { scopes.start(engine) }
         .onDisappear { scopes.stop() }
     }
 
-    private func panel(_ title: String, _ img: CGImage?, square: Bool = false) -> some View {
-        ZStack(alignment: .topLeading) {
-            Color.black
-            if let img = img {
-                Image(decorative: img, scale: 1)
-                    .resizable()
-                    .interpolation(.medium)
-                    .aspectRatio(square ? 1 : nil, contentMode: square ? .fit : .fill)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    private var toolbar: some View {
+        HStack(spacing: 12) {
+            Menu {
+                Button("Output (Program)") { scopes.source = .output }
+                Button("Preview") { scopes.source = .preview }
+                if !engine.inputs.isEmpty {
+                    Divider()
+                    ForEach(engine.inputs) { i in
+                        Button("\(engine.number(of: i)). \(i.name)") { scopes.source = .input(i.id) }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "video").font(.system(size: 11))
+                    Text(sourceName).lineLimit(1).truncationMode(.tail)
+                }
+                .frame(width: 210, alignment: .leading)
             }
-            Text(title).font(.system(size: 10, weight: .semibold)).foregroundColor(.white.opacity(0.7)).padding(5)
+            .menuStyle(.borderlessButton)
+            .padding(.horizontal, 8).frame(height: 24)
+            .background(RoundedRectangle(cornerRadius: 5).fill(Color(white: 0.17)))
+            .help(L("소스"))
+
+            Picker("", selection: $layout) {
+                Text("4-Up").tag("quad")
+                Text("Waveform").tag("wave")
+                Text("Parade").tag("parade")
+                Text("Vector").tag("vector")
+                Text("Histogram").tag("hist")
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 400)
+
+            HStack(spacing: 6) {
+                Image(systemName: "sun.max").font(.system(size: 11)).foregroundColor(.secondary)
+                Slider(value: $scopes.gain, in: 0.3...6).frame(width: 100)
+            }
+            .help(L("밝기"))
+            Spacer(minLength: 8)
+            Text(String(format: L("클리핑 %.1f%% · 블랙 %.1f%%"), scopes.clipHigh, scopes.clipLow))
+                .font(.system(size: 11).monospacedDigit())
+                .foregroundColor(scopes.clipHigh > 1 ? .orange : .secondary)
+                .lineLimit(1)
         }
+    }
+
+    @ViewBuilder private func content(size: CGSize) -> some View {
+        let gap: CGFloat = 8
+        switch layout {
+        case "wave": panel(L("웨이브폼 (휘도)"), scopes.waveform, ire: true, w: size.width, h: size.height)
+        case "parade": panel(L("RGB 퍼레이드"), scopes.parade, ire: true, w: size.width, h: size.height)
+        case "vector": panel(L("벡터스코프"), scopes.vector, square: true, w: size.width, h: size.height)
+        case "hist": panel(L("히스토그램"), scopes.histogram, w: size.width, h: size.height)
+        default:
+            let w = (size.width - gap) / 2, h = (size.height - gap) / 2
+            VStack(spacing: gap) {
+                HStack(spacing: gap) {
+                    panel(L("웨이브폼 (휘도)"), scopes.waveform, ire: true, w: w, h: h)
+                    panel(L("RGB 퍼레이드"), scopes.parade, ire: true, w: w, h: h)
+                }
+                HStack(spacing: gap) {
+                    panel(L("벡터스코프"), scopes.vector, square: true, w: w, h: h)
+                    panel(L("히스토그램"), scopes.histogram, w: w, h: h)
+                }
+            }
+        }
+    }
+
+    /// One scope tile. Traces stretch to the tile (vectorscope stays square); nothing draws outside it.
+    private func panel(_ title: String, _ img: CGImage?, square: Bool = false, ire: Bool = false,
+                       w: CGFloat, h: CGFloat) -> some View {
+        let w = max(10, w), h = max(10, h)
+        let top: CGFloat = 20, side: CGFloat = ire ? 30 : 0
+        let plotW = max(1, w - side - 6), plotH = max(1, h - top - 6)
+        return ZStack(alignment: .topLeading) {
+            Color.black
+            Text(title).font(.system(size: 10, weight: .semibold)).foregroundColor(.white.opacity(0.7))
+                .padding(.leading, 7).padding(.top, 4)
+            Group {
+                if let img = img {
+                    if square {
+                        let d = min(plotW, plotH)
+                        Image(decorative: img, scale: 1).resizable().interpolation(.high)
+                            .frame(width: d, height: d)
+                            .frame(width: plotW, height: plotH)
+                    } else {
+                        Image(decorative: img, scale: 1).resizable().interpolation(.high)
+                            .frame(width: plotW, height: plotH)
+                    }
+                } else {
+                    Text(L("신호 없음")).font(.system(size: 11)).foregroundColor(.secondary)
+                        .frame(width: plotW, height: plotH)
+                }
+            }
+            .offset(x: side + 3, y: top)
+            if ire {
+                ForEach([0, 25, 50, 75, 100], id: \.self) { v in
+                    Text("\(v)").font(.system(size: 9).monospacedDigit()).foregroundColor(Color(white: 0.5))
+                        .frame(width: side - 4, alignment: .trailing)
+                        .offset(x: 0, y: top + plotH * CGFloat(100 - v) / 100 - 6)
+                }
+            }
+        }
+        .frame(width: w, height: h)
         .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 }

@@ -26,12 +26,12 @@
 // NSApplication subclass (Info.plist NSPrincipalClass). CEF requires the app to implement
 // CefAppProtocol so Chromium knows when -sendEvent: is on the stack.
 #if MC_HAVE_CEF
-@interface BraceletMixApplication : NSApplication <CefAppProtocol> {
+@interface HongMixApplication : NSApplication <CefAppProtocol> {
 @private
     BOOL handlingSendEvent_;
 }
 @end
-@implementation BraceletMixApplication
+@implementation HongMixApplication
 - (BOOL)isHandlingSendEvent { return handlingSendEvent_; }
 - (void)setHandlingSendEvent:(BOOL)handlingSendEvent { handlingSendEvent_ = handlingSendEvent; }
 - (void)sendEvent:(NSEvent *)event {
@@ -40,9 +40,9 @@
 }
 @end
 #else
-@interface BraceletMixApplication : NSApplication
+@interface HongMixApplication : NSApplication
 @end
-@implementation BraceletMixApplication
+@implementation HongMixApplication
 @end
 #endif
 
@@ -285,7 +285,7 @@ int mc_web_available(void) {
     NSString *fw = [[[NSBundle mainBundle] privateFrameworksPath]
         stringByAppendingPathComponent:@"Chromium Embedded Framework.framework/Chromium Embedded Framework"];
     NSString *helper = [[[NSBundle mainBundle] privateFrameworksPath]
-        stringByAppendingPathComponent:@"BraceletMix Helper.app/Contents/MacOS/BraceletMix Helper"];
+        stringByAppendingPathComponent:@"HongMix Helper.app/Contents/MacOS/HongMix Helper"];
     return [[NSFileManager defaultManager] fileExistsAtPath:fw] &&
            [[NSFileManager defaultManager] fileExistsAtPath:helper] && !g_failed;
 }
@@ -326,11 +326,11 @@ int mc_web_init(void) {
     s.external_message_pump = true;
     s.multi_threaded_message_loop = false;
     s.log_severity = LOGSEVERITY_WARNING;
-    CefString(&s.browser_subprocess_path) = bundlePath(@"Contents/Frameworks/BraceletMix Helper.app/Contents/MacOS/BraceletMix Helper");
+    CefString(&s.browser_subprocess_path) = bundlePath(@"Contents/Frameworks/HongMix Helper.app/Contents/MacOS/HongMix Helper");
     CefString(&s.framework_dir_path) = bundlePath(@"Contents/Frameworks/Chromium Embedded Framework.framework");
     CefString(&s.main_bundle_path) = std::string([[[NSBundle mainBundle] bundlePath] UTF8String]);
     NSString *support = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES) firstObject];
-    NSString *cache = [support stringByAppendingPathComponent:@"BraceletMix/Browser"];
+    NSString *cache = [support stringByAppendingPathComponent:@"HongMix/Browser"];
     [[NSFileManager defaultManager] createDirectoryAtPath:cache withIntermediateDirectories:YES attributes:nil error:nil];
     CefString(&s.root_cache_path) = std::string([cache UTF8String]);
     CefString(&s.cache_path) = std::string([[cache stringByAppendingPathComponent:@"Default"] UTF8String]);

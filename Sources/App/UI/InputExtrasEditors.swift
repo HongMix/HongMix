@@ -1,6 +1,62 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import AVFoundation
+import CoreMedia
+
+private struct PlaylistMediaSpec: Sendable {
+    var video = "—"
+    var audio = "—"
+    var needsConversion = false
+}
+
+/// Lightweight, read-only preflight. Results are cached for the properties window lifetime and never
+/// modify the media. AVFoundation does the probing off the UI thread so a long list cannot freeze air.
+@MainActor private final class PlaylistMediaInspector: ObservableObject {
+    @Published private(set) var specs: [String: PlaylistMediaSpec] = [:]
+
+    func inspect(_ paths: [String]) {
+        for path in paths where specs[path] == nil {
+            specs[path] = PlaylistMediaSpec(video: L("분석 중…"), audio: "", needsConversion: false)
+            Task {
+                let result = await Self.read(path)
+                specs[path] = result
+            }
+        }
+    }
+
+    nonisolated private static func read(_ path: String) async -> PlaylistMediaSpec {
+        let asset = AVURLAsset(url: URL(fileURLWithPath: path))
+        do {
+            let tracks = try await asset.load(.tracks)
+            var out = PlaylistMediaSpec()
+            if let v = tracks.first(where: { $0.mediaType == .video }) {
+                let size = try await v.load(.naturalSize)
+                let fps = try await v.load(.nominalFrameRate)
+                let formats = try await v.load(.formatDescriptions)
+                let codec = formats.first.map { fourCC(CMFormatDescriptionGetMediaSubType($0)) } ?? "?"
+                out.video = String(format: "%dx%d · %.2f fps · %@", Int(abs(size.width)), Int(abs(size.height)), fps, codec)
+                out.needsConversion = abs(Double(fps) - 59.94) > 0.02 || Int(abs(size.width)) != 1920 || Int(abs(size.height)) != 1080
+            }
+            if let a = tracks.first(where: { $0.mediaType == .audio }) {
+                let formats = try await a.load(.formatDescriptions)
+                if let f = formats.first, let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(f)?.pointee {
+                    out.audio = String(format: "%.0f Hz · %d ch · %@", asbd.mSampleRate, asbd.mChannelsPerFrame,
+                                       fourCC(asbd.mFormatID))
+                    if abs(asbd.mSampleRate - 48_000) > 1 || asbd.mChannelsPerFrame != 2 { out.needsConversion = true }
+                }
+            }
+            return out
+        } catch {
+            return PlaylistMediaSpec(video: L("분석 실패"), audio: error.localizedDescription, needsConversion: true)
+        }
+    }
+
+    nonisolated private static func fourCC(_ n: FourCharCode) -> String {
+        let bytes: [UInt8] = [UInt8((n >> 24) & 255), UInt8((n >> 16) & 255), UInt8((n >> 8) & 255), UInt8(n & 255)]
+        return String(bytes: bytes, encoding: .macOSRoman)?.trimmingCharacters(in: .whitespaces) ?? "?"
+    }
+}
 
 /// Input Properties › Triggers (vMix Triggers): run functions on air / off air / at the end / at countdown 0.
 struct TriggersEditor: View {
@@ -94,6 +150,7 @@ struct TriggersEditor: View {
 struct ListEditor: View {
     @ObservedObject var input: FFmpegInput
     @ViewState private var selection: Int? = nil
+    @StateObject private var inspector = PlaylistMediaInspector()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -121,6 +178,11 @@ struct ListEditor: View {
                             .frame(width: 16)
                         Text("\(k + 1). " + (path as NSString).lastPathComponent)
                             .fontWeight(k == input.playlistIndex ? .semibold : .regular)
+                        if let s = inspector.specs[path] {
+                            Text(s.video + (s.audio.isEmpty ? "" : " · " + s.audio))
+                                .font(.caption2).foregroundColor(s.needsConversion ? .yellow : .green).lineLimit(1)
+                                .help(s.needsConversion ? L("재생 가능 · HongMix가 출력 규격과 48 kHz 오디오로 자동 변환합니다.") : L("출력 규격과 일치"))
+                        }
                         Spacer()
                         Text((path as NSString).deletingLastPathComponent).font(.caption).foregroundColor(.secondary).lineLimit(1)
                     }
@@ -131,10 +193,15 @@ struct ListEditor: View {
             }
             .frame(minHeight: 260)
             Toggle(L("리스트 반복 (마지막 다음에 처음으로)"), isOn: $input.looping)
+            Label(L("규격이 달라도 재생됩니다. 노란색은 내부 변환, 초록색은 출력 규격 일치를 뜻합니다. 원본 파일은 변경하지 않습니다."),
+                  systemImage: "waveform.badge.magnifyingglass")
+                .font(.caption).foregroundColor(.secondary)
             Text(L("더블클릭 = 그 항목 재생. 한 파일이 끝나면 다음 파일이 자동으로 이어집니다. 마지막 파일이 끝나면 OnCompletion 트리거가 실행됩니다. API: NextItem · PreviousItem · SelectIndex Value=n · ListAdd · ListRemove · ListShuffle"))
                 .font(.caption).foregroundColor(.secondary)
         }
         .padding(.vertical, 6)
+        .onAppear { inspector.inspect(input.playlist) }
+        .onChange(of: input.playlist) { _, paths in inspector.inspect(paths) }
     }
 
     private func addFiles() {
@@ -218,6 +285,70 @@ struct DuckingSection: View {
             }
             Text(L("설정(양·레벨·시간)은 모든 입력에 공통입니다. 줄어드는 중에는 믹서 제목 옆에 DUCK 표시가 나옵니다."))
                 .font(.caption).foregroundColor(.secondary)
+        }
+    }
+}
+
+
+/// Key tab: where this input's transparency comes from (built-in alpha / opaque / key from another input).
+struct AlphaKeySection: View {
+    @EnvironmentObject var engine: SwitcherEngine
+    @ObservedObject var input: InputSource
+
+    private var builtIn: String {
+        switch input.kind {
+        case .ndi: return L("NDI 알파(BGRA)를 그대로 씁니다.")
+        case .media: return L("ProRes 4444 · 애니메이션 · PNG 시퀀스 · VP9 알파 파일의 알파를 그대로 씁니다.")
+        case .image: return L("PNG · TIFF의 알파를 그대로 씁니다.")
+        case .browser: return L("웹 브라우저 탭의 '투명 배경'을 켜면 알파가 생깁니다.")
+        case .title: return L("타이틀은 항상 알파가 있습니다.")
+        case .decklink: return L("SDI에는 알파가 없습니다 — Key 신호가 들어오는 다른 DeckLink 입력을 'Key 입력'으로 지정하세요.")
+        case .stream: return L("H.264/HEVC 스트림에는 알파가 없습니다 — Key용 스트림을 따로 받아 'Key 입력'으로 지정하세요.")
+        default: return L("이 소스에는 알파가 없습니다.")
+        }
+    }
+
+    var body: some View {
+        Section(L("알파 / Fill & Key")) {
+            Picker(L("알파 소스"), selection: $input.alphaKey.mode) {
+                Text(L("소스 자체 알파 (기본)")).tag("auto")
+                Text(L("알파 무시 (불투명)")).tag("opaque")
+                Text(L("다른 입력을 Key로 사용 (Fill + Key)")).tag("key")
+            }
+            if input.alphaKey.mode == "auto" {
+                Text(builtIn).font(.caption).foregroundColor(.secondary)
+            }
+            if input.alphaKey.mode == "key" {
+                Picker(L("Key 입력"), selection: $input.alphaKey.keyInputID) {
+                    Text(L("선택 안 함")).tag("")
+                    ForEach(engine.inputs.filter { $0.id != input.id }) { i in
+                        Text("\(engine.number(of: i)). \(i.name)").tag(i.id.uuidString)
+                    }
+                }
+                Picker(L("Key 신호"), selection: $input.alphaKey.keySignal) {
+                    Text(L("밝기 (Luma) — SDI Key 신호")).tag("luma")
+                    Text(L("알파 채널")).tag("alpha")
+                }
+                .pickerStyle(.segmented)
+                Picker(L("Fill 형태"), selection: $input.alphaKey.shaped) {
+                    Text(L("Shaped (Premultiplied)")).tag(true)
+                    Text(L("Unshaped (Straight)")).tag(false)
+                }
+                .pickerStyle(.segmented)
+                Toggle(L("Key 반전"), isOn: $input.alphaKey.invert)
+                HStack {
+                    Text(L("Clip 아래")).frame(width: 70, alignment: .leading)
+                    Slider(value: $input.alphaKey.clipLow, in: 0...0.9)
+                    Text(String(format: "%.0f%%", input.alphaKey.clipLow * 100)).frame(width: 40).monospacedDigit()
+                }
+                HStack {
+                    Text(L("Clip 위")).frame(width: 70, alignment: .leading)
+                    Slider(value: $input.alphaKey.clipHigh, in: 0.1...1)
+                    Text(String(format: "%.0f%%", input.alphaKey.clipHigh * 100)).frame(width: 40).monospacedDigit()
+                }
+                Text(L("Fill = 이 입력, Key = 위에서 고른 입력(흰색 = 보임, 검정 = 투명). 두 신호는 같은 장비에서 같은 타이밍으로 들어와야 가장자리가 맞습니다 (DeckLink SDI 1·2 권장). Key 입력은 화면에 쓰지 않아도 계속 받습니다."))
+                    .font(.caption).foregroundColor(.secondary)
+            }
         }
     }
 }

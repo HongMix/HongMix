@@ -15,6 +15,10 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdatomic.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreVideo/CoreVideo.h>
@@ -69,12 +73,26 @@ struct mc_output {
     mc_srt *srt_live;
 
     // broadcast delay (output thread only, except dump_req)
-    AVPacket **dq;            // FIFO of held packets
-    int64_t *dq_release;      // wall time (us) each may go out
+    struct dq_ent *dq;        // FIFO of held packets (in RAM or spooled to disk)
     int dq_head, dq_count, dq_cap;
     atomic_int dump_req;
     int delay_off;            // set after a dump: no delay until restart
+
+    // disk spool for long delays (cfg.delay_dir): packets go into ~1-minute segment files
+    char *spool_dir;          // our own subfolder, removed on close
+    int spool_failed;         // could not create/write → new packets stay in RAM
+    int w_fd, w_seg, r_fd, r_seg, low_seg;
+    int64_t w_off, w_seg_t0;
+    int64_t disk_bytes;       // bytes currently held on disk
+    uint8_t *rbuf; int rbuf_cap;
 };
+
+typedef struct dq_ent {
+    AVPacket *mem;            // packet in RAM, or NULL when on disk
+    int64_t release;          // wall time (us) it may go out
+    int64_t off, pts, dts, duration;
+    int size, seg, stream_index, flags;
+} dq_ent;
 
 typedef struct {
     AVFormatContext *oc;
@@ -423,30 +441,170 @@ static int osession_open(mc_output *o, osession *s, char *err, int errlen) {
 }
 
 // ---- broadcast delay queue (output thread) ----
+#ifndef SPOOL_SEG_US
+#define SPOOL_SEG_US   (60LL * 1000000)       // new segment file every minute …
+#endif
+#define SPOOL_SEG_MAX  (512LL * 1024 * 1024)  // … or every 512 MB
+
+static void spool_path(mc_output *o, int seg, char *buf, size_t n) {
+    snprintf(buf, n, "%s/seg%06d.bin", o->spool_dir, seg);
+}
+
+static int spool_open(mc_output *o) {
+    if (o->spool_dir || o->spool_failed || !o->cfg.delay_dir || !o->cfg.delay_dir[0]) return o->spool_dir != NULL;
+    char d[1024];
+    snprintf(d, sizeof(d), "%s/HongMix-delay-%d-%lld", o->cfg.delay_dir, (int)getpid(), (long long)mc_now_us());
+    mkdir(o->cfg.delay_dir, 0755);
+    if (mkdir(d, 0700) != 0 && errno != EEXIST) {
+        o->spool_failed = 1;
+        if (o->status_cb) o->status_cb(o->user, MC_STATE_RUNNING, "딜레이: 디스크 버퍼 폴더를 만들 수 없어 메모리로 진행");
+        return 0;
+    }
+    o->spool_dir = strdup(d);
+    o->w_fd = o->r_fd = -1;
+    o->w_seg = o->r_seg = o->low_seg = 0;
+    o->w_off = 0;
+    o->w_seg_t0 = 0;
+    return 1;
+}
+
+/* Deletes segment files nobody needs any more (everything before the oldest held disk packet). */
+static void spool_gc(mc_output *o) {
+    if (!o->spool_dir) return;
+    int keep = o->w_fd >= 0 ? o->w_seg : o->w_seg + 1;
+    for (int i = 0; i < o->dq_count; i++) {
+        dq_ent *e = &o->dq[(o->dq_head + i) % o->dq_cap];
+        if (!e->mem) { keep = e->seg; break; }
+    }
+    char path[1100];
+    while (o->low_seg < keep) {
+        if (o->r_fd >= 0 && o->r_seg == o->low_seg) { close(o->r_fd); o->r_fd = -1; }
+        spool_path(o, o->low_seg, path, sizeof(path));
+        unlink(path);
+        o->low_seg++;
+    }
+}
+
+static void spool_close(mc_output *o) {
+    if (!o->spool_dir) return;
+    if (o->w_fd >= 0) close(o->w_fd);
+    if (o->r_fd >= 0) close(o->r_fd);
+    o->w_fd = o->r_fd = -1;
+    char path[1100];
+    for (int i = o->low_seg; i <= o->w_seg; i++) { spool_path(o, i, path, sizeof(path)); unlink(path); }
+    rmdir(o->spool_dir);
+    free(o->spool_dir);
+    o->spool_dir = NULL;
+    o->disk_bytes = 0;
+    free(o->rbuf);
+    o->rbuf = NULL;
+    o->rbuf_cap = 0;
+}
+
+/* Appends the packet data to the current segment. 0 = ok (e filled), -1 = keep it in RAM. */
+static int spool_write(mc_output *o, const AVPacket *pkt, dq_ent *e) {
+    if (!spool_open(o)) return -1;
+    int64_t now = mc_now_us();
+    if (o->w_fd >= 0 && (now - o->w_seg_t0 >= SPOOL_SEG_US || o->w_off >= SPOOL_SEG_MAX)) {
+        close(o->w_fd);
+        o->w_fd = -1;
+        o->w_seg++;
+    }
+    if (o->w_fd < 0) {
+        char path[1100];
+        spool_path(o, o->w_seg, path, sizeof(path));
+        o->w_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        o->w_off = 0;
+        o->w_seg_t0 = now;
+        if (o->w_fd < 0) goto fail;
+    }
+    {
+        const uint8_t *p = pkt->data;
+        int left = pkt->size;
+        while (left > 0) {
+            ssize_t n = write(o->w_fd, p, (size_t)left);
+            if (n < 0 && errno == EINTR) continue;
+            if (n <= 0) goto fail;
+            p += n; left -= (int)n;
+        }
+    }
+    e->mem = NULL;
+    e->off = o->w_off;
+    e->seg = o->w_seg;
+    o->w_off += pkt->size;
+    o->disk_bytes += pkt->size;
+    return 0;
+fail:
+    // disk full / unplugged: from here on the delay is held in RAM (what is already on disk still airs)
+    if (o->w_fd >= 0 && ftruncate(o->w_fd, o->w_off) != 0) { /* best effort */ }
+    o->spool_failed = 1;
+    if (o->status_cb) o->status_cb(o->user, MC_STATE_RUNNING, "딜레이: 디스크 공간 부족 또는 쓰기 실패 — 이후 구간은 메모리로 계속");
+    return -1;
+}
+
+/* Reads a spooled packet back. NULL = lost (read error). */
+static AVPacket *spool_read(mc_output *o, const dq_ent *e) {
+    if (o->r_fd < 0 || o->r_seg != e->seg) {
+        if (o->r_fd >= 0) close(o->r_fd);
+        char path[1100];
+        spool_path(o, e->seg, path, sizeof(path));
+        o->r_fd = open(path, O_RDONLY);
+        o->r_seg = e->seg;
+        if (o->r_fd < 0) return NULL;
+    }
+    AVPacket *p = av_packet_alloc();
+    if (!p || av_new_packet(p, e->size) < 0) { av_packet_free(&p); return NULL; }
+    int got = 0;
+    while (got < e->size) {
+        ssize_t n = pread(o->r_fd, p->data + got, (size_t)(e->size - got), e->off + got);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) { av_packet_free(&p); return NULL; }
+        got += (int)n;
+    }
+    p->pts = e->pts; p->dts = e->dts; p->duration = e->duration;
+    p->stream_index = e->stream_index; p->flags = e->flags;
+    return p;
+}
+
 static void dq_push(mc_output *o, AVPacket *pkt, int64_t release) {
     if (o->dq_count == o->dq_cap) {
         int nc = o->dq_cap ? o->dq_cap * 2 : 4096;
-        AVPacket **nq = calloc(nc, sizeof(*nq));
-        int64_t *nr = calloc(nc, sizeof(*nr));
-        for (int i = 0; i < o->dq_count; i++) {
-            nq[i] = o->dq[(o->dq_head + i) % o->dq_cap];
-            nr[i] = o->dq_release[(o->dq_head + i) % o->dq_cap];
-        }
-        free(o->dq); free(o->dq_release);
-        o->dq = nq; o->dq_release = nr; o->dq_head = 0; o->dq_cap = nc;
+        dq_ent *nq = calloc(nc, sizeof(*nq));
+        for (int i = 0; i < o->dq_count; i++) nq[i] = o->dq[(o->dq_head + i) % o->dq_cap];
+        free(o->dq);
+        o->dq = nq; o->dq_head = 0; o->dq_cap = nc;
     }
     int t = (o->dq_head + o->dq_count) % o->dq_cap;
-    o->dq[t] = av_packet_clone(pkt);
-    o->dq_release[t] = release;
+    dq_ent *e = &o->dq[t];
+    memset(e, 0, sizeof(*e));
+    e->release = release;
+    e->pts = pkt->pts; e->dts = pkt->dts; e->duration = pkt->duration;
+    e->size = pkt->size; e->stream_index = pkt->stream_index; e->flags = pkt->flags;
+    // side data (rare: encoder parameter changes) only survives in RAM
+    int disk = o->cfg.delay_dir && o->cfg.delay_dir[0] && !o->spool_failed && pkt->side_data_elems == 0;
+    if (!disk || spool_write(o, pkt, e) != 0) e->mem = av_packet_clone(pkt);
     o->dq_count++;
 }
 
-static void dq_clear(mc_output *o) {
-    while (o->dq_count > 0) {
-        av_packet_free(&o->dq[o->dq_head]);
-        o->dq_head = (o->dq_head + 1) % o->dq_cap;
-        o->dq_count--;
+/* Removes the head entry; returns its packet (caller frees) or NULL when only dropping. */
+static AVPacket *dq_pop(mc_output *o, int want) {
+    dq_ent *e = &o->dq[o->dq_head];
+    AVPacket *p = NULL;
+    if (e->mem) {
+        if (want) p = e->mem; else av_packet_free(&e->mem);
+        e->mem = NULL;
+    } else {
+        if (want) p = spool_read(o, e);
+        o->disk_bytes -= e->size;
     }
+    o->dq_head = (o->dq_head + 1) % o->dq_cap;
+    o->dq_count--;
+    return p;
+}
+
+static void dq_clear(mc_output *o) {
+    while (o->dq_count > 0) dq_pop(o, 0);
+    spool_close(o);
 }
 
 /* Writes held packets whose time has come. `all` = write everything. Handles a pending dump. */
@@ -455,24 +613,26 @@ static int dq_flush(mc_output *o, osession *s, int all) {
         // keep from the newest video keyframe on (decoders need one), drop the rest, go live
         int keep_from = -1;
         for (int i = o->dq_count - 1; i >= 0; i--) {
-            AVPacket *p = o->dq[(o->dq_head + i) % o->dq_cap];
-            if (s->vst && p->stream_index == s->vst->index && (p->flags & AV_PKT_FLAG_KEY)) { keep_from = i; break; }
+            dq_ent *e = &o->dq[(o->dq_head + i) % o->dq_cap];
+            if (s->vst && e->stream_index == s->vst->index && (e->flags & AV_PKT_FLAG_KEY)) { keep_from = i; break; }
         }
         int drop = keep_from < 0 ? o->dq_count : keep_from;
-        for (int i = 0; i < drop; i++) {
-            av_packet_free(&o->dq[o->dq_head]);
-            o->dq_head = (o->dq_head + 1) % o->dq_cap;
-            o->dq_count--;
-        }
+        for (int i = 0; i < drop; i++) dq_pop(o, 0);
         o->delay_off = 1;
         all = 1;
+        spool_gc(o);
     }
     int64_t now = mc_now_us();
-    while (o->dq_count > 0 && (all || o->dq_release[o->dq_head] <= now)) {
-        AVPacket *p = o->dq[o->dq_head];
-        o->dq[o->dq_head] = NULL;
-        o->dq_head = (o->dq_head + 1) % o->dq_cap;
-        o->dq_count--;
+    int popped = 0;
+    while (o->dq_count > 0 && (all || o->dq[o->dq_head].release <= now)) {
+        AVPacket *p = dq_pop(o, 1);
+        popped = 1;
+        if (!p) {   // unreadable from disk: skip it (decoder recovers at the next keyframe)
+            pthread_mutex_lock(&o->lock);
+            o->stats.frames_dropped++;
+            pthread_mutex_unlock(&o->lock);
+            continue;
+        }
         int size = p->size;
         o->io_deadline_us = o->is_network ? mc_now_us() + 5000000 : 0;
         int ret = av_interleaved_write_frame(s->oc, p);
@@ -489,10 +649,13 @@ static int dq_flush(mc_output *o, osession *s, int all) {
         }
         pthread_mutex_unlock(&o->lock);
     }
+    if (popped) spool_gc(o);
     pthread_mutex_lock(&o->lock);
     o->stats.delay_buffered_ms = o->dq_count > 0
-        ? (int)((o->cfg.delay_ms > 0 ? o->cfg.delay_ms : 0) - (o->dq_release[o->dq_head] - now) / 1000) : 0;
+        ? (int)((o->cfg.delay_ms > 0 ? o->cfg.delay_ms : 0) - (o->dq[o->dq_head].release - now) / 1000) : 0;
     if (o->stats.delay_buffered_ms < 0) o->stats.delay_buffered_ms = 0;
+    o->stats.delay_on_disk = o->spool_dir != NULL && !o->spool_failed;
+    o->stats.delay_disk_bytes = o->disk_bytes;
     pthread_mutex_unlock(&o->lock);
     return 0;
 }
@@ -511,11 +674,22 @@ static int write_packets(mc_output *o, osession *s, AVCodecContext *enc, AVStrea
             break;
         }
         if (ret < 0) break;
+        if (o->cfg.packet_cb) {
+            // instant replay: hand the encoded frame to the replay store instead of muxing it
+            if (st == s->vst)
+                o->cfg.packet_cb(o->cfg.packet_user, pkt->data, pkt->size, pkt->pts + o->base_tick,
+                                 (pkt->flags & AV_PKT_FLAG_KEY) != 0);
+            pthread_mutex_lock(&o->lock);
+            o->stats.bytes_written += pkt->size;
+            pthread_mutex_unlock(&o->lock);
+            av_packet_unref(pkt);
+            continue;
+        }
         av_packet_rescale_ts(pkt, enc->time_base, st->time_base);
         pkt->stream_index = st->index;
         int size = pkt->size;
         if (o->cfg.delay_ms > 0 && !o->delay_off) {
-            // broadcast delay: hold the encoded packet (≈ bitrate × delay of RAM, no re-encode, no quality loss)
+            // broadcast delay: hold the encoded packet (RAM, or disk segments for long delays; no re-encode, no quality loss)
             dq_push(o, pkt, mc_now_us() + (int64_t)o->cfg.delay_ms * 1000);
             av_packet_unref(pkt);
             ret = dq_flush(o, s, 0);
@@ -860,6 +1034,8 @@ mc_output *mc_output_open(const mc_output_config *cfg, mc_status_cb status_cb, v
     o->url = strdup(cfg->url);
     o->format = cfg->format ? strdup(cfg->format) : NULL;
     o->vcodec = cfg->video_codec ? strdup(cfg->video_codec) : NULL;
+    o->cfg.delay_dir = cfg->delay_dir && cfg->delay_dir[0] ? strdup(cfg->delay_dir) : NULL;
+    o->w_fd = o->r_fd = -1;
     o->cfg.url = o->url;
     o->cfg.format = o->format;
     o->cfg.video_codec = o->vcodec;
@@ -880,6 +1056,7 @@ mc_output *mc_output_open(const mc_output_config *cfg, mc_status_cb status_cb, v
         free(o->url);
         free(o->format);
         free(o->vcodec);
+        free((char *)o->cfg.delay_dir);
         free(o);
         return NULL;
     }
@@ -1004,7 +1181,7 @@ void mc_output_close(mc_output *o) {
     free(o->vcodec);
     dq_clear(o);
     free(o->dq);
-    free(o->dq_release);
+    free((char *)o->cfg.delay_dir);
     free(o);
 }
 

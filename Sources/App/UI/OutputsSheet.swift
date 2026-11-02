@@ -109,6 +109,10 @@ struct BusSourcesBar: View {
                     Menu {
                         Button(L("Output (프로그램)")) { engine.setBusSource(b, .program) }
                         Button(L("Clean (오버레이 제외)")) { engine.setBusSource(b, .clean) }
+                        Section(L("Fill & Key (투명 배경, 오버레이만)")) {
+                            Button(L("Overlay 알파 (Premultiplied)")) { engine.setBusSource(b, .overlaysAlpha) }
+                            Button(L("Overlay 알파 (Straight)")) { engine.setBusSource(b, .overlaysAlphaStraight) }
+                        }
                         Button("Preview") { engine.setBusSource(b, .preview) }
                         Button("MultiView") { engine.setBusSource(b, .multiview) }
                         Section(L("입력")) {
@@ -200,6 +204,8 @@ struct OutputEditor: View {
                     if mc_ndi_available() == 0 {
                         Text(L("NDI 런타임이 설치되어 있지 않습니다.")).foregroundColor(.orange)
                     }
+                    Text(L("알파(Fill & Key)를 보내려면 위 비디오 소스를 'Output 2~4'로 하고, 그 Output을 'Overlay 알파'로 지정하세요. NDI는 보통 Straight를 씁니다."))
+                        .font(.caption).foregroundColor(.secondary)
                 }
             case .decklink:
                 Section("DeckLink") {
@@ -210,6 +216,11 @@ struct OutputEditor: View {
                     Text(L("프로그램 포맷과 같은 해상도/프레임레이트로 출력됩니다 (8-bit YUV, 48kHz 2ch)."))
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    Toggle(L("Fill & Key (외부 키어: SDI A = Fill, SDI B = Key)"), isOn: $output.config.deckLinkKey)
+                    if output.config.deckLinkKey {
+                        Text(L("비디오 소스를 'Overlay 알파'로 지정한 Output으로 고르세요. 받는 쪽 키어 설정에 맞춰 Premultiplied(ATEM 기본) 또는 Straight를 고릅니다. 외부 키를 지원하는 카드만 가능하며, Duo 2·Quad 2는 Desktop Video Setup에서 SDI 1·2를 묶어야 합니다."))
+                            .font(.caption).foregroundColor(.secondary)
+                    }
                 }
             }
             if output.config.kind == .stream || output.config.kind == .record { encoderFields }
@@ -371,15 +382,53 @@ struct OutputEditor: View {
             Toggle(L("하드웨어 인코더 (VideoToolbox) 우선"), isOn: $output.config.hardwareEncoder)
             Picker(L("방송 딜레이"), selection: $output.config.delaySeconds) {
                 Text(L("끔 (실시간)")).tag(0)
-                ForEach([5, 10, 15, 30, 60, 120, 300, 600, 900], id: \.self) { s in
-                    Text(s < 60 ? Lf("%@초", "\(s)") : Lf("%@분", "\(s / 60)")).tag(s)
+                ForEach(OutputEditor.delayChoices(including: output.config.delaySeconds), id: \.self) { s in
+                    Text(OutputEditor.delayLabel(s)).tag(s)
                 }
             }
             if output.config.delaySeconds > 0 {
-                Text(L("인코딩된 영상을 그만큼 늦게 내보냅니다 (화질 손실 없음, 메모리 ≈ 비트레이트 × 시간). 위쪽 DUMP 버튼으로 지연분을 버리고 즉시 실시간으로 넘어갈 수 있습니다."))
+                Picker(L("딜레이 보관 위치"), selection: $output.config.delayStorage) {
+                    Text(L("자동 (1분 이하 메모리, 그 이상 디스크)")).tag("auto")
+                    Text(L("메모리")).tag("memory")
+                    Text(L("디스크 (SSD)")).tag("disk")
+                }
+                if output.config.delayUsesDisk {
+                    HStack {
+                        Text(output.config.delayFolder.isEmpty ? L("기본 위치 (캐시 폴더)") : output.config.delayFolder)
+                            .lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                        Button(L("폴더 선택…")) {
+                            let p = NSOpenPanel()
+                            p.canChooseDirectories = true
+                            p.canChooseFiles = false
+                            p.canCreateDirectories = true
+                            if p.runModal() == .OK, let u = p.url { output.config.delayFolder = u.path }
+                        }
+                        if !output.config.delayFolder.isEmpty {
+                            Button(L("기본값")) { output.config.delayFolder = "" }
+                        }
+                    }
+                }
+                Text(output.config.delaySummary(format: engine.format))
+                    .font(.caption).monospacedDigit()
+                    .foregroundColor(output.config.delaySummary(format: engine.format).hasSuffix(L("공간 부족!")) ? .orange : .secondary)
+                Text(L("인코딩된 영상을 그만큼 늦게 내보냅니다 (화질 손실 없음). 디스크 방식은 1분 단위 조각 파일에 쌓고 내보낸 조각은 바로 지웁니다. 방송 중 디스크가 차면 이후 구간은 메모리로 이어 가고, 위쪽 DUMP 버튼으로 지연분을 버리고 즉시 실시간으로 넘어갈 수 있습니다."))
                     .font(.caption).foregroundColor(.secondary)
             }
         }
+    }
+
+    static let delayPresets = [5, 10, 15, 30, 60, 120, 300, 600, 900, 1200, 1800, 2700, 3600, 5400, 7200, 10800, 14400, 21600]
+
+    /// Presets plus the current value (e.g. set through the API) so the picker never shows blank.
+    static func delayChoices(including v: Int) -> [Int] {
+        v > 0 && !delayPresets.contains(v) ? (delayPresets + [v]).sorted() : delayPresets
+    }
+
+    static func delayLabel(_ s: Int) -> String {
+        if s < 60 { return Lf("%@초", "\(s)") }
+        if s >= 3600 && s % 3600 == 0 { return Lf("%@시간", "\(s / 3600)") }
+        return Lf("%@분", "\(s / 60)")
     }
 
     private func deckLinkList() -> String {

@@ -8,7 +8,7 @@ import CoreImage
 enum APIProcessor {
 
     /// Function families that exist in the reference but are intentionally not implemented.
-    static let unsupportedPrefixes = ["replay", "ptz", "script", "playlist",
+    static let unsupportedPrefixes = ["ptz", "script", "playlist",
                                       "nextplaylist", "previousplaylist", "selectplaylist", "startplaylist",
                                       "stopplaylist", "videocall", "list", "layer", "multiviewoverlay",
                                       "movemultiviewoverlay", "setmultiviewoverlay", "audioplugin", "busaaudioplugin",
@@ -58,6 +58,8 @@ enum APIProcessor {
         case "preview": return .preview
         case "multiview": return .multiview
         case "clean", "cleanfeed", "output (clean)": return .clean
+        case "overlaysalpha", "alpha", "keyfill", "alphapremultiplied": return .overlaysAlpha
+        case "overlaysalphastraight", "alphastraight", "straight": return .overlaysAlphaStraight
         case "input": return input.map { .input($0.id) }
         default:
             return input.map { .input($0.id) }
@@ -82,6 +84,9 @@ enum APIProcessor {
         let title = input as? TitleInput
         func needInput() -> String { "Input not found" }
 
+        // --- Instant Replay (vMix-style Replay… functions)
+        if fn.hasPrefix("replay") { return ReplayEngine.shared.api(fn, value, q) }
+
         // --- Transitions by effect name: Fade, Merge, Wipe, Slide, Fly, CrossZoom, Zoom
         if let t = TransitionType.named(function), t != .dip {
             if let i = input { e.setPreview(i.id) }
@@ -94,6 +99,7 @@ enum APIProcessor {
             return nil
         }
         if let n = numberSuffix(fn, "stinger") {
+            guard n == 1 else { return "Only Stinger1 is available" }
             if let i = input { e.setPreview(i.id) }
             e.stinger(n)
             return nil
@@ -111,7 +117,7 @@ enum APIProcessor {
         // --- Overlays: OverlayInputN, …In, …Out, …Off, …Last, …Zoom
         if fn.hasPrefix("overlayinput"), fn != "overlayinputalloff" {
             let rest = fn.dropFirst("overlayinput".count)
-            guard let ch = rest.first.flatMap({ Int(String($0)) }), (1...4).contains(ch) else { return "Bad overlay" }
+            guard let ch = rest.first.flatMap({ Int(String($0)) }), (1...SwitcherEngine.overlayCount).contains(ch) else { return "Bad overlay" }
             switch rest.dropFirst() {
             case "", "zoom":
                 guard let i = input else { return needInput() }
@@ -303,13 +309,13 @@ enum APIProcessor {
             case "browsermouseenabled": b.mouseEnabled = true
             default: b.mouseEnabled = false
             }
-        case "browserclick":   // BraceletMix extension: Value="x,y" normalised 0…1 — same path as a click in Preview
+        case "browserclick":   // HongMix extension: Value="x,y" normalised 0…1 — same path as a click in Preview
             guard let b = input as? BrowserInput else { return "Browser input required" }
             let p = value.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
             guard p.count == 2 else { return "Value=x,y (0-1)" }
             b.forwardMouse(.leftMouseDown, at: CGPoint(x: p[0], y: p[1]))
             b.forwardMouse(.leftMouseUp, at: CGPoint(x: p[0], y: p[1]))
-        case "browserevaljs":  // BraceletMix extension (diagnostics): runs JS, result goes to the status line
+        case "browserevaljs":  // HongMix extension (diagnostics): runs JS, result goes to the status line
             guard let b = input as? BrowserInput else { return "Browser input required" }
             b.evalJS(value) { r in e.lastMessage = "JS: " + r }
             // interaction happens in the browser window opened from the input menu
@@ -506,7 +512,7 @@ enum APIProcessor {
         case "multiviewoverlayon", "multiviewoverlayoff", "multiviewoverlay":   // Value=LayerNumber
             guard let i = input, let n = Int(value), i.layers.indices.contains(n - 1) else { return "Input / Value=LayerNumber" }
             i.layers[n - 1].visible = fn == "multiviewoverlayon" ? true : (fn == "multiviewoverlayoff" ? false : !i.layers[n - 1].visible)
-        case "layerlayout":       // BraceletMix extension: Input=target Value=quad|nine|split2|onePlus3|pipBR …
+        case "layerlayout":       // HongMix extension: Input=target Value=quad|nine|split2|onePlus3|pipBR …
             if value.lowercased() == "none", let i = input { i.layers = []; return nil }
             guard let i = input, let layout = LayerLayout(rawValue: value) else { return "Value=" + LayerLayout.allCases.map(\.rawValue).joined(separator: "|") }
             let rects = layout.rects(gap: 0.01)
@@ -568,11 +574,12 @@ enum APIProcessor {
         case "rundownreset":
             e.rundown.reset()
         case "setdelay":          // HongMix: Value=seconds — broadcast delay of stream + record outputs (applies on next start)
-            guard let sec = Int(value), sec >= 0 else { return "Value=seconds" }
+            guard let v = Int(value), v >= 0 else { return "Value=seconds" }
+            let sec = min(v, OutputConfig.maxDelaySeconds)
             for o in e.outputs where o.config.kind == .stream || o.config.kind == .record { o.config.delaySeconds = sec }
         case "delaydump":         // HongMix: dump the broadcast delay of every running delayed output
             for o in e.outputs where o.running && o.config.delaySeconds > 0 { o.dumpDelay() }
-        case "scheduleadd":       // BraceletMix extension: Value="HH:MM[:SS],Function[,Input[,Value]]" (daily)
+        case "scheduleadd":       // HongMix extension: Value="HH:MM[:SS],Function[,Input[,Value]]" (daily)
             let parts = value.split(separator: ",", maxSplits: 3, omittingEmptySubsequences: false).map { String($0).trimmingCharacters(in: .whitespaces) }
             let t = (parts.first ?? "").split(separator: ":").compactMap { Int($0) }
             guard parts.count >= 2, t.count >= 2, (0...23).contains(t[0]), (0...59).contains(t[1]) else { return "Value=HH:MM[:SS],Function[,Input[,Value]]" }
@@ -583,28 +590,26 @@ enum APIProcessor {
             if parts.count > 3 { a.value = parts[3] }
             a.name = q["selectedname"] ?? ""
             e.scheduler.actions.append(a)
-        case "scheduleremove":    // BraceletMix extension: Value=name or index (1-based); empty = all
+        case "scheduleremove":    // HongMix extension: Value=name or index (1-based); empty = all
             if value.isEmpty { e.scheduler.actions.removeAll() }
             else if let n = Int(value), n >= 1, n <= e.scheduler.actions.count { e.scheduler.actions.remove(at: n - 1) }
             else { e.scheduler.actions.removeAll { $0.name == value } }
-        case "loudnessreset":     // BraceletMix extension: restart the integrated (R128) measurement
-            e.audioMixer.loudness.reset()
-        case "setbackupinput":    // BraceletMix extension: Input=live input, Value=backup input ("" = none)
+        case "setbackupinput":    // HongMix extension: Input=live input, Value=backup input ("" = none)
             guard let i = input else { return needInput() }
             i.backupInputID = value.isEmpty ? nil : resolveInput(value, e)?.id
-        case "datasourceadd":     // BraceletMix extension: Value="Name,URL-or-path"
+        case "datasourceadd":     // HongMix extension: Value="Name,URL-or-path"
             let parts = value.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
             guard parts.count == 2 else { return "Value=Name,URL" }
             e.dataSources.add(DataSourceConfig(name: parts[0], url: parts[1]))
-        case "datasourcebind":    // BraceletMix extension: Input=title SelectedName=field Value="Name,ColumnIndex"
+        case "datasourcebind":    // HongMix extension: Input=title SelectedName=field Value="Name,ColumnIndex"
             let parts = value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
             guard let t = title, let f = q["selectedname"], parts.count == 2, let col = Int(parts[1]),
                   let src = e.dataSources.source(named: parts[0]) else { return "Input, SelectedName, Value=Name,Column" }
             e.dataSources.bindings.append(DataBinding(inputID: t.id, fieldID: f, sourceID: src.id, column: col))
             e.dataSources.apply()
-        case "snapshotwindow":   // BraceletMix extension: PNG of the main window (UI layout check)
+        case "snapshotwindow":   // HongMix extension: PNG of the main window (UI layout check)
             return snapshotWindow(value) ? nil : "Snapshot failed"
-        case "resizewindow":     // BraceletMix extension: Value=width,height
+        case "resizewindow":     // HongMix extension: Value=width,height
             let p = value.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
             guard p.count == 2, let w = NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil && $0.styleMask.contains(.titled) }) else { return "Value=width,height" }
             w.setContentSize(NSSize(width: p[0], height: p[1]))
@@ -844,7 +849,7 @@ enum APIProcessor {
             walk(v)
             NSGraphicsContext.restoreGraphicsState()
         }
-        let file = path.isEmpty ? (("~/Pictures/BraceletMix/window.png") as NSString).expandingTildeInPath
+        let file = path.isEmpty ? (("~/Pictures/HongMix/window.png") as NSString).expandingTildeInPath
                                 : (path as NSString).expandingTildeInPath
         guard let data = rep.representation(using: .png, properties: [:]) else { return false }
         return (try? data.write(to: URL(fileURLWithPath: file))) != nil
@@ -873,6 +878,7 @@ enum APIProcessor {
         case .screen: return "DesktopCapture"
         case .browser: return "Browser"
         case .audio: return "Audio"
+        case .replay: return "Replay"
         }
     }
 
@@ -969,12 +975,21 @@ enum APIProcessor {
             x += "<dataSource name=\"\(esc(d.config.name))\" rows=\"\(d.rows.count)\" row=\"\(d.config.row + 1)\" status=\"\(esc(d.status))\" />"
         }
         x += "</dataSources>"
-        // BraceletMix diagnostics (ignored by vMix clients)
+        // HongMix diagnostics (ignored by vMix clients)
         for i in e.inputs {
             let st = i.video.stats
-            x += String(format: "<inputStats number=\"%d\" fps=\"%.2f\" measuredFps=\"%.2f\" jitterMs=\"%.2f\" late=\"%d\" w=\"%d\" h=\"%d\" status=\"%@\" sourceDropped=\"%d\" signalLost=\"%@\" />",
-                        e.number(of: i), st.fps, st.updateFPS, st.jitterMs, st.late, st.width, st.height, esc(i.status), i.video.sourceDropped,
-                        tf(i.signalLost))
+            let ad = i.audio.diagnostics
+            let mixAudio = i.mixAudioDiagnostics
+            let decodeMode = (i as? FFmpegInput)?.videoDecodeModeName() ?? "n/a"
+            x += String(format: "<inputStats number=\"%d\" fps=\"%.2f\" measuredFps=\"%.2f\" jitterMs=\"%.2f\" maxGapMs=\"%.2f\" late=\"%d\" w=\"%d\" h=\"%d\" status=\"%@\" decodeMode=\"%@\" sourceDropped=\"%d\" signalLost=\"%@\" audioBufferMs=\"%.1f\" audioWritten=\"%lld\" audioRead=\"%lld\" audioShortReads=\"%lld\" mixPrimes=\"%lld\" mixUnderflows=\"%lld\" ptsUs=\"%lld\" ptsStepMs=\"%.2f\" programReuseTicks=\"%llu\" maxProgramFrameAgeMs=\"%.2f\" />",
+                        e.number(of: i), st.fps, st.updateFPS, st.jitterMs, st.maxGapMs, st.late, st.width, st.height, esc(i.status), esc(decodeMode), i.video.sourceDropped,
+                        tf(i.signalLost), Double(ad.available) / 48.0, ad.written, ad.read, ad.shortReads,
+                        mixAudio.primes, mixAudio.underflows, st.latestPTSUs, st.lastPTSStepMs,
+                        st.repeatedProgramTicks, st.maxProgramFrameAgeMs)
+        }
+        for a in e.audioMixer.outputRingStats {
+            x += String(format: "<audioOutputStats name=\"%@\" underflowCallbacks=\"%llu\" underflowFrames=\"%llu\" primingSilenceFrames=\"%llu\" queuedMs=\"%.1f\" />",
+                        esc(a.name), a.shortReads, a.shortFrames, a.primingSilenceFrames, Double(a.availableFrames) / 48.0)
         }
         for i in e.inputs {
             if let st = (i as? FFmpegInput)?.srtStats() {
@@ -1005,9 +1020,6 @@ enum APIProcessor {
             x += "<action index=\"\(k + 1)\" name=\"\(esc(a.name))\" enabled=\"\(tf(a.enabled))\" time=\"\(a.timeText)\" days=\"\(a.weekdays.map(String.init).joined(separator: ","))\" function=\"\(esc(a.function))\" input=\"\(esc(a.input))\" value=\"\(esc(a.value))\" next=\"\(a.nextFire(after: now).map { iso.string(from: $0) } ?? "")\" lastFired=\"\(a.lastFired.map { iso.string(from: $0) } ?? "")\" />"
         }
         x += "</schedule>"
-        let lr = e.audioMixer.loudness.current
-        func lf(_ v: Double) -> String { v.isFinite ? String(format: "%.1f", v) : "-inf" }
-        x += "<loudness momentary=\"\(lf(lr.momentary))\" shortTerm=\"\(lf(lr.shortTerm))\" integrated=\"\(lf(lr.integrated))\" range=\"\(lf(lr.range))\" peak=\"\(lf(lr.peak))\" target=\"\(lf(LoudnessTarget.saved.rawValue))\" seconds=\"\(Int(lr.seconds))\" />"
         x += "</vmix>"
         return x
     }

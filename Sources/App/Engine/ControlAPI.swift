@@ -49,7 +49,7 @@ enum APIAccess {
 final class HTTPAPIServer {
     weak var engine: SwitcherEngine?
     private var listener: NWListener?
-    private let queue = DispatchQueue(label: "BraceletMix.http")
+    private let queue = DispatchQueue(label: "HongMix.http")
 
     func start(port: UInt16) -> Bool {
         guard let p = NWEndpoint.Port(rawValue: port), let l = try? NWListener(using: .tcp, on: p) else { return false }
@@ -305,7 +305,7 @@ final class TCPAPIServer {
         didSet { subscribeToEngine() }
     }
     private var listener: NWListener?
-    private let queue = DispatchQueue(label: "BraceletMix.tcp")
+    private let queue = DispatchQueue(label: "HongMix.tcp")
     private var clients: [ObjectIdentifier: TCPClient] = [:]   // main thread
     private var eventSub: AnyCancellable?
     private var lastActs: [String: String] = [:]                // activator key -> value

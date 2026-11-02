@@ -46,9 +46,30 @@ struct TransitionColumn: View {
             ForEach(0..<4, id: \.self) { i in
                 TransitionSlotRow(index: i)
             }
-            HStack(spacing: 3) {
-                StingerButton(slot: 1)
-                StingerButton(slot: 2)
+            StingerButton(slot: 1)
+
+            // vMix-style overlay bank: each channel recalls its saved input, independent of Preview.
+            VStack(spacing: 3) {
+                Text(L("OVERLAY 1–8"))
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                ForEach(0..<2, id: \.self) { row in
+                    HStack(spacing: 3) {
+                        ForEach(1...4, id: \.self) { col in
+                            let channel = row * 4 + col
+                            let active = engine.overlayOn[channel - 1]
+                            let savedInput = engine.input(withID: engine.overlayIDs[channel - 1])
+                            FlatButton(title: "\(channel)", active: active, activeColor: Theme.overlay,
+                                       height: 20, fontSize: 9, weight: .bold) {
+                                engine.toggleOverlayChannel(channel)
+                            }
+                            .disabled(savedInput == nil)
+                            .help(savedInput.map { Lf("Overlay %@ · 저장된 입력: %@", "\(channel)", $0.name) }
+                                  ?? Lf("Overlay %@ · 입력 타일에서 소스를 먼저 지정하세요", "\(channel)"))
+                        }
+                    }
+                }
             }
 
             // one slim T-bar centred in the column, FTB underneath
@@ -244,6 +265,8 @@ struct InputGrid: View {
     @Binding var sheet: SheetRequest?
     /// 0 small, 1 medium, 2 large (input preview size)
     @AppStorage("inputSize") private var inputSize = 1
+    @AppStorage("compactInputTiles") private var compactInputTiles = false
+    @AppStorage("inputDockLeft") private var inputDockLeft = false
 
     private var widths: (CGFloat, CGFloat) {
         switch inputSize {
@@ -263,22 +286,81 @@ struct InputGrid: View {
         }
     }
 
+    private var foldedInputs: [InputSource] { shown.filter(\.folded) }
+    private var expandedInputs: [InputSource] { shown.filter { !$0.folded } }
+
     var body: some View {
         HStack(spacing: 0) {
             CategoryBar(category: $category, search: $search)
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: widths.0, maximum: widths.1), spacing: 6, alignment: .top)],
-                          alignment: .leading, spacing: 6) {
-                    ForEach(shown) { input in
-                        InputBox(input: input, number: engine.number(of: input), sheet: $sheet)
+            VStack(spacing: 0) {
+                HStack(spacing: 6) {
+                    Text(L("입력"))
+                        .font(.system(size: 10, weight: .bold)).foregroundColor(.secondary)
+                    Text("\(shown.count)").font(.system(size: 10, weight: .medium).monospacedDigit()).foregroundColor(.secondary)
+                    Spacer()
+                    Button {
+                        compactInputTiles.toggle()
+                        engine.inputs.forEach { $0.collapsed = compactInputTiles }
+                    } label: {
+                        Label(compactInputTiles ? L("타일 펼치기") : L("컴팩트 타일"),
+                              systemImage: compactInputTiles ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
+                            .font(.system(size: 10, weight: .semibold))
                     }
+                    .buttonStyle(.borderless)
+                    .help(L("vMix 스타일의 입력 타일 보기 전환. 접은 상태에서도 미리보기, 컷, 오버레이, 오디오 버튼을 표시합니다."))
+                    Button { withAnimation(.easeInOut(duration: 0.18)) { inputDockLeft.toggle() } } label: {
+                        Image(systemName: inputDockLeft ? "rectangle.rightthird.inset.filled" : "sidebar.left")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .buttonStyle(.borderless)
+                    .help(inputDockLeft ? L("입력 패널을 아래 전체 폭으로 펼치기") : L("입력 패널을 왼쪽 세로 도크로 배치"))
                 }
-                .padding(6)
+                .padding(.horizontal, 8).frame(height: 26)
+                Divider().overlay(Color.black.opacity(0.35))
+                ScrollView {
+                    HStack(alignment: .top, spacing: 6) {
+                        if !foldedInputs.isEmpty {
+                            VStack(spacing: 5) {
+                                Image(systemName: "rectangle.compress.vertical")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.secondary)
+                                    .overlay(alignment: .topTrailing) {
+                                        Text("\(foldedInputs.count)")
+                                            .font(.system(size: 7, weight: .bold).monospacedDigit())
+                                            .foregroundColor(.white)
+                                            .offset(x: 7, y: -4)
+                                    }
+                                    .frame(height: 18)
+                                    .help(L("접힌 입력"))
+
+                                ForEach(foldedInputs) { input in
+                                    FoldedInputRow(input: input, number: engine.number(of: input), sheet: $sheet)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .frame(width: 54)
+                            .padding(.vertical, 5)
+                            .background(Theme.panel.opacity(0.72))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                        }
+
+                        LazyVGrid(columns: inputDockLeft
+                                  ? [GridItem(.flexible(minimum: 180, maximum: 260), spacing: 6, alignment: .top)]
+                                  : [GridItem(.adaptive(minimum: widths.0, maximum: widths.1), spacing: 6, alignment: .top)],
+                                  alignment: .leading, spacing: 6) {
+                            ForEach(expandedInputs) { input in
+                                InputBox(input: input, number: engine.number(of: input), sheet: $sheet, compactDock: inputDockLeft)
+                            }
+                        }
+                    }
+                    .padding(6)
+                }
             }
             .overlay(alignment: .top) {
                 if category != 0 { Rectangle().fill(InputCategory.color(category)).frame(height: 2) }
             }
         }
+        .frame(width: inputDockLeft ? 290 : nil)
         .background(Theme.window)
         .contextMenu {
             Picker(L("입력 크기"), selection: $inputSize) {
@@ -287,12 +369,85 @@ struct InputGrid: View {
                 Text(L("크게")).tag(2)
             }
             Divider()
-            Button(L("모든 입력 접기")) { engine.inputs.forEach { $0.collapsed = true } }
-            Button(L("모든 입력 펼치기")) { engine.inputs.forEach { $0.collapsed = false } }
+            Button(L("모든 입력 접기")) { engine.inputs.forEach { $0.folded = true } }
+            Button(L("모든 입력 펼치기")) { engine.inputs.forEach { $0.folded = false } }
+            Button(L("컴팩트 타일 모드 전환")) {
+                compactInputTiles.toggle()
+                engine.inputs.forEach { $0.collapsed = compactInputTiles }
+            }
             Button(L("오디오 전용 입력만 접기")) {
                 engine.inputs.forEach { if $0.kind == .audio { $0.collapsed = true } }
             }
         }
+    }
+}
+
+/// A folded source becomes a narrow vertical tab in the input area's left rail.
+private struct FoldedInputRow: View {
+    @EnvironmentObject var engine: SwitcherEngine
+    @ObservedObject var input: InputSource
+    let number: Int
+    @Binding var sheet: SheetRequest?
+
+    private var stateColor: Color {
+        switch input.state {
+        case Int32(MC_STATE_RUNNING): return .green
+        case Int32(MC_STATE_CONNECTING): return .yellow
+        case Int32(MC_STATE_ERROR): return .red
+        default: return .gray
+        }
+    }
+
+    private var selectedColor: Color {
+        if engine.programID == input.id { return Theme.program }
+        if engine.previewID == input.id { return Theme.preview }
+        if !engine.overlayChannels(of: input.id).isEmpty { return Theme.overlay }
+        return Theme.button
+    }
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Text("\(number)")
+                .font(.system(size: 12, weight: .heavy).monospacedDigit())
+                .foregroundColor(.white)
+            Circle().fill(stateColor).frame(width: 7, height: 7)
+            Text(input.name)
+                .font(.system(size: 8, weight: .semibold))
+                .lineLimit(3).multilineTextAlignment(.center)
+                .foregroundColor(.white.opacity(0.88))
+                .frame(maxHeight: .infinity)
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { input.folded = false }
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(.white.opacity(0.9))
+                    .frame(width: 26, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(L("입력 타일 펼치기"))
+        }
+        .padding(.vertical, 6)
+        .frame(width: 46, height: 76)
+        .background(selectedColor.opacity(0.88))
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .contentShape(Rectangle())
+        .onTapGesture { engine.setPreview(input.id) }
+        .contextMenu {
+            Button(L("미리보기로 선택")) { engine.setPreview(input.id) }
+            Button(L("펼치기")) { withAnimation(.easeInOut(duration: 0.15)) { input.folded = false } }
+            Button(L("속성…")) { sheet = SheetRequest(kind: input.kind, editing: input, mode: .properties) }
+            Button(L("입력 설정…")) { sheet = SheetRequest(kind: input.kind, editing: input) }
+        }
+        .draggable(input.id.uuidString) { Text("\(number). \(input.name)").padding(6).background(Theme.panel) }
+        .dropDestination(for: String.self) { items, _ in
+            guard let raw = items.first, let id = UUID(uuidString: raw),
+                  let from = engine.inputs.firstIndex(where: { $0.id == id }) else { return false }
+            engine.moveInput(from: from, to: number - 1)
+            return true
+        }
+        .help(L("번호는 원래 입력 번호를 유지 · 클릭: Preview 선택 · 화살표: 타일 펼치기 · 우클릭: 추가 작업"))
     }
 }
 
@@ -392,6 +547,7 @@ struct InputBox: View {
     @ObservedObject var input: InputSource
     let number: Int
     @Binding var sheet: SheetRequest?
+    var compactDock = false
 
     private var isProgram: Bool { engine.programID == input.id }
     private var isPreview: Bool { engine.previewID == input.id }
@@ -413,6 +569,32 @@ struct InputBox: View {
         }
     }
 
+    @ViewBuilder private var listNowPlaying: some View {
+        if let media = input as? FFmpegInput, media.isList,
+           media.playlist.indices.contains(media.playlistIndex) {
+            HStack(spacing: 5) {
+                Image(systemName: media.playing ? "play.fill" : "pause.fill")
+                    .foregroundColor(media.playing ? Theme.program : .secondary)
+                Text("\(media.playlistIndex + 1)/\(media.playlist.count)")
+                    .fontWeight(.semibold).monospacedDigit().foregroundColor(.secondary)
+                Text((media.playlist[media.playlistIndex] as NSString).lastPathComponent)
+                    .lineLimit(1).truncationMode(.middle)
+                    .foregroundColor(Theme.buttonText)
+                Spacer(minLength: 0)
+                Button { media.previousItem() } label: { Image(systemName: "backward.end.fill") }
+                    .help(L("이전 리스트 항목"))
+                Button { media.nextItem() } label: { Image(systemName: "forward.end.fill") }
+                    .help(L("다음 리스트 항목"))
+            }
+            .font(.system(size: 9))
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 6)
+            .frame(height: 20)
+            .background(Theme.panel.opacity(0.9))
+            .help(L("현재 재생 중인 리스트 항목 · 속성 › List에서 전체 순서 관리"))
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Title bar: number + name, settings / close
@@ -430,7 +612,8 @@ struct InputBox: View {
                     if input.kind == .title {
                         Button(L("타이틀 편집…")) { sheet = SheetRequest(kind: input.kind, editing: input, mode: .title) }
                     }
-                    Button(input.collapsed ? L("펼치기") : L("접기 (제목만 표시)")) { input.collapsed.toggle() }
+                    Button(input.folded ? L("펼치기") : L("접기 (제목만 표시)")) { input.folded.toggle() }
+                    Button(input.collapsed ? L("타일 펼치기") : L("컴팩트 타일")) { input.collapsed.toggle() }
                     Button(L("속성 (위치·색보정·오디오·재생)…")) {
                         sheet = SheetRequest(kind: input.kind, editing: input, mode: .properties)
                     }
@@ -454,6 +637,16 @@ struct InputBox: View {
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
                 .frame(width: 16)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { input.folded.toggle() }
+                } label: {
+                    Image(systemName: input.folded ? "chevron.down" : "chevron.up")
+                        .font(.system(size: 9, weight: .bold))
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(input.folded ? L("펼치기") : L("접기 (제목만 표시)"))
             }
             .foregroundColor(.white)
             .padding(.horizontal, 6)
@@ -461,12 +654,16 @@ struct InputBox: View {
             .background(headerColor)
             .contentShape(Rectangle())
             .onTapGesture(count: 2) { sheet = SheetRequest(kind: input.kind, editing: input, mode: .properties) }
-            .onTapGesture { if input.collapsed { engine.setPreview(input.id) } }
-            .overlay(RightClickCatcher { withAnimation(.easeInOut(duration: 0.15)) { input.collapsed.toggle() } })
+            .onTapGesture { if input.collapsed || input.folded { engine.setPreview(input.id) } }
+            .overlay(RightClickCatcher { withAnimation(.easeInOut(duration: 0.15)) { input.folded.toggle() } })
             .help(L("더블클릭: Input Settings · 우클릭: 접기/펼치기"))
 
-            if !input.collapsed {
+            if input.folded {
+                EmptyView()
+            } else if !input.collapsed && !compactDock {
                 expandedBody
+            } else {
+                compactBody
             }
         }
         .background(Theme.panel)
@@ -487,11 +684,69 @@ struct InputBox: View {
 
     @ViewState private var dropTarget = false
 
+    /// vMix-style compact input tile: retain source identity and useful live controls while
+    /// removing the large settings-heavy presentation from the input grid.
+    private var compactBody: some View {
+        VStack(spacing: 3) {
+            ZStack(alignment: .bottomLeading) {
+                MonitorView(fps: 6, onActiveChange: { input.setInputTileVisible($0) }) { input.monitorFrame() }
+                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                    .background(Color.black)
+                Color.clear.contentShape(Rectangle())
+                    .onTapGesture { engine.setPreview(input.id) }
+                if input.signalLost { SignalLostBadge(input: input) }
+            }
+            .help(L("클릭: Preview"))
+
+            listNowPlaying
+
+            HStack(spacing: 3) {
+                FlatButton(title: L("Quick Play"), height: 20, fontSize: 9) { engine.quickPlay(input.id) }
+                FlatButton(title: L("Cut"), height: 20, fontSize: 9) { engine.cutDirect(input.id) }
+                FlatButton(title: L("Loop"), active: input.looping, activeColor: Theme.accent, height: 20, fontSize: 9) {
+                    input.looping.toggle()
+                }
+                .disabled(!input.supportsTransport)
+                .opacity(input.supportsTransport ? 1 : 0.4)
+            }
+            .padding(.horizontal, 3)
+
+            HStack(spacing: 3) {
+                VStack(spacing: 2) {
+                    ForEach(0..<2, id: \.self) { row in
+                        HStack(spacing: 2) {
+                            ForEach(1...4, id: \.self) { col in
+                                let channel = row * 4 + col
+                                let active = overlayChannels.contains(channel)
+                                FlatButton(title: "\(channel)", active: active, activeColor: Theme.overlay,
+                                           height: 16, fontSize: 8, weight: .bold) {
+                                    engine.toggleOverlay(channel, input.id)
+                                }
+                                .help(Lf("Overlay %@ 지정/해제", "\(channel)"))
+                            }
+                        }
+                    }
+                }
+                Button { input.muted.toggle() } label: {
+                    Image(systemName: input.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(Theme.buttonText)
+                        .frame(width: 24, height: 34)
+                        .background(input.muted ? Theme.live : Theme.button)
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+                .buttonStyle(.plain)
+                .help(input.muted ? L("오디오 켜기") : L("오디오 끄기"))
+            }
+            .padding(.horizontal, 3).padding(.bottom, 3)
+        }
+    }
+
     @ViewBuilder private var expandedBody: some View {
         VStack(spacing: 0) {
             // Thumbnail: click = preview, double-click = cut to output
             ZStack(alignment: .bottomLeading) {
-                MonitorView(fps: 15) { input.currentFrame() }
+                MonitorView(fps: 6, onActiveChange: { input.setInputTileVisible($0) }) { input.monitorFrame() }
                     .aspectRatio(16.0 / 9.0, contentMode: .fit)
                     .background(Color.black)
                 Color.clear
@@ -509,6 +764,8 @@ struct InputBox: View {
                         .allowsHitTesting(false)
                 }
             }
+
+            listNowPlaying
 
             // Row 1: Close / Quick Play / Cut / Loop
             HStack(spacing: 3) {
@@ -535,15 +792,37 @@ struct InputBox: View {
             .padding(.horizontal, 4)
             .padding(.top, 4)
 
-            // Row 2: overlay 1-4, play/pause, audio
-            HStack(spacing: 3) {
-                ForEach(1...4, id: \.self) { ch in
-                    FlatButton(title: "\(ch)", active: overlayChannels.contains(ch), activeColor: Theme.overlay,
-                               height: 22, fontSize: 10, weight: .bold) {
-                        engine.toggleOverlay(ch, input.id)
+            // vMix input overlay bank: direct 1–8 buttons on each source tile.
+            VStack(spacing: 2) {
+                HStack(spacing: 3) {
+                    Text(L("OVERLAY 1–8"))
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.secondary)
+                    Spacer(minLength: 0)
+                    if !overlayChannels.isEmpty {
+                        Text(overlayChannels.map(String.init).joined(separator: ","))
+                            .font(.system(size: 8, weight: .medium).monospacedDigit())
+                            .foregroundColor(Theme.overlay)
                     }
-                    .help("Overlay \(ch)")
                 }
+                ForEach(0..<2, id: \.self) { row in
+                    HStack(spacing: 3) {
+                        ForEach(1...4, id: \.self) { col in
+                            let channel = row * 4 + col
+                            let assigned = overlayChannels.contains(channel)
+                            let onAir = engine.overlayOn[channel - 1] && engine.overlayIDs[channel - 1] == input.id
+                            FlatButton(title: "\(channel)", active: onAir || assigned,
+                                       activeColor: onAir ? Theme.program : Theme.accent,
+                                       height: 18, fontSize: 9, weight: .bold) {
+                                engine.toggleOverlay(channel, input.id)
+                            }
+                            .help(Lf("Overlay %@ · %@", "\(channel)", onAir ? L("출력 중 · 클릭해 종료") : assigned ? L("지정됨 · 클릭해 출력") : L("이 입력을 지정하고 출력")))
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 4)
+            HStack(spacing: 3) {
                 if input.supportsTransport {
                     Button {
                         input.playing.toggle()
@@ -570,7 +849,9 @@ struct InputBox: View {
                 .buttonStyle(.plain)
                 .help("Audio On/Off")
             }
-            .padding(4)
+            .padding(.horizontal, 4)
+            .padding(.top, 2)
+            .padding(.bottom, 4)
         }
     }
 }
@@ -580,30 +861,71 @@ struct InputBox: View {
 struct AudioMixerPanel: View {
     @EnvironmentObject var engine: SwitcherEngine
     @Binding var sheet: SheetRequest?
+    @Binding var inputStripsCollapsed: Bool
+    @ViewState private var showAudioOutputs = false
+    @AppStorage("audioMetersCollapsed") private var metersCollapsed = false
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                Text("Audio Mixer")
-                    .font(.system(size: 11, weight: .bold))
-                LoudnessBadge()
-                Spacer()
+                HStack(spacing: 6) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Theme.accent)
+                    Text(inputStripsCollapsed ? "Audio" : "Audio Mixer")
+                        .font(.system(size: 11, weight: .bold))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                if !inputStripsCollapsed {
+                    Slider(value: $engine.headphonesVolume, in: 0...1)
+                        .controlSize(.mini)
+                        .frame(width: 54)
+                        .help(L("헤드폰 볼륨"))
+                }
+                Spacer(minLength: 4)
+                Button { withAnimation(.easeInOut(duration: 0.15)) { metersCollapsed.toggle() } } label: {
+                    Image(systemName: metersCollapsed ? "waveform" : "waveform.path")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(metersCollapsed ? .secondary : Theme.accent)
+                        .frame(width: 26, height: 24)
+                        .background(metersCollapsed ? Color.clear : Theme.button.opacity(0.7), in: RoundedRectangle(cornerRadius: 5))
+                }
+                .buttonStyle(.plain)
+                .help(metersCollapsed ? L("오디오 레벨 미터 펼치기") : L("오디오 레벨 미터 접기"))
                 BusManagerButton()
-                Image(systemName: "headphones").font(.system(size: 10))
-                Slider(value: $engine.headphonesVolume, in: 0...1)
-                    .controlSize(.mini)
-                    .frame(width: 70)
-                    .help(L("헤드폰 볼륨"))
+                // Keep output routing reachable even when the mixer is collapsed or narrow.
+                Button { showAudioOutputs = true } label: {
+                    Image(systemName: "cable.connector.horizontal")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 26, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background(Theme.button.opacity(0.55), in: RoundedRectangle(cornerRadius: 5))
+                .help(L("Audio Outputs — Master, Headphones, Bus A–G의 CoreAudio 장치와 채널 지정"))
                 Toggle(isOn: $engine.monitorOn) {
-                    Text(L("모니터")).font(.system(size: 10))
+                    Image(systemName: engine.monitorOn ? "headphones" : "headphones")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 27, height: 24)
                 }
                 .toggleStyle(.button)
                 .controlSize(.small)
-                .help(L("헤드폰 모니터 (기본 출력 장치). Solo가 켜져 있으면 Solo 신호를 듣습니다."))
+                .help(L("헤드폰 모니터. Solo가 켜져 있으면 Solo 신호를 듣습니다."))
+                Button { withAnimation(.easeInOut(duration: 0.18)) { inputStripsCollapsed.toggle() } } label: {
+                    Image(systemName: inputStripsCollapsed ? "chevron.left" : "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(inputStripsCollapsed ? L("오디오 입력 채널 펼치기") : L("오디오 입력 채널 접기"))
             }
             .padding(.horizontal, 8)
-            .frame(height: 24)
-            .background(Theme.panelDark)
+            .frame(height: 30)
+            .background(LinearGradient(colors: [Theme.panelDark, Theme.panel], startPoint: .top, endPoint: .bottom))
+            .overlay(alignment: .bottom) { Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1) }
+            .sheet(isPresented: $showAudioOutputs) { AudioOutputsSheet().environmentObject(engine) }
 
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: 2) {
@@ -616,9 +938,11 @@ struct AudioMixerPanel: View {
                     }
                     AddBusColumn()
                     Rectangle().fill(Color.black).frame(width: 2)
-                    ForEach(engine.inputs.filter { $0.audioFX.visibleInMixer }) { input in
-                        InputChannelStrip(input: input, number: engine.number(of: input)) {
-                            sheet = SheetRequest(kind: input.kind, editing: input, mode: .properties, tab: 4)
+                    if !inputStripsCollapsed {
+                        ForEach(engine.inputs.filter { $0.hasAudio && $0.audioFX.visibleInMixer }) { input in
+                            InputChannelStrip(input: input, number: engine.number(of: input)) {
+                                sheet = SheetRequest(kind: input.kind, editing: input, mode: .properties, tab: 4)
+                            }
                         }
                     }
                 }
@@ -628,6 +952,62 @@ struct AudioMixerPanel: View {
             .frame(maxHeight: .infinity)
         }
         .background(Theme.panel)
+    }
+}
+
+struct AudioOutputsSheet: View {
+    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(\.dismiss) private var dismiss
+    private let devices = CoreAudioOutputs.devices()
+
+    private var names: [String] { ["Master", "Bus A", "Bus B", "Bus C", "Bus D", "Bus E", "Bus F", "Bus G", "Headphones"] }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L("Audio Outputs")).font(.title2.bold())
+            Text(L("각 믹스를 실제 CoreAudio 장치와 스테레오 채널 쌍으로 보냅니다. Headphones는 Solo가 켜지면 Solo 믹스를 출력합니다."))
+                .font(.caption).foregroundColor(.secondary)
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                GridRow {
+                    Text(L("믹스")).bold(); Text(L("사용")).bold(); Text(L("출력 장치")).bold(); Text(L("채널")).bold()
+                }.font(.caption)
+                ForEach(0..<9, id: \.self) { index in
+                    routeRow(index)
+                }
+            }
+            Divider()
+            Text(L("같은 다채널 인터페이스에서 Master=1–2, Bus A=3–4처럼 지정할 수 있습니다. 동일 장치·채널을 여러 믹스에 중복 지정하면 신호가 합산될 수 있습니다."))
+                .font(.caption).foregroundColor(.orange)
+            HStack { Spacer(); Button(L("닫기")) { dismiss() }.keyboardShortcut(.defaultAction) }
+        }
+        .padding(18).frame(width: 720)
+    }
+
+    @ViewBuilder private func routeRow(_ index: Int) -> some View {
+        let route = engine.audioOutputRoutes[index]
+        let selected = devices.first { $0.uid == route.deviceUID }
+        GridRow {
+            Text(names[index]).font(.system(size: 12, weight: .semibold)).frame(width: 90, alignment: .leading)
+            Toggle("", isOn: index == 8 ? $engine.monitorOn : binding(index, \.enabled)).labelsHidden()
+            Picker("", selection: binding(index, \.deviceUID)) {
+                Text(L("시스템 기본 출력")).tag("")
+                ForEach(devices) { Text($0.name).tag($0.uid) }
+            }.labelsHidden().frame(width: 360)
+            Picker("", selection: binding(index, \.firstChannel)) {
+                let channels = max(2, selected?.channels ?? 2)
+                ForEach(Array(stride(from: 0, to: channels, by: 2)), id: \.self) { c in
+                    Text("\(c + 1)–\(min(c + 2, channels))").tag(c)
+                }
+            }.labelsHidden().frame(width: 90).disabled(route.deviceUID.isEmpty)
+        }
+    }
+
+    private func binding<T>(_ index: Int, _ keyPath: WritableKeyPath<AudioOutputRoute, T>) -> Binding<T> {
+        Binding(get: { engine.audioOutputRoutes[index][keyPath: keyPath] }, set: { value in
+            var routes = engine.audioOutputRoutes
+            routes[index][keyPath: keyPath] = value
+            engine.audioOutputRoutes = routes
+        })
     }
 }
 
@@ -779,7 +1159,7 @@ struct InputChannelStrip: View {
         let id = input.id
         let hl: Color? = engine.programID == id ? Theme.program : (engine.previewID == id ? Theme.preview : nil)
         ChannelStrip(title: "\(number) \(input.name)", volume: $input.volume, muted: $input.muted,
-                     meter: { mixer.meter(for: id) }, highlight: hl) {
+                     meter: { mixer.meter(for: id) }, highlight: hl, meterSupported: input.hasAudio) {
             VStack(spacing: 2) {
                 HStack(spacing: 2) {
                     busButton("M")
@@ -845,15 +1225,18 @@ struct ChannelStrip<Accessory: View>: View {
     @Binding var muted: Bool
     let meter: () -> (Float, Float)
     var highlight: Color?
+    var meterSupported = true
+    @AppStorage("audioMetersCollapsed") private var metersCollapsed = false
     let accessory: Accessory
 
     init(title: String, volume: Binding<Float>, muted: Binding<Bool>, meter: @escaping () -> (Float, Float),
-         highlight: Color?, @ViewBuilder accessory: () -> Accessory) {
+         highlight: Color?, meterSupported: Bool = true, @ViewBuilder accessory: () -> Accessory) {
         self.title = title
         self._volume = volume
         self._muted = muted
         self.meter = meter
         self.highlight = highlight
+        self.meterSupported = meterSupported
         self.accessory = accessory()
     }
 
@@ -867,10 +1250,14 @@ struct ChannelStrip<Accessory: View>: View {
                 .background(highlight ?? Theme.panelDark)
                 .clipShape(RoundedRectangle(cornerRadius: 2))
             HStack(spacing: 3) {
-                LayerMeter(meter: meter)
-                    .frame(width: 11)
+                if !metersCollapsed && meterSupported {
+                    LayerMeter(meter: meter).frame(width: 11)
+                } else {
+                    Spacer(minLength: 0)
+                }
                 VerticalFader(value: $volume)
                     .frame(width: 26)
+                if metersCollapsed || !meterSupported { Spacer(minLength: 0) }
             }
             .frame(minHeight: 70, maxHeight: .infinity)
             Text(volume <= 0.0001 ? "-inf" : String(format: "%.1f", 20 * log10(Double(volume * volume))))

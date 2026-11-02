@@ -39,7 +39,7 @@ struct AboutView: View {
                     if taps >= 7 { showSecret = true; taps = 0 }
                 }
             Text("HongMix").font(.system(size: 26, weight: .heavy))
-            Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2") (Apple Silicon)").font(.caption).foregroundColor(.secondary)
+            Text("Version \(AppInfo.version) (\(AppInfo.build)) · Apple Silicon").font(.caption).foregroundColor(.secondary)
 
             if showSecret {
                 VStack(spacing: 6) {
@@ -97,4 +97,11 @@ struct AboutView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.3), value: showSecret)
     }
+}
+
+
+/// App version from Info.plist (shown in the top bar and About).
+enum AppInfo {
+    static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    static let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
 }

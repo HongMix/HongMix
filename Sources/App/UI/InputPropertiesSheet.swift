@@ -7,12 +7,14 @@ struct InputPropertiesSheet: View {
     @EnvironmentObject var engine: SwitcherEngine
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var input: InputSource
+    @ObservedObject private var transport: InputTransportState
     var initialTab: Int = 0
     var onChangeSource: (() -> Void)? = nil
     @ViewState private var tab = 0
 
     init(input: InputSource, initialTab: Int = 0, onChangeSource: (() -> Void)? = nil) {
         self.input = input
+        self._transport = ObservedObject(wrappedValue: input.transport)
         self.initialTab = initialTab
         self.onChangeSource = onChangeSource
     }
@@ -24,42 +26,58 @@ struct InputPropertiesSheet: View {
                 Text(Lf("%@. %@ — 속성", "\(engine.number(of: input))", "\(input.name)")).font(.headline)
                 InputFormatLabel(slot: input.video, size: 11)
                 Spacer()
-                MonitorView(fps: 15) { input.currentFrame() }
+                MonitorView(fps: 12) { input.monitorFrame() }
                     .frame(width: 160, height: 90)
                     .background(Color.black)
             }
             .padding()
 
-            Picker("", selection: $tab) {
-                Text("General").tag(0)
-                Text("Colour Adjust").tag(1)
-                Text("Colour Key").tag(2)
-                Text("Position").tag(3)
-                Text("Layers").tag(6)
-                Text("Audio Settings").tag(4)
-                if input.supportsTransport { Text("Playback").tag(5) }
-                if input.supportsTransport, input is FFmpegInput { Text("List").tag(8) }
-                Text("Triggers").tag(7)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .padding(.bottom, 6)
-            Group {
-                switch tab {
-                case 1: colorTab
-                case 2: keyTab
-                case 3: positionTab
-                case 4: audioTab
-                case 5: playbackTab
-                case 6: LayersEditor(input: input)
-                case 7: TriggersEditor(input: input)
-                case 8: if let f = input as? FFmpegInput { ListEditor(input: f) }
-                default: generalTab
+            HStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 3) {
+                        ForEach(propertyTabs, id: \.id) { item in
+                            Button {
+                                tab = item.id
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: item.icon).frame(width: 17)
+                                    Text(item.title).lineLimit(1)
+                                    Spacer(minLength: 0)
+                                }
+                                .font(.system(size: 11, weight: tab == item.id ? .semibold : .regular))
+                                .foregroundColor(tab == item.id ? .white : Theme.buttonText.opacity(0.82))
+                                .padding(.horizontal, 9)
+                                .frame(height: 30)
+                                .background(tab == item.id ? Theme.accent : Color.clear)
+                                .clipShape(RoundedRectangle(cornerRadius: 5))
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(8)
                 }
+                .frame(width: 158)
+                .background(Theme.panel.opacity(0.55))
+
+                Divider()
+
+                Group {
+                    switch tab {
+                    case 1: colorTab
+                    case 2: keyTab
+                    case 3: positionTab
+                    case 4: audioTab
+                    case 5: playbackTab
+                    case 6: LayersEditor(input: input)
+                    case 7: TriggersEditor(input: input)
+                    case 8: if let f = input as? FFmpegInput { ListEditor(input: f) }
+                    default: generalTab
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, 12)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.horizontal)
             .onAppear { tab = initialTab }
 
             HStack {
@@ -72,7 +90,22 @@ struct InputPropertiesSheet: View {
             }
             .padding()
         }
-        .frame(width: 860, height: 680)
+        .frame(width: 900, height: 680)
+    }
+
+    private var propertyTabs: [(id: Int, title: String, icon: String)] {
+        var tabs: [(Int, String, String)] = [
+            (0, "General", "slider.horizontal.3"),
+            (1, "Colour Adjust", "sun.max"),
+            (2, "Colour Key", "viewfinder"),
+            (3, "Position", "rectangle.dashed"),
+            (6, "Layers", "square.3.layers.3d"),
+            (4, "Audio Settings", "speaker.wave.2"),
+        ]
+        if input.supportsTransport { tabs.append((5, "Playback", "play.rectangle")) }
+        if input.supportsTransport, input is FFmpegInput { tabs.append((8, "List", "list.number")) }
+        tabs.append((7, "Triggers", "bolt"))
+        return tabs.map { (id: $0.0, title: $0.1, icon: $0.2) }
     }
 
     private var generalTab: some View {
@@ -137,6 +170,7 @@ struct InputPropertiesSheet: View {
 
     private var keyTab: some View {
         Form {
+            AlphaKeySection(input: input)
             Section("Colour Key / Chroma Key") {
                 Toggle(L("Colour Key 사용"), isOn: $input.adjust.keyOn)
                 HStack {
@@ -151,7 +185,7 @@ struct InputPropertiesSheet: View {
                 slider("Tolerance", $input.adjust.keyTolerance, 0...0.5, reset: 0.12)
                 slider("Softness", $input.adjust.keySoftness, 0...0.3, reset: 0.08)
                 slider(L("Spill 제거"), $input.adjust.keySpill, 0...1, reset: 0.5)
-                Text(L("초록/파랑 배경을 투명하게 합니다. 키를 건 입력을 오버레이(1~4)로 올리면 배경 위에 합성됩니다."))
+                Text(L("초록/파랑 배경을 투명하게 합니다. 키를 건 입력을 오버레이(1~8)로 올리면 배경 위에 합성됩니다."))
                     .font(.caption).foregroundColor(.secondary)
             }
         }
@@ -287,11 +321,11 @@ struct InputPropertiesSheet: View {
                     Toggle(L("반복"), isOn: $input.looping)
                 }
                 HStack {
-                    Text(String(format: L("%.2f / %.2f 초"), input.position, input.duration))
+                    Text(String(format: L("%.2f / %.2f 초"), transport.position, transport.duration))
                         .font(.system(size: 12).monospacedDigit())
-                    Slider(value: Binding(get: { input.position },
-                                          set: { input.seek(seconds: $0) }),
-                           in: 0...max(0.1, input.duration))
+                    Slider(value: Binding(get: { transport.position },
+                                          set: { input.seek(seconds: $0); transport.position = $0 }),
+                           in: 0...max(0.1, transport.duration))
                 }
                 HStack {
                     Text(L("재생 속도"))
@@ -303,10 +337,10 @@ struct InputPropertiesSheet: View {
             }
             Section(L("마크 인/아웃")) {
                 HStack {
-                    Button(L("Mark In (현재)")) { input.markIn = input.position }
+                    Button(L("Mark In (현재)")) { input.markIn = transport.position }
                     Text(input.markIn >= 0 ? String(format: L("%.2f초"), input.markIn) : L("없음"))
                     Spacer()
-                    Button(L("Mark Out (현재)")) { input.markOut = input.position }
+                    Button(L("Mark Out (현재)")) { input.markOut = transport.position }
                     Text(input.markOut > 0 ? String(format: L("%.2f초"), input.markOut) : L("없음"))
                     Button("Reset") {
                         input.markIn = -1

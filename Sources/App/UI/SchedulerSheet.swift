@@ -33,7 +33,7 @@ struct SchedulerSheet: View {
         "StartStreaming", "StopStreaming", "StartRecording", "StopRecording", "StartMultiCorder", "StopMultiCorder",
         "StartExternal", "StopExternal", "Cut", "Fade", "CutDirect", "PreviewInput", "OverlayInput1In", "OverlayInput1Out",
         "OverlayInput2In", "OverlayInput2Out", "Play", "Pause", "Restart", "SetVolume", "AudioOn", "AudioOff",
-        "SetText", "FadeToBlack", "LoudnessReset",
+        "SetText", "FadeToBlack",
     ]
     static let dayNames = [L("일"), L("월"), L("화"), L("수"), L("목"), L("금"), L("토")]
 

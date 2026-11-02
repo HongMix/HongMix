@@ -63,6 +63,8 @@ Settings (⌘,) → Shortcuts lets you map any key to any function (vMix default
 - Camera/Capture: built-in camera, USB/Thunderbolt capture (UltraStudio, Magewell, Elgato …).
   Format: "Automatic" matches the program rate; or pick the exact resolution · frame rate the device offers.
 - Media file: MP4, MOV (incl. ProRes 4444 alpha), MXF, TS, MKV, MP3, WAV …
+  Includes FFmpeg's native decoders plus AV1 (libdav1d), VP8/9 (libvpx), and Opus. A file extension alone does not guarantee support for every codec inside it. VideoToolbox hardware decoding is used when available; otherwise decoding falls back to the CPU.
+  Input tiles use 480×270 monitor proxies at up to 12 fps, while Preview and Program retain the source image. The proxy reduces monitor rendering work, but does not remove the cost of decoding the active source.
 - Stream: SRT (Caller/Listener/Rendezvous, passphrase, Stream ID), RTMP (receive), UDP, URL.
   SRT latency: same as the other side, at least 4× the ping. LiveU etc. connect as Caller to srt://your-IP:port.
 - NDI: sources on the network are found automatically (other subnets: Settings → Network).
@@ -105,12 +107,11 @@ API: SetText Input=number SelectedName=Headline.Text Value=text
 
 7. Audio
 ----------------------------------------------------------------
-- The mixer shows Master plus only the buses in use. [+ Bus] adds buses A–G.
+- Master and active buses are always shown. Media inputs are checked for an audio track while the file is opened, so their strip appears before playback; inputs without an audio track stay hidden. Live inputs appear when audio arrives. [+ Bus] adds buses A–G.
+- The waveform button beside the mixer title hides/shows level meters. The arrow collapses/expands all input strips. Use input ⚙ Properties › Audio Settings › Visible in Mixer to show/hide individual strips.
 - Grid icon = Audio Bus Manager (inputs × buses on one screen).
 - Per channel: fader, mute, M/A/B buses, Solo (headphones), → (Audio Auto: audio only while in Output),
   ⚙ audio settings (EQ, compressor, gate, delay, channel mode).
-- LUFS next to the mixer title: program loudness (EBU R128). S = short-term, I = integrated.
-  Click for targets (−23/−24/−14/−16) and reset.
 - Headphones volume + [Monitor] to listen on the Mac's default output.
 
 
@@ -160,13 +161,18 @@ Settings (⌘,) → General → 언어 / Language: 한국어 / English. Switches
 13. Show tools (added in 1.1)
 ----------------------------------------------------------------
 [Broadcast delay + DUMP]
-  Stream/Record output settings › Encoding › "Broadcast delay" (5 s – 15 min). The encoded output goes out that much
-  later (no quality loss). The top bar shows "DELAY name · seconds"; in an emergency press the red [DUMP] to throw the
+  Stream/Record output settings › Encoding › "Broadcast delay" (5 s – 6 h). The encoded output goes out that much
+  later (no quality loss). The top bar shows "DELAY name · time held"; in an emergency press the red [DUMP] to throw the
   delayed part away and go live immediately.  API: SetDelay Value=seconds / DelayDump
+  Delay storage: Auto (memory up to 1 min, disk above) / Memory / Disk. On disk the delay is kept in 1-minute segment
+  files in the chosen folder (default: cache folder) and each file is deleted as soon as it has aired. The settings show
+  the space needed, the free space and how many hours would fit at the current bitrate. HongMix refuses to start if the
+  disk can't hold the delay plus a 2 GB reserve; if the disk fills during a show, the rest continues in memory and the
+  top bar chip drops its "DISK" tag.
 
 [Pre-flight check] checklist icon at the bottom
   Output signal, live inputs, backups, SRT quality (loss/latency), stream URL/key, recording disk time, audio
-  (silence/clipping/LUFS), renderer and FTB — green/yellow/red. Opens automatically when you press Stream and something is off.
+  (silence/clipping), renderer and FTB — green/yellow/red. Opens automatically when you press Stream and something is off.
 
 [Rundown (cue sheet)] [Rundown] at the bottom
   The show's running order: title, length, notes and any number of actions (Fade, overlays, SetText, start recording …).
@@ -213,7 +219,7 @@ Settings (⌘,) → General → 언어 / Language: 한국어 / English. Switches
 
 [Auto ducking] input ⚙ › Properties › Audio Settings › Auto Ducking
   On the presenter mic tick "When this input speaks, lower the others"; on music/video tick "Lower this input".
-  Amount (−15 dB), threshold (−38 dB), release (0.9 s). "DUCK" shows next to LUFS while ducking.
+  Amount (−15 dB), threshold (−38 dB), release (0.9 s).
   API: DuckingOn / DuckingOff / SetDuckTrigger · SetDucked Input=… Value=On|Off
 
 [Multitrack recording] Record ⚙ › Multitrack audio › switch on buses (M, A–G) as extra tracks.

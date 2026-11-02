@@ -55,13 +55,13 @@ if [ $USE_XCODE = 0 ]; then
 else
   say "=== Xcode 빌드"
   xcodegen generate >>"$LOG" 2>&1 || { say "ERROR: xcodegen 실패"; exit 1; }
-  xcodebuild -project BraceletMix.xcodeproj -scheme BraceletMix -configuration Debug \
+  xcodebuild -project HongMix.xcodeproj -scheme HongMix -configuration Debug \
     -derivedDataPath build/DerivedData ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGN_IDENTITY=- \
     HOMEBREW_PREFIX="$HOMEBREW_PREFIX" build >"$LOG" 2>&1
   RC=$?
   grep -E "error:|BUILD (SUCCEEDED|FAILED)" "$LOG" | sort -u > build/logs/errors.txt
   if [ $RC -eq 0 ]; then
-    say "BUILD SUCCEEDED → build/DerivedData/Build/Products/Debug/BraceletMix.app"
+    say "BUILD SUCCEEDED → build/DerivedData/Build/Products/Debug/HongMix.app"
   else
     say "BUILD FAILED — 오류 $(grep -c 'error:' build/logs/errors.txt)개 (build/logs/errors.txt)"
   fi

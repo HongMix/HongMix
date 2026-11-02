@@ -135,6 +135,7 @@ struct mc_ndi_recv {
     pthread_t thread;
     atomic_int stop;
     atomic_int tally_pgm, tally_pvw, tally_dirty;
+    atomic_int link;          // 1 = the NDI connection to the sender is up (even if no new frames arrive)
     float *abuf;
     int abuf_frames;
 };
@@ -205,7 +206,7 @@ static void *ndi_recv_thread(void *arg) {
     rc.color_format = NDIlib_recv_color_format_BGRX_BGRA;
     rc.bandwidth = r->low_bw ? NDIlib_recv_bandwidth_lowest : NDIlib_recv_bandwidth_highest;
     rc.allow_video_fields = false;
-    rc.p_ndi_recv_name = "BraceletMix";
+    rc.p_ndi_recv_name = "HongMix";
     NDIlib_recv_instance_t recv = g_ndi->recv_create_v3(&rc);
     free(url);
     if (!recv) {
@@ -215,6 +216,7 @@ static void *ndi_recv_thread(void *arg) {
     ndi_rstatus(r, MC_STATE_CONNECTING, "NDI 연결 중");
     int connected = 0;
     int64_t last_frame = mc_now_us();
+    int64_t last_link_check = 0, link_down_since = 0;
     while (!atomic_load(&r->stop)) {
         if (atomic_exchange(&r->tally_dirty, 0)) {
             NDIlib_tally_t t;
@@ -251,7 +253,17 @@ static void *ndi_recv_thread(void *arg) {
         default:
             break;
         }
-        if (connected && mc_now_us() - last_frame > 3000000) {
+        // Screen-capture style senders (NDI Screen Capture, Scan Converter …) only send a frame when the
+        // picture changes, so "no new frame" is not "no signal": judge by the NDI connection instead.
+        int64_t now = mc_now_us();
+        if (now - last_link_check >= 250000) {
+            last_link_check = now;
+            int up = g_ndi->recv_get_no_connections(recv) > 0;
+            atomic_store(&r->link, up);
+            if (up) link_down_since = 0;
+            else if (!link_down_since) link_down_since = now;
+        }
+        if (connected && link_down_since && now - link_down_since > 1500000) {
             connected = 0;
             ndi_rstatus(r, MC_STATE_CONNECTING, "NDI 신호 없음 — 대기 중");
         }
@@ -286,6 +298,10 @@ void mc_ndi_recv_set_tally(mc_ndi_recv *r, int program, int preview) {
     atomic_store(&r->tally_pgm, program);
     atomic_store(&r->tally_pvw, preview);
     atomic_store(&r->tally_dirty, 1);
+}
+
+int mc_ndi_recv_link(mc_ndi_recv *r) {
+    return r ? atomic_load(&r->link) : 0;
 }
 
 void mc_ndi_recv_close(mc_ndi_recv *r) {
@@ -391,7 +407,7 @@ mc_ndi_send *mc_ndi_send_open(const char *name, int fps_num, int fps_den) {
     if (!s) return NULL;
     NDIlib_send_create_t sc;
     memset(&sc, 0, sizeof(sc));
-    sc.p_ndi_name = name ? name : "BraceletMix Program";
+    sc.p_ndi_name = name ? name : "HongMix Program";
     sc.clock_video = false;
     sc.clock_audio = false;
     s->send = g_ndi->send_create(&sc);
@@ -459,6 +475,7 @@ mc_ndi_recv *mc_ndi_recv_open(const char *n, int l, mc_callbacks cb) {
 }
 void mc_ndi_recv_set_tally(mc_ndi_recv *r, int p, int v) { (void)r; (void)p; (void)v; }
 void mc_ndi_recv_close(mc_ndi_recv *r) { (void)r; }
+int mc_ndi_recv_link(mc_ndi_recv *r) { (void)r; return 0; }
 mc_ndi_send *mc_ndi_send_open(const char *n, int a, int b) {
     (void)n; (void)a; (void)b;
     return NULL;

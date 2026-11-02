@@ -122,7 +122,7 @@ final class DataSource: ObservableObject, Identifiable {
             }
         } else {
             var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
-            req.setValue("BraceletMix", forHTTPHeaderField: "User-Agent")
+            req.setValue("HongMix", forHTTPHeaderField: "User-Agent")
             URLSession.shared.dataTask(with: req) { d, resp, e in
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
                 if let d = d, code < 400 {

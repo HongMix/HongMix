@@ -359,7 +359,7 @@ struct TitleDocument: Codable, Equatable {
     var displayName: String { name.isEmpty ? template.label : name }
 }
 
-/// User templates: saved title documents in ~/Library/Application Support/BraceletMix/Titles/*.bmtitle (JSON).
+/// User templates: saved title documents in ~/Library/Application Support/HongMix/Titles/*.bmtitle (JSON).
 /// Shareable between Macs by copying the files (Export / Import in the title editor).
 final class TitleLibrary: ObservableObject {
     static let shared = TitleLibrary()
@@ -367,7 +367,7 @@ final class TitleLibrary: ObservableObject {
 
     static var folder: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("BraceletMix/Titles", isDirectory: true)
+        return base.appendingPathComponent("HongMix/Titles", isDirectory: true)
     }
 
     init() { reload() }

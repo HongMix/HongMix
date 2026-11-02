@@ -2,7 +2,7 @@ import Foundation
 import CoreVideo
 
 enum InputKind: String, Codable, CaseIterable {
-    case camera, media, stream, ndi, decklink, color, image, title, screen, browser, audio
+    case camera, media, stream, ndi, decklink, color, image, title, screen, browser, audio, replay
 
     var label: String {
         switch self {
@@ -17,6 +17,7 @@ enum InputKind: String, Codable, CaseIterable {
         case .screen: return L("화면/창 캡처")
         case .browser: return L("웹 브라우저")
         case .audio: return L("오디오 입력")
+        case .replay: return "Instant Replay"
         }
     }
 
@@ -33,6 +34,7 @@ enum InputKind: String, Codable, CaseIterable {
         case .screen: return "rectangle.on.rectangle"
         case .browser: return "globe"
         case .audio: return "mic"
+        case .replay: return "gobackward"
         }
     }
 }
@@ -312,7 +314,7 @@ struct InputConfig: Codable, Identifiable, Equatable {
     var lowLatency: Bool = true
     var hardwareDecode: Bool = true
     var autoPlay: Bool = true
-    var autoPause: Bool = false
+    var autoPause: Bool = true
     var autoRestart: Bool = false
     var markIn: Double = -1
     var markOut: Double = -1
@@ -360,8 +362,10 @@ struct InputConfig: Codable, Identifiable, Equatable {
     var audioFX = AudioFX()
     // recording
     var multiCorder: Bool = false
-    /// vMix: right-click an input's title to collapse it (title bar only)
+    /// Show this input using the compact thumbnail tile layout.
     var collapsed: Bool = false
+    /// Fully fold an input card to its title bar while leaving the switcher input available.
+    var folded: Bool = false
     /// Signal loss (live inputs): 0 keep last frame, 1 black, 2 colour bars "NO SIGNAL"
     var lossMode: Int = 2
     var backupInputID: UUID? = nil      // failover: cut to this input when this one is live and loses signal
@@ -379,6 +383,10 @@ struct InputConfig: Codable, Identifiable, Equatable {
     /// 3D LUT (.cube) applied to this input's picture
     var lutPath: String = ""
     var lutStrength: Float = 1
+    /// Alpha / Fill & Key mapping
+    var alphaKey = AlphaKeySettings()
+    /// Instant Replay input: 0 = channel A, 1 = channel B
+    var replayChannel: Int = 0
 
     init(kind: InputKind, name: String) {
         self.kind = kind
@@ -435,6 +443,7 @@ struct InputConfig: Codable, Identifiable, Equatable {
         channel2 = c.value(.channel2, d.channel2)
         multiCorder = c.value(.multiCorder, d.multiCorder)
         collapsed = c.value(.collapsed, d.collapsed)
+        folded = c.value(.folded, d.folded)
         lossMode = c.value(.lossMode, d.lossMode)
         backupInputID = c.value(.backupInputID, d.backupInputID)
         autoReturn = c.value(.autoReturn, d.autoReturn)
@@ -446,6 +455,8 @@ struct InputConfig: Codable, Identifiable, Equatable {
         playlistIndex = c.value(.playlistIndex, d.playlistIndex)
         lutPath = c.value(.lutPath, d.lutPath)
         lutStrength = c.value(.lutStrength, d.lutStrength)
+        alphaKey = c.value(.alphaKey, d.alphaKey)
+        replayChannel = c.value(.replayChannel, d.replayChannel)
         if let b: String = try? c.decodeIfPresent(String.self, forKey: .buses) {
             buses = b
         } else {
@@ -488,6 +499,11 @@ struct AudioParams {
     var fx = AudioFX()
 }
 
+final class InputTransportState: ObservableObject {
+    @Published var position: Double = 0
+    @Published var duration: Double = 0
+}
+
 /// Base class for all inputs.
 class InputSource: ObservableObject, Identifiable {
     let id: UUID
@@ -507,6 +523,11 @@ class InputSource: ObservableObject, Identifiable {
     @Published var channel2: Float { didSet { syncAudioParams() } }
     @Published var solo: Bool = false { didSet { syncAudioParams() } }
     @Published var audioFX: AudioFX { didSet { syncAudioParams() } }
+    @Published private(set) var hasAudioSignal = false
+    @Published private(set) var hasAudioTrack = false
+    var hasAudio: Bool { hasAudioTrack || hasAudioSignal }
+    private let audioPresenceLock = NSLock()
+    private var audioPresenceNotified = false
 
     // media transport
     @Published var playing: Bool = true { didSet { applyTransport() } }
@@ -517,13 +538,23 @@ class InputSource: ObservableObject, Identifiable {
     @Published var autoPlay: Bool
     @Published var autoPause: Bool
     @Published var autoRestart: Bool
-    @Published var position: Double = 0     // seconds
-    @Published var duration: Double = 0     // seconds (0 = live)
+    // Keep the high-frequency playhead clock out of InputSource.objectWillChange. The input
+    // card observes InputSource for configuration and status; only transport controls observe this.
+    let transport = InputTransportState()
+    var position: Double {
+        get { transport.position }
+        set { transport.position = newValue }
+    }
+    var duration: Double {
+        get { transport.duration }
+        set { transport.duration = newValue }
+    }
 
     // picture / recording
     @Published var adjust: VideoAdjust { didSet { syncVideoParams() } }
     @Published var multiCorder: Bool
     @Published var collapsed: Bool = false
+    @Published var folded: Bool = false
     @Published var lossMode: Int = 2 { didSet { applyLossSubstitute() } }
     @Published var backupInputID: UUID?
     @Published var autoReturn = true
@@ -539,6 +570,18 @@ class InputSource: ObservableObject, Identifiable {
         return lutStore
     }
     private func syncLUT() { paramsLock.lock(); lutStore = (lutPath, lutStrength); paramsLock.unlock() }
+    /// Alpha / Fill & Key — snapshot read by the render thread
+    @Published var alphaKey = AlphaKeySettings() { didSet { paramsLock.lock(); alphaKeyStore = alphaKey; paramsLock.unlock() } }
+    private var alphaKeyStore = AlphaKeySettings()
+    var alphaKeySnapshot: AlphaKeySettings {
+        paramsLock.lock(); defer { paramsLock.unlock() }
+        return alphaKeyStore
+    }
+    /// Render thread: last alpha/key result, reused while fill and key frames don't change.
+    var keyCacheFill: CVPixelBuffer?
+    var keyCacheKey: CVPixelBuffer?
+    var keyCacheOut: CVPixelBuffer?
+    var keyCacheSettings = AlphaKeySettings()
     /// Render thread: last LUT result, reused while the source frame doesn't change.
     var lutCacheSrc: CVPixelBuffer?
     var lutCacheOut: CVPixelBuffer?
@@ -564,11 +607,31 @@ class InputSource: ObservableObject, Identifiable {
     }
     /// What this input looks like: composed with its layers if it has any, else its own frame.
     func currentFrame() -> CVPixelBuffer? { composed ?? video.latest() }
+    /// Lightweight input-grid image. Program and main Preview always use `currentFrame()`.
+    func monitorFrame() -> CVPixelBuffer? { composed ?? video.monitorLatest() }
+    func setInputTileVisible(_ visible: Bool) { video.setMonitorDemand(visible) }
+
+    /// Publish audio presence once, outside the real-time callback, so silent/no-track inputs
+    /// don't reserve a meter in the mixer UI.
+    func noteAudioFrame() {
+        audioPresenceLock.lock()
+        let shouldPublish = !audioPresenceNotified
+        audioPresenceNotified = true
+        audioPresenceLock.unlock()
+        if shouldPublish { DispatchQueue.main.async { self.hasAudioSignal = true } }
+    }
+    /// FFmpeg reports stream metadata as soon as probing and decoder setup complete, before playback.
+    func noteAudioTrack(_ present: Bool) {
+        DispatchQueue.main.async { self.hasAudioTrack = present }
+    }
     /// Live input stopped delivering frames (or errored) after having had signal.
     @Published private(set) var signalLost = false
     private(set) var lostSince: Date?
     private(set) var hadSignal = false
     private var goodSince: CFTimeInterval = 0
+
+    /// The transport is connected even when no new frames arrive (NDI screen capture sends on change only).
+    var linkAlive: Bool { false }
 
     /// Inputs that carry a live signal (files, titles, colours, images never "lose signal").
     var isLiveSource: Bool { [.stream, .ndi, .camera, .decklink, .screen].contains(kind) }
@@ -578,7 +641,8 @@ class InputSource: ObservableObject, Identifiable {
         guard isLiveSource else { return 0 }
         let age = video.age
         let errored = state == Int32(MC_STATE_ERROR)
-        let ok = age < 0.8 && !errored
+        let link = hadSignal && linkAlive      // connected sender with a static picture = still a signal
+        let ok = (age < 0.8 || link) && !errored
         if ok {
             if !hadSignal { hadSignal = true }
             if signalLost {
@@ -594,7 +658,7 @@ class InputSource: ObservableObject, Identifiable {
             return 0
         }
         goodSince = 0
-        if hadSignal && !signalLost && (age > 1.0 || errored) {
+        if hadSignal && !signalLost && ((age > 1.0 && !link) || errored) {
             signalLost = true
             lostSince = Date()
             applyLossSubstitute()
@@ -617,6 +681,29 @@ class InputSource: ObservableObject, Identifiable {
 
     // Render-thread-only mixer state.
     var mixPrimed = false
+    var mixBufferGeneration: UInt64 = 0
+    private let audioMixHoldLock = NSLock()
+    private var _audioMixHeld = false
+    var audioMixHeld: Bool {
+        audioMixHoldLock.lock(); defer { audioMixHoldLock.unlock() }
+        return _audioMixHeld
+    }
+    func setAudioMixHeld(_ held: Bool) {
+        audioMixHoldLock.lock(); _audioMixHeld = held; audioMixHoldLock.unlock()
+    }
+    private let mixDiagnosticsLock = NSLock()
+    private var _mixPrimeTransitions: Int64 = 0
+    private var _mixUnderflows: Int64 = 0
+    func recordMixPrime() { mixDiagnosticsLock.lock(); _mixPrimeTransitions += 1; mixDiagnosticsLock.unlock() }
+    func recordMixUnderflow() { mixDiagnosticsLock.lock(); _mixUnderflows += 1; mixDiagnosticsLock.unlock() }
+    var mixAudioDiagnostics: (primes: Int64, underflows: Int64) {
+        mixDiagnosticsLock.lock(); defer { mixDiagnosticsLock.unlock() }
+        return (_mixPrimeTransitions, _mixUnderflows)
+    }
+    func resetAudioDiagnostics() {
+        audio.resetDiagnostics()
+        mixDiagnosticsLock.lock(); _mixPrimeTransitions = 0; _mixUnderflows = 0; mixDiagnosticsLock.unlock()
+    }
     var mixLastGains = [Float](repeating: 0, count: 8)
     let dsp = InputDSPState()
 
@@ -641,12 +728,16 @@ class InputSource: ObservableObject, Identifiable {
         self.markIn = config.markIn
         self.markOut = config.markOut
         self.rate = config.rate
+        // File inputs are cued on load. goLive() starts them when CUT/transition puts them on air.
+        // Keep streams and replay inputs on their existing transport defaults.
+        if config.kind == .media { self.playing = false }
         self.autoPlay = config.autoPlay
         self.autoPause = config.autoPause
         self.autoRestart = config.autoRestart
         self.adjust = config.adjust
         self.multiCorder = config.multiCorder
         self.collapsed = config.collapsed
+        self.folded = config.folded
         self.lossMode = config.lossMode
         self.backupInputID = config.backupInputID
         self.autoReturn = config.autoReturn
@@ -656,9 +747,11 @@ class InputSource: ObservableObject, Identifiable {
         self.triggers = config.triggers
         self.lutPath = config.lutPath
         self.lutStrength = config.lutStrength
+        self.alphaKey = config.alphaKey
         self.config = config
         layersStore = config.layers          // didSet doesn't run in init
         lutStore = (config.lutPath, config.lutStrength)
+        alphaKeyStore = config.alphaKey
         if !config.lutPath.isEmpty { LUTCache.shared.preload(config.lutPath) }
         syncAudioParams()
         syncVideoParams()
@@ -736,6 +829,7 @@ class InputSource: ObservableObject, Identifiable {
         c.adjust = adjust
         c.multiCorder = multiCorder
         c.collapsed = collapsed
+        c.folded = folded
         c.lossMode = lossMode
         c.backupInputID = backupInputID
         c.autoReturn = autoReturn
@@ -745,6 +839,7 @@ class InputSource: ObservableObject, Identifiable {
         c.triggers = triggers
         c.lutPath = lutPath
         c.lutStrength = lutStrength
+        c.alphaKey = alphaKey
         return c
     }
 
@@ -778,6 +873,37 @@ class InputSource: ObservableObject, Identifiable {
         case .screen: return ScreenCaptureInput(config: config)
         case .browser: return BrowserInput(config: config)
         case .audio: return AudioDeviceInput(config: config)
+        case .replay: return ReplayInput(config: config)
         }
+    }
+}
+
+
+/// How an input gets its transparency (Input Properties › Key › Alpha / Fill & Key).
+struct AlphaKeySettings: Codable, Equatable {
+    /// "auto" = the source's own alpha (NDI, PNG, ProRes 4444, browser …), "opaque" = ignore it,
+    /// "key" = take the key (matte) from another input — e.g. SDI 1 = fill, SDI 2 = key from a CG system
+    var mode: String = "auto"
+    var keyInputID: String = ""
+    /// key signal: "luma" (brightness of the key input, the usual SDI key) or "alpha" (key input's own alpha)
+    var keySignal: String = "luma"
+    var invert = false
+    /// key clip: key values below `clipLow` → transparent, above `clipHigh` → solid
+    var clipLow: Float = 0
+    var clipHigh: Float = 1
+    /// fill already multiplied by the key (shaped / premultiplied) — most CG systems and ATEM default
+    var shaped = true
+
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = AlphaKeySettings()
+        mode = c.value(.mode, d.mode)
+        keyInputID = c.value(.keyInputID, d.keyInputID)
+        keySignal = c.value(.keySignal, d.keySignal)
+        invert = c.value(.invert, d.invert)
+        clipLow = c.value(.clipLow, d.clipLow)
+        clipHigh = c.value(.clipHigh, d.clipHigh)
+        shaped = c.value(.shaped, d.shaped)
     }
 }

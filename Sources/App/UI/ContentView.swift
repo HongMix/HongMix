@@ -36,14 +36,18 @@ struct ContentView: View {
     @ViewState private var outputsSheet: OutputKind? = nil
     /// vMix: drag the dividing line to give the inputs more (or fewer) rows
     @AppStorage("monitorFraction") private var monitorFraction = 0.58
+    @AppStorage("audioInputStripsCollapsed") private var audioInputStripsCollapsed = false
+    @AppStorage("inputDockLeft") private var inputDockLeft = false
     @ViewState private var dragStartFraction: Double? = nil
 
     var body: some View {
         VStack(spacing: 0) {
             TopBar()
             GeometryReader { geo in
+                let activeAudioInputs = engine.inputs.filter { $0.hasAudio && $0.audioFX.visibleInMixer }
                 let lay = SwitcherLayout(size: geo.size, mixerVisible: engine.mixerVisible,
-                                       strips: 1 + engine.visibleBuses.count + engine.inputs.filter { $0.audioFX.visibleInMixer }.count,
+                                       strips: 1 + engine.visibleBuses.count + (audioInputStripsCollapsed ? 0 : activeAudioInputs.count),
+                                       inputStripsCollapsed: audioInputStripsCollapsed,
                                        topFraction: monitorFraction)
                 VStack(spacing: 0) {
                     // Preview | transitions | Output — height follows the 16:9 monitors so nothing hangs below them
@@ -90,10 +94,11 @@ struct ContentView: View {
                     // Inputs (fill the rest) | Audio mixer docked right, same height
                     HStack(spacing: 0) {
                         InputGrid(sheet: $sheet)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .frame(maxWidth: inputDockLeft ? nil : .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        if inputDockLeft { Spacer(minLength: 0) }
                         if engine.mixerVisible {
                             Rectangle().fill(Color.black).frame(width: 1)
-                            AudioMixerPanel(sheet: $sheet)
+                            AudioMixerPanel(sheet: $sheet, inputStripsCollapsed: $audioInputStripsCollapsed)
                                 .frame(width: lay.mixerWidth)
                                 .frame(maxHeight: .infinity)
                         }
@@ -147,7 +152,8 @@ struct SwitcherLayout {
     let topHeight: CGFloat
     let mixerWidth: CGFloat
 
-    init(size: CGSize, mixerVisible: Bool, strips: Int, topFraction: Double = 0.58) {
+    init(size: CGSize, mixerVisible: Bool, strips: Int, inputStripsCollapsed: Bool = false,
+         topFraction: Double = 0.58) {
         let maxTop = max(200, size.height * CGFloat(topFraction))
         var mw = max(200, (size.width - Self.transitionWidth - Self.gap * 4) / 2)
         var h = mw * 9 / 16 + Self.header + Self.transport
@@ -158,7 +164,8 @@ struct SwitcherLayout {
         monitorWidth = mw
         topHeight = h
         let want = CGFloat(strips) * Self.stripWidth + 12
-        mixerWidth = mixerVisible ? min(max(300, want), size.width * 0.45) : 0
+        let minimumMixerWidth: CGFloat = inputStripsCollapsed ? 120 : 300
+        mixerWidth = mixerVisible ? min(max(minimumMixerWidth, want + (inputStripsCollapsed ? 36 : 0)), size.width * 0.45) : 0
     }
 }
 
@@ -176,6 +183,10 @@ struct TopBar: View {
             Text("HongMix")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(Theme.buttonText)
+            Text("v" + AppInfo.version)
+                .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                .foregroundColor(.secondary)
+                .help(Lf("HongMix 버전 %@ (빌드 %@)", AppInfo.version, AppInfo.build))
             Text(engine.format.name)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.secondary)
@@ -384,9 +395,17 @@ struct BrowserBadge: View {
 
 struct BottomBar: View {
     @EnvironmentObject var engine: SwitcherEngine
+    @Environment(\.openWindow) private var openWindow
     @Binding var sheet: SheetRequest?
     @Binding var outputsSheet: OutputKind?
     @ViewState private var showStats = false
+    @ViewState private var utilitySheet: UtilitySheet?
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private enum UtilitySheet: String, Identifiable {
+        case overlay, scheduler, captions, preflight, monitoring, multiCorder
+        var id: String { rawValue }
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -405,30 +424,10 @@ struct BottomBar: View {
             .keyboardShortcut("i", modifiers: [.command])
             .help(L("입력 추가 (⌘I)"))
 
-            Spacer().frame(width: 10)
             OutputBarButton(title: "Record", kind: .record, outputsSheet: $outputsSheet)
             OutputBarButton(title: "External", kind: .ndi, alsoKind: .decklink, outputsSheet: $outputsSheet)
             OutputBarButton(title: "Stream", kind: .stream, outputsSheet: $outputsSheet)
-            MultiCorderBarButton()
             FullscreenBarButton()
-            OverlaySettingsButton()
-            RundownButton()
-            SchedulerButton()
-            CaptionsButton()
-            PreflightButton()
-            MonitoringButton()
-            ScopesButton()
-            Button {
-                engine.snapshot()
-            } label: {
-                Image(systemName: "camera.fill")
-                    .foregroundColor(.white)
-                    .frame(width: 30, height: 30)
-                    .background(Theme.button)
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
-            }
-            .buttonStyle(.plain)
-            .help("Snapshot (~/Pictures/BraceletMix)")
             Button {
                 engine.mixerVisible.toggle()
             } label: {
@@ -440,6 +439,35 @@ struct BottomBar: View {
             }
             .buttonStyle(.plain)
             .help(L("Audio Mixer 보이기/숨기기"))
+
+            Menu {
+                Button(engine.multiCorderOn ? L("MultiCorder 녹화 중지") : L("MultiCorder 시작")) {
+                    if engine.multiCorderOn { engine.stopMultiCorder() } else { engine.startMultiCorder() }
+                }
+                Button(L("MultiCorder 설정…")) { utilitySheet = .multiCorder }
+                Divider()
+                Button(L("Overlay 설정…")) { utilitySheet = .overlay }
+                Button(L("Rundown / 큐시트")) { openWindow(id: "rundown") }
+                Button(L("스케줄러…")) { utilitySheet = .scheduler }
+                Button(L("자막…")) { utilitySheet = .captions }
+                Button(L("송출 전 점검…")) { utilitySheet = .preflight }
+                Button(L("상황판 / 블랙박스…")) { utilitySheet = .monitoring }
+                Button(L("스코프")) { openWindow(id: "scopes") }
+                Button(L("Instant Replay")) { openWindow(id: "replay") }
+                Divider()
+                Button(L("스냅샷 저장")) { engine.snapshot() }
+            } label: {
+                Label(L("도구"), systemImage: "ellipsis")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+                    .background(Theme.button)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .help(L("도구: MultiCorder, Overlay, 큐시트, 스케줄, 자막, 상황판, 스코프, Replay, 스냅샷"))
 
             Spacer()
             Button {
@@ -461,6 +489,9 @@ struct BottomBar: View {
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
                     .textSelection(.enabled)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 220, alignment: .trailing)
                 if !engine.lastMessage.isEmpty {
                     Text(engine.lastMessage)
                         .font(.system(size: 10))
@@ -472,6 +503,16 @@ struct BottomBar: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(Theme.panelDark)
+        .sheet(item: $utilitySheet) { destination in
+            switch destination {
+            case .overlay: OverlaySettingsSheet().environmentObject(engine)
+            case .scheduler: SchedulerSheet(scheduler: engine.scheduler).environmentObject(engine)
+            case .captions: CaptionsSheet(captions: engine.captions).environmentObject(engine)
+            case .preflight: PreflightSheet().environmentObject(engine)
+            case .monitoring: MonitoringSheet(srt: engine.srtMonitor, box: engine.blackbox).environmentObject(engine)
+            case .multiCorder: MultiCorderSheet().environmentObject(engine)
+            }
+        }
     }
 }
 
@@ -770,10 +811,16 @@ private struct DelayChip: View {
     @ObservedObject var output: OutputChannel
     @ViewState private var confirm = false
 
+    private var delayText: String {
+        let ms = output.delayBufferedMs
+        let held = ms >= 60_000 ? String(format: "%d:%02d", ms / 60_000, (ms / 1000) % 60) : String(format: "%.1fs", Double(ms) / 1000)
+        let disk = output.delayOnDisk ? " · DISK " + OutputConfig.bytesText(output.delayDiskBytes) : ""
+        return "DELAY \(output.config.name) · \(held)\(disk)"
+    }
+
     var body: some View {
         HStack(spacing: 4) {
-            Text(output.delayDumped ? L("DELAY 해제됨 (실시간)") :
-                    String(format: "DELAY %@ · %.1fs", output.config.name, Double(output.delayBufferedMs) / 1000))
+            Text(output.delayDumped ? L("DELAY 해제됨 (실시간)") : delayText)
                 .font(.system(size: 11, weight: .bold).monospacedDigit())
                 .foregroundColor(.white)
                 .padding(.horizontal, 6).padding(.vertical, 1)

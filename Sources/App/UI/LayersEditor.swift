@@ -127,7 +127,7 @@ private struct LayersCanvas: View {
             let size = g.size
             ZStack(alignment: .topLeading) {
                 Color.black
-                MonitorView(fps: 30) { input.currentFrame() }
+                MonitorView(fps: 12) { input.monitorFrame() }
                 ForEach(Array(input.layers.enumerated()), id: \.element.id) { k, l in
                     let r = CGRect(x: l.x * size.width, y: l.y * size.height, width: l.w * size.width, height: l.h * size.height)
                     let sel = selected == l.id

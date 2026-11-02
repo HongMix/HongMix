@@ -1,4 +1,4 @@
-// BraceletMix media core — public C API consumed by the Swift engine.
+// HongMix media core — public C API consumed by the Swift engine.
 // All audio crossing this API is 48 kHz, 2-channel, interleaved float32.
 // All video crossing this API is 8-bit BGRA (premultiplied alpha is NOT assumed).
 #ifndef MC_CORE_H
@@ -26,9 +26,13 @@ enum {
 typedef void (*mc_video_cb)(void *user, const uint8_t *bgra, int width, int height, int stride, int64_t pts_us);
 typedef void (*mc_audio_cb)(void *user, const float *stereo, int frames);
 typedef void (*mc_status_cb)(void *user, int state, const char *message);
+/* Reports whether the opened FFmpeg session has a usable audio decoder. This is metadata,
+   delivered before playback so the mixer can allocate its strip without waiting for PCM. */
+typedef void (*mc_audio_presence_cb)(void *user, int present);
 /* Hardware-decoded frame (macOS: CVPixelBufferRef, usually NV12 IOSurface). Only valid during the call;
    retain it to keep it. When set, VideoToolbox frames skip the CPU download + BGRA conversion. */
 typedef void (*mc_pixelbuffer_cb)(void *user, void *pixel_buffer, int64_t pts_us);
+typedef void (*mc_video_drop_cb)(void *user);
 
 typedef struct {
     mc_video_cb on_video;
@@ -36,6 +40,8 @@ typedef struct {
     mc_status_cb on_status;
     void *user;
     mc_pixelbuffer_cb on_pixelbuffer;
+    mc_video_drop_cb on_video_drop;
+    mc_audio_presence_cb on_audio_presence;
 } mc_callbacks;
 
 /* ------------------------------------------------------------------ */
@@ -60,10 +66,31 @@ void mc_input_set_loop(mc_input *in, int loop);
 void mc_input_seek(mc_input *in, int64_t position_us);              // files
 void mc_input_set_marks(mc_input *in, int64_t in_us, int64_t out_us); // -1 = no mark
 void mc_input_set_rate(mc_input *in, double rate);                  // files: 0.05 ... 4.0 (audio muted when != 1)
+/* Queue the next file on the existing decoder thread. It opens immediately at EOF, avoiding the
+   close/join/new-thread gap used by UI-level playlists. */
+void mc_input_queue_next(mc_input *in, const char *url);
 double mc_input_nominal_fps(mc_input *in);                          // declared stream rate, 0 = unknown
 void mc_input_get_position(mc_input *in, int64_t *position_us, int64_t *duration_us, int *finished);
 /* SRT link statistics (1 = this input is a connected SRT session). Any thread. */
 int mc_input_srt_stats(mc_input *in, mc_srt_stats *out);
+/* Video decoder selected for delivered frames: 0 = no frame yet, 1 = VideoToolbox, 2 = software. */
+int mc_input_video_decode_mode(mc_input *in);
+
+/* Single-producer/single-consumer float stereo queue for CoreAudio render callbacks.
+   Reads are lock-free and never allocate; when full, new frames are dropped. */
+typedef struct mc_audio_ring mc_audio_ring;
+mc_audio_ring *mc_audio_ring_create(int capacity_frames);
+void mc_audio_ring_destroy(mc_audio_ring *ring);
+int mc_audio_ring_available(const mc_audio_ring *ring);
+int mc_audio_ring_write(mc_audio_ring *ring, const float *stereo, int frames);
+int mc_audio_ring_read(mc_audio_ring *ring, float *stereo, int frames);
+int mc_audio_ring_skip(mc_audio_ring *ring, int frames);
+void mc_audio_ring_clear(mc_audio_ring *ring); /* call only while producer/consumer are stopped */
+uint64_t mc_audio_ring_short_reads(const mc_audio_ring *ring);
+uint64_t mc_audio_ring_short_frames(const mc_audio_ring *ring);
+uint64_t mc_audio_ring_priming_silence_frames(const mc_audio_ring *ring);
+void mc_audio_ring_note_priming_silence(mc_audio_ring *ring, uint64_t frames);
+void mc_audio_ring_reset_diagnostics(mc_audio_ring *ring);
 
 /* ------------------------------------------------------------------ */
 /* FFmpeg output: RTMP/RTMPS, SRT, UDP streaming and file recording    */
@@ -83,8 +110,14 @@ typedef struct {
     int hardware;             // prefer VideoToolbox encoders
     int pixelbuffer_input;    // frames arrive via mc_output_push_pixelbuffer (zero-copy to VideoToolbox)
     int delay_ms;             // broadcast delay: encoded packets are held this long before going out (0 = live)
+    const char *delay_dir;    // optional: hold the delay on disk in this folder (1-minute segment files,
+                              // deleted as they air); NULL = RAM. Falls back to RAM if the disk fails/fills.
     int extra_audio_tracks;   // multitrack recording: extra stereo audio tracks (0…MC_MAX_XTRACKS), fed by
                               // mc_output_push_audio_tracks (track 1 = the normal audio)
+    /* Packet sink (instant replay): when set, encoded video packets go here instead of a file/stream
+       (use url "replay:" with format "null"). `frame` = the tick passed to push_video/pixelbuffer. */
+    void (*packet_cb)(void *user, const uint8_t *data, int size, int64_t frame, int key);
+    void *packet_user;
 } mc_output_config;
 
 #define MC_MAX_XTRACKS 8
@@ -98,6 +131,8 @@ typedef struct {
     int queue_depth;
     char encoder[48];
     int delay_buffered_ms;    // broadcast delay: how much is currently held back
+    int delay_on_disk;        // 1 = the delay is being held on disk
+    int64_t delay_disk_bytes; // bytes of delay currently on disk
 } mc_output_stats;
 
 mc_output *mc_output_open(const mc_output_config *cfg, mc_status_cb status, void *user);
@@ -116,6 +151,39 @@ void mc_output_close(mc_output *out);
 void mc_output_dump_delay(mc_output *out);
 
 /* ------------------------------------------------------------------ */
+/* Instant replay store: per-stream (camera / audio) frame-indexed packets on disk                    */
+/* ------------------------------------------------------------------ */
+typedef struct mc_replay_store mc_replay_store;
+/* streams: number of streams (cameras + audio). seg_frames: frames per segment file (e.g. 60 s). */
+mc_replay_store *mc_replay_store_open(const char *dir, int streams, int seg_frames);
+void mc_replay_store_close(mc_replay_store *st, int delete_files);
+/* Thread-safe. Frames must increase per stream. 0 = ok, -1 = write failed (disk). */
+int mc_replay_store_write(mc_replay_store *st, int stream, int64_t frame, const uint8_t *data, int size);
+/* Oldest / newest frame held for a stream (-1 = none). */
+int64_t mc_replay_store_first(mc_replay_store *st, int stream);
+int64_t mc_replay_store_last(mc_replay_store *st, int stream);
+/* Reads the packet for the newest frame <= `frame` into `*data` (malloc'd, caller frees). Returns size or -1. */
+int mc_replay_store_read(mc_replay_store *st, int stream, int64_t frame, uint8_t **data, int64_t *got_frame);
+/* Ring buffer: keep total bytes <= max_bytes by deleting the oldest segments (all streams together). 0 = no limit. */
+void mc_replay_store_set_limit(mc_replay_store *st, int64_t max_bytes);
+int64_t mc_replay_store_bytes(mc_replay_store *st);
+/* Deletes everything (keeps the store open). */
+void mc_replay_store_clear(mc_replay_store *st);
+
+/* Packet-sink adapter: user pointer for mc_output_config.packet_cb that writes into one store stream. */
+typedef struct mc_replay_sink mc_replay_sink;
+mc_replay_sink *mc_replay_sink_new(mc_replay_store *st, int stream);
+void mc_replay_sink_free(mc_replay_sink *s);
+void mc_replay_sink_cb(void *user, const uint8_t *data, int size, int64_t frame, int key);
+
+/* Decoder for stored (intra) video packets → BGRA. */
+typedef struct mc_replay_dec mc_replay_dec;
+mc_replay_dec *mc_replay_dec_open(void);
+/* 0 = ok: frame decoded and scaled into bgra (w × h, stride). */
+int mc_replay_dec_decode(mc_replay_dec *d, const uint8_t *data, int size, uint8_t *bgra, int stride, int w, int h);
+void mc_replay_dec_close(mc_replay_dec *d);
+
+/* ------------------------------------------------------------------ */
 /* NDI (runtime-loaded libndi)                                          */
 /* ------------------------------------------------------------------ */
 int mc_ndi_available(void);                         // 1 if libndi could be loaded
@@ -129,6 +197,8 @@ typedef struct mc_ndi_recv mc_ndi_recv;
 mc_ndi_recv *mc_ndi_recv_open(const char *source_name, int low_bandwidth, mc_callbacks cb);
 void mc_ndi_recv_set_tally(mc_ndi_recv *r, int program, int preview);
 void mc_ndi_recv_close(mc_ndi_recv *r);
+/* 1 = connected to the sender (frames may still be sparse: screen-capture senders send on change only). */
+int mc_ndi_recv_link(mc_ndi_recv *r);
 
 typedef struct mc_ndi_send mc_ndi_send;
 mc_ndi_send *mc_ndi_send_open(const char *name, int fps_num, int fps_den);
@@ -149,7 +219,9 @@ mc_dl_in *mc_decklink_in_open(int device_index, mc_callbacks cb, char *err, int 
 void mc_decklink_in_close(mc_dl_in *in);
 
 typedef struct mc_dl_out mc_dl_out;
-mc_dl_out *mc_decklink_out_open(int device_index, int width, int height, int fps_num, int fps_den,
+/* external_key: Fill & Key through the card's external keyer — fill on one SDI, key (alpha) on the paired
+   SDI. Frames are then sent as BGRA with alpha (straight or premultiplied as the output bus delivers them). */
+mc_dl_out *mc_decklink_out_open(int device_index, int width, int height, int fps_num, int fps_den, int external_key,
                                 char *err, int errlen);
 void mc_decklink_out_video(mc_dl_out *o, const uint8_t *bgra, int stride);
 void mc_decklink_out_audio(mc_dl_out *o, const float *stereo, int frames);

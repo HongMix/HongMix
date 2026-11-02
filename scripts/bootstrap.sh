@@ -1,5 +1,5 @@
 #!/bin/bash
-# BraceletMix 개발 환경 준비 + Xcode 프로젝트 생성 (Apple Silicon macOS 14+)
+# HongMix 개발 환경 준비 + Xcode 프로젝트 생성 (Apple Silicon macOS 14+)
 set -e
 cd "$(dirname "$0")/.."
 if ! command -v brew >/dev/null 2>&1; then
@@ -41,10 +41,10 @@ xcodegen generate
 
 if [ "$1" == "--build" ]; then
   echo "==> 빌드 (Release)"
-  xcodebuild -project BraceletMix.xcodeproj -scheme BraceletMix -configuration Release \
+  xcodebuild -project HongMix.xcodeproj -scheme HongMix -configuration Release \
     -derivedDataPath build HOMEBREW_PREFIX="$HOMEBREW_PREFIX" CODE_SIGN_IDENTITY=- build | tail -20
-  echo "앱: build/Build/Products/Release/BraceletMix.app"
+  echo "앱: build/Build/Products/Release/HongMix.app"
 else
-  open BraceletMix.xcodeproj
+  open HongMix.xcodeproj
   echo "Xcode에서 ⌘R 로 실행하세요. (명령줄 빌드: scripts/bootstrap.sh --build)"
 fi

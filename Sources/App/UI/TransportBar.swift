@@ -22,12 +22,18 @@ struct TransportBar: View {
 
 private struct TransportControls: View {
     @ObservedObject var input: InputSource
+    @ObservedObject var transport: InputTransportState
     @ViewState private var scrub: Double? = nil        // seconds while dragging
     @ViewState private var showRemaining = false
 
+    init(input: InputSource) {
+        self.input = input
+        self.transport = input.transport
+    }
+
     var body: some View {
-        let dur = input.duration
-        let pos = scrub ?? input.position
+        let dur = transport.duration
+        let pos = scrub ?? transport.position
         let remaining = max(0, effectiveEnd - pos)
         let nearEnd = dur > 0 && !input.looping && input.playing && remaining <= 10
         HStack(spacing: 6) {
@@ -50,7 +56,7 @@ private struct TransportControls: View {
     }
 
     private var effectiveEnd: Double {
-        input.markOut > 0 && input.markOut < input.duration ? input.markOut : input.duration
+        input.markOut > 0 && input.markOut < transport.duration ? input.markOut : transport.duration
     }
 
     private func iconButton(_ name: String, help: String, _ action: @escaping () -> Void) -> some View {
@@ -78,13 +84,20 @@ private struct TransportControls: View {
 /// Seek bar. Click/drag seeks live (like vMix); right-click sets Mark In / Mark Out at the clicked point.
 private struct PositionBar: View {
     @ObservedObject var input: InputSource
+    @ObservedObject var transport: InputTransportState
     @Binding var scrub: Double?
     @ViewState private var lastSeek = Date.distantPast
 
+    init(input: InputSource, scrub: Binding<Double?>) {
+        self.input = input
+        self.transport = input.transport
+        self._scrub = scrub
+    }
+
     var body: some View {
         GeometryReader { g in
-            let dur = max(0.001, input.duration)
-            let pos = scrub ?? input.position
+            let dur = max(0.001, transport.duration)
+            let pos = scrub ?? transport.position
             let x = { (t: Double) -> CGFloat in CGFloat(min(1, max(0, t / dur))) * g.size.width }
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 2).fill(Color.black.opacity(0.6)).frame(height: 8)
@@ -120,12 +133,12 @@ private struct PositionBar: View {
                     .onEnded { v in
                         let t = Double(min(max(0, v.location.x), g.size.width) / max(1, g.size.width)) * dur
                         input.seek(seconds: t)
-                        input.position = t
+                        transport.position = t
                         scrub = nil
                     }
             )
             .contextMenu {
-                let t = input.position
+                let t = transport.position
                 Button(Lf("Mark In (현재 위치 %@)", "\(TransportControls.tc(t))")) { input.markIn = t }
                 Button(Lf("Mark Out (현재 위치 %@)", "\(TransportControls.tc(t))")) { input.markOut = t }
                 Divider()

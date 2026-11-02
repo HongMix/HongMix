@@ -5,11 +5,13 @@
 #include "mc_util.h"
 #include <stdio.h>
 #include <stdatomic.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <math.h>
 
 typedef struct {
-    atomic_int vframes, aframes;
+    atomic_int vframes, aframes, audio_track;
     int w, h;
     mc_output *rec;
     int64_t tick;
@@ -32,6 +34,10 @@ static void on_audio(void *u, const float *s, int n) {
     (void)s;
     ctx_t *c = (ctx_t *)u;
     atomic_fetch_add(&c->aframes, n);
+}
+static void on_audio_presence(void *u, int present) {
+    ctx_t *c = (ctx_t *)u;
+    atomic_store(&c->audio_track, present ? 2 : 1);
 }
 static void on_status(void *u, int st, const char *m) {
     printf("  [%s] state=%d %s\n", (const char *)u, st, m);
@@ -62,6 +68,7 @@ int main(int argc, char **argv) {
     mc_callbacks cb = {on_video, on_audio, on_status, "file-in"};
     cb.user = &c;
     cb.on_status = NULL;
+    cb.on_audio_presence = on_audio_presence;
     mc_input *in = mc_input_open(&ic, cb);
 
     mc_output_config oc = {.url = "/tmp/mc_rec.mp4", .width = 640, .height = 360, .fps_num = 30, .fps_den = 1,
@@ -84,8 +91,21 @@ int main(int argc, char **argv) {
            (long long)st.frames_dropped, (long long)st.bytes_written);
     mc_output_close(rec);
     mc_input_close(in);
-    printf("file input: video frames=%d (%dx%d) audio frames=%d\n", atomic_load(&c.vframes), c.w, c.h,
-           atomic_load(&c.aframes));
+    int trackState = atomic_load(&c.audio_track);
+    printf("file input: video frames=%d (%dx%d) audio frames=%d metadata_audio_track=%s\n",
+           atomic_load(&c.vframes), c.w, c.h, atomic_load(&c.aframes),
+           trackState == 2 ? "yes" : trackState == 1 ? "no" : "unknown");
+    if (argc > 2) {
+        int expected = atoi(argv[2]);
+        if (trackState != (expected ? 2 : 1)) {
+            fprintf(stderr, "audio track metadata mismatch: expected %d, got state %d\n", expected, trackState);
+            return 2;
+        }
+    }
+    if (argc > 3 && strcmp(argv[3], "--skip-srt") == 0) {
+        puts("SRT loopback skipped by request");
+        return 0;
+    }
 
     // 2) SRT loopback
     ctx_t r;

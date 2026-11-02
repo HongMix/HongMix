@@ -51,11 +51,15 @@ struct TransitionSlot: Codable, Equatable {
 /// What an auxiliary output bus (Output 2–4) carries.
 enum BusSource: Codable, Equatable, Hashable {
     case program, clean, preview, multiview, input(UUID)
+    /// Overlay channels only on a transparent background (key & fill for NDI / DeckLink / downstream keyers)
+    case overlaysAlpha, overlaysAlphaStraight
 
     var label: String {
         switch self {
         case .program: return L("Output (프로그램)")
         case .clean: return L("Clean (오버레이 없음)")
+        case .overlaysAlpha: return L("Overlay 알파 (Premultiplied)")
+        case .overlaysAlphaStraight: return L("Overlay 알파 (Straight)")
         case .preview: return "Preview"
         case .multiview: return "MultiView"
         case .input: return L("입력")
@@ -70,7 +74,7 @@ struct StingerConfig: Codable, Equatable {
 }
 
 struct MultiCorderSettings: Codable, Equatable {
-    var folder: String = "~/Movies/BraceletMix/MultiCorder"
+    var folder: String = "~/Movies/HongMix/MultiCorder"
     var videoCodec: String = "h264"     // h264 | hevc | prores
     var container: String = "mov"
     var videoKbps: Int = 20000
@@ -152,8 +156,8 @@ private struct RenderState {
     var transitionStart: CFTimeInterval = 0
     var transitionDuration: Double = 1.0
     var manualT: Float? = nil
-    var overlays = [OverlayState](repeating: OverlayState(), count: 4)
-    var overlaySettings = [OverlaySettings](repeating: OverlaySettings(), count: 4)
+    var overlays = [OverlayState](repeating: OverlayState(), count: 8)
+    var overlaySettings = [OverlaySettings](repeating: OverlaySettings(), count: 8)
     var ftbTarget: Float = 0
     var ftb: Float = 0
     var stinger: StingerState? = nil
@@ -169,15 +173,15 @@ final class EngineStats: ObservableObject {
 }
 
 final class SwitcherEngine: ObservableObject {
-    static let overlayCount = 4
+    static let overlayCount = 8
 
     // Published UI state (main thread only)
     @Published private(set) var inputs: [InputSource] = []
     @Published private(set) var outputs: [OutputChannel] = []
     @Published private(set) var programID: UUID?
     @Published private(set) var previewID: UUID?
-    @Published private(set) var overlayIDs: [UUID?] = [nil, nil, nil, nil]
-    @Published private(set) var overlayOn: [Bool] = [false, false, false, false]
+    @Published private(set) var overlayIDs: [UUID?] = Array(repeating: nil, count: overlayCount)
+    @Published private(set) var overlayOn: [Bool] = Array(repeating: false, count: overlayCount)
     @Published private(set) var ftbOn = false
     @Published private(set) var transitioning = false
     @Published var transitionSlots: [TransitionSlot] = [
@@ -187,7 +191,7 @@ final class SwitcherEngine: ObservableObject {
         TransitionSlot(type: .fly, durationMs: 1000),
     ]
     var defaultTransition: TransitionSlot { transitionSlots[0] }
-    @Published var stingers: [StingerConfig] = [StingerConfig(), StingerConfig(), StingerConfig(), StingerConfig()]
+    @Published var stingers: [StingerConfig] = [StingerConfig()]
     @Published private(set) var stingerActive: Int? = nil
     @Published var busSources: [BusSource] = [.preview, .multiview, .clean] {
         didSet { withState { $0.busSources = busSources } }
@@ -198,8 +202,25 @@ final class SwitcherEngine: ObservableObject {
         didSet { for (i, b) in busSettings.enumerated() { audioMixer.setBus(i, b) } }
     }
     @Published var headphonesVolume: Float = 1 { didSet { audioMixer.setHeadphones(volume: headphonesVolume) } }
+    @Published var audioOutputRoutes: [AudioOutputRoute] = {
+        if let d = UserDefaults.standard.data(forKey: "audioOutputRoutes"),
+           var r = try? JSONDecoder().decode([AudioOutputRoute].self, from: d) {
+            if r.count == 8 { r.append(AudioOutputRoute()) }
+            if r.count == 9 { return r }
+        }
+        var r = [AudioOutputRoute](repeating: AudioOutputRoute(), count: 9)
+        r[8].deviceUID = UserDefaults.standard.string(forKey: "monitorDeviceUID") ?? ""
+        return r
+    }() {
+        didSet {
+            if let d = try? JSONEncoder().encode(audioOutputRoutes) { UserDefaults.standard.set(d, forKey: "audioOutputRoutes") }
+            audioMixer.setOutputRoutes(audioOutputRoutes)
+            audioMixer.setMonitoringDevice(uid: audioOutputRoutes[8].deviceUID,
+                                           firstChannel: audioOutputRoutes[8].firstChannel)
+        }
+    }
     @Published var multiCorderSettings = MultiCorderSettings()
-    @Published var overlaySettings = [OverlaySettings](repeating: OverlaySettings(), count: 4) {
+    @Published var overlaySettings = [OverlaySettings](repeating: OverlaySettings(), count: overlayCount) {
         didSet { withState { $0.overlaySettings = overlaySettings } }
     }
     @Published private(set) var multiCorderOn = false
@@ -212,6 +233,7 @@ final class SwitcherEngine: ObservableObject {
     let rundown = Rundown()
     let captions = CaptionEngine()
     private var appActivity: NSObjectProtocol?
+    private var pendingSwitchToken = UUID()
     let srtMonitor = SRTMonitor()
     let blackbox = Blackbox()
     /// Recording: "≈ 3.2 h left" on the disk of the record folder (updated every second).
@@ -227,7 +249,12 @@ final class SwitcherEngine: ObservableObject {
     private(set) var uiStallMs: Double = 0
     private var uiLastTick: CFTimeInterval = 0
     private var uiMaxGap: Double = 0
-    @Published var monitorOn = false { didSet { audioMixer.setMonitoring(monitorOn) } }
+    @Published var monitorOn = false { didSet {
+        let hp = audioOutputRoutes[8]
+        audioMixer.setMonitoringDevice(uid: hp.deviceUID, firstChannel: hp.firstChannel)
+        audioMixer.setMonitoring(monitorOn)
+        if monitorOn && !audioMixer.monitoring { monitorOn = false }
+    } }
     @Published var apiStatus: String = ""
     @Published var lastMessage: String = ""
 
@@ -299,6 +326,8 @@ final class SwitcherEngine: ObservableObject {
     private var audioAccumulator: Int = 0
     private var statsTimer: Timer?
     private var mediaTimer: Timer?
+    private let childChangeSubject = PassthroughSubject<UUID, Never>()
+    private var childChangeBatch: AnyCancellable?
     private var renderMsAccum: Double = 0
     private var renderMsCount = 0
     private var renderMsMax: Double = 0
@@ -323,11 +352,21 @@ final class SwitcherEngine: ObservableObject {
     }
 
     private func watch(_ id: UUID, _ publisher: ObservableObjectPublisher) {
-        // Children (inputs/outputs) change often — playback position, meters, bitrate text.
-        // Coalesce so the whole window re-evaluates at most 10×/s; rows observe their own object directly.
-        childSubscriptions[id] = publisher
-            .throttle(for: .milliseconds(100), scheduler: DispatchQueue.main, latest: true)
-            .sink { [weak self] _ in self?.childChanges[id, default: 0] += 1; self?.objectWillChange.send() }
+        // Child views observe their own input/output directly. Only invalidate the parent switcher
+        // for dependent controls, and batch all children together so N active sources cannot cause
+        // N × 10 full-window updates per second.
+        if childChangeBatch == nil {
+            childChangeBatch = childChangeSubject
+                .collect(.byTime(DispatchQueue.main, .milliseconds(100)))
+                .sink { [weak self] ids in
+                    guard let self else { return }
+                    for childID in Set(ids) { self.childChanges[childID, default: 0] += 1 }
+                    self.objectWillChange.send()
+                }
+        }
+        childSubscriptions[id] = publisher.sink { [weak self] _ in
+            self?.childChangeSubject.send(id)
+        }
     }
     /// Diagnostics: how often each child forced a window update (per second, reset in publishStats).
     var childChanges: [UUID: Int] = [:]
@@ -343,6 +382,10 @@ final class SwitcherEngine: ObservableObject {
 
     func startEngine() {
         guard !running else { return }
+        ReplayEngine.shared.engine = self
+        audioMixer.setOutputRoutes(audioOutputRoutes)
+        let hp = audioOutputRoutes[8]
+        audioMixer.setMonitoringDevice(uid: hp.deviceUID, firstChannel: hp.firstChannel)
         // No App Nap / timer coalescing while HongMix runs — even minimised or behind other windows.
         // (macOS otherwise slows background apps, which shows up as dropped frames.)
         appActivity = ProcessInfo.processInfo.beginActivity(
@@ -355,10 +398,13 @@ final class SwitcherEngine: ObservableObject {
         statsTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.publishStats()
         }
-        let watch = Timer(timeInterval: 0.01, repeats: true) { [weak self] _ in
+        let uiProbeInterval = 0.02
+        let watch = Timer(timeInterval: uiProbeInterval, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             let now = CACurrentMediaTime()
-            if self.uiLastTick > 0 { self.uiMaxGap = max(self.uiMaxGap, (now - self.uiLastTick) * 1000 - 10) }
+            if self.uiLastTick > 0 {
+                self.uiMaxGap = max(self.uiMaxGap, (now - self.uiLastTick) * 1000 - uiProbeInterval * 1000)
+            }
             self.uiLastTick = now
         }
         RunLoop.main.add(watch, forMode: .common)
@@ -382,7 +428,7 @@ final class SwitcherEngine: ObservableObject {
         running = true
         stateLock.unlock()
         let t = Thread { [weak self] in self?.renderLoop() }
-        t.name = "BraceletMix.render"
+        t.name = "HongMix.render"
         t.qualityOfService = .userInteractive
         renderThread = t
         t.start()
@@ -540,6 +586,37 @@ final class SwitcherEngine: ObservableObject {
         if i.autoPause { i.playing = false }
     }
 
+    /// Pre-roll file audio before changing the program bus. Previously a CUT started
+    /// playback and immediately switched video/audio weights; the mixer could consume
+    /// the first decoder blocks while the source was still priming, creating a short
+    /// silence or clipped audio at the transition.
+    private func whenIncomingAudioIsReady(_ id: UUID?, then action: @escaping () -> Void) {
+        pendingSwitchToken = UUID()
+        let token = pendingSwitchToken
+        guard let id, let input = input(withID: id), input.supportsTransport,
+              input.autoPlay, input.hasAudio, input.audioParams.followsVideo else {
+            action()
+            return
+        }
+        input.setAudioMixHeld(true)
+        goLive(id)
+        let deadline = CACurrentMediaTime() + 0.30
+        let requiredFrames = 4_800 // 100 ms at the mixer's 48 kHz rate
+        func poll() {
+            guard self.pendingSwitchToken == token else {
+                input.setAudioMixHeld(false)
+                return
+            }
+            if input.audio.available >= requiredFrames || CACurrentMediaTime() >= deadline {
+                input.setAudioMixHeld(false)
+                action()
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.005, execute: poll)
+            }
+        }
+        DispatchQueue.main.async(execute: poll)
+    }
+
     // MARK: Switching (main thread)
 
     func setPreview(_ id: UUID?) {
@@ -549,12 +626,17 @@ final class SwitcherEngine: ObservableObject {
     }
 
     func cut() {
+        let incoming = previewID
+        whenIncomingAudioIsReady(incoming) { [weak self] in self?.performCut(to: incoming) }
+    }
+
+    private func performCut(to incoming: UUID?) {
         var newPgm: UUID?, newPvw: UUID?
         withState { s in
             s.transitionActive = false
             s.manualT = nil
             let old = s.programID
-            s.programID = s.previewID
+            s.programID = incoming
             s.previewID = old
             newPgm = s.programID
             newPvw = s.previewID
@@ -570,6 +652,10 @@ final class SwitcherEngine: ObservableObject {
     }
 
     func cutDirect(_ id: UUID) {
+        whenIncomingAudioIsReady(id) { [weak self] in self?.performCutDirect(id) }
+    }
+
+    private func performCutDirect(_ id: UUID) {
         withState { s in
             s.transitionActive = false
             s.manualT = nil
@@ -586,21 +672,25 @@ final class SwitcherEngine: ObservableObject {
 
     func autoTransition(_ type: TransitionType, durationMs: Int) {
         let d = max(0.05, Double(durationMs) / 1000)
-        var started = false
-        var incoming: UUID?
-        withState { s in
-            guard !s.transitionActive, s.stinger == nil, s.previewID != nil else { return }
-            s.transition = type
-            s.transitionDuration = d
-            s.transitionStart = CACurrentMediaTime()
-            s.manualT = nil
-            s.transitionActive = true
-            started = true
-            incoming = s.previewID
-        }
-        if started {
-            goLive(incoming)
-            transitioning = true
+        guard stingerActive == nil, let incoming = previewID else { return }
+        var alreadyTransitioning = false
+        withState { alreadyTransitioning = $0.transitionActive || $0.stinger != nil }
+        guard !alreadyTransitioning else { return }
+        whenIncomingAudioIsReady(incoming) { [weak self] in
+            guard let self, self.previewID == incoming else { return }
+            var started = false
+            withState { s in
+                guard !s.transitionActive, s.stinger == nil, s.previewID == incoming else { return }
+                s.transition = type
+                s.transitionDuration = d
+                s.transitionStart = CACurrentMediaTime()
+                s.manualT = nil
+                s.transitionActive = true
+                started = true
+            }
+            guard started else { return }
+            self.goLive(incoming)
+            self.transitioning = true
         }
     }
 
@@ -654,15 +744,14 @@ final class SwitcherEngine: ObservableObject {
     // Stingers (1-based)
 
     func stinger(_ slot: Int) {
-        let i = max(1, min(4, slot)) - 1
-        guard let sid = stingers[i].inputID, let s = input(withID: sid), previewID != nil else {
+        guard slot == 1, let sid = stingers[0].inputID, let s = input(withID: sid), previewID != nil else {
             lastMessage = Lf("Stinger %@: 미디어 입력이 지정되지 않음", "\(slot)")
             return
         }
         var ok = false
         withState { st in
             guard st.stinger == nil, !st.transitionActive else { return }
-            st.stinger = StingerState(slot: slot, id: sid, start: CACurrentMediaTime(), cutMs: stingers[i].cutPointMs)
+            st.stinger = StingerState(slot: 1, id: sid, start: CACurrentMediaTime(), cutMs: stingers[0].cutPointMs)
             ok = true
         }
         guard ok else { return }
@@ -685,6 +774,13 @@ final class SwitcherEngine: ObservableObject {
         let c = channel - 1
         guard (0..<SwitcherEngine.overlayCount).contains(c) else { return }
         if overlayOn[c] && overlayIDs[c] == id { overlayOut(channel) } else { overlayIn(channel, id) }
+    }
+
+    /// Toggle the input remembered by this channel; changing Preview never reassigns it.
+    func toggleOverlayChannel(_ channel: Int) {
+        let c = channel - 1
+        guard (0..<SwitcherEngine.overlayCount).contains(c), let id = overlayIDs[c], input(withID: id) != nil else { return }
+        if overlayOn[c] { overlayOut(channel) } else { overlayIn(channel, id) }
     }
 
     func overlayIn(_ channel: Int, _ id: UUID) {
@@ -931,7 +1027,7 @@ final class SwitcherEngine: ObservableObject {
     @discardableResult
     func snapshot(input: InputSource? = nil, path: String? = nil) -> String? {
         guard let pb = input?.currentFrame() ?? programSlot.latest() else { return nil }
-        let folder = (("~/Pictures/BraceletMix") as NSString).expandingTildeInPath
+        let folder = (("~/Pictures/HongMix") as NSString).expandingTildeInPath
         try? FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
         let df = DateFormatter()
         df.dateFormat = "yyyyMMdd_HHmmss_SSS"
@@ -1070,7 +1166,7 @@ final class SwitcherEngine: ObservableObject {
         }
     }
     private var programChangeHandled = false
-    private var overlayOnSince: [CFTimeInterval] = [0, 0, 0, 0]
+    private var overlayOnSince: [CFTimeInterval] = Array(repeating: 0, count: overlayCount)
     private var multiCorderStarted: CFTimeInterval = 0
 
     // MARK: Render loop (render thread)
@@ -1127,12 +1223,18 @@ final class SwitcherEngine: ObservableObject {
             tick += 1
             let target = start + toAbs(Double(tick) * frameNs)
             let now = mach_absolute_time()
-            if now > target + toAbs(frameNs * 3) {
+            let frameAbs = toAbs(frameNs)
+            let lateness = now > target ? now - target : 0
+            // Count an individual missed frame deadline instead of waiting until the render loop
+            // is three frames behind. The old threshold hid short recurring PGM/audio stalls.
+            if lateness > frameAbs / 2 {
                 stateLock.lock()
-                droppedCount += 1
+                droppedCount += Int(lateness / frameAbs) + 1
                 stateLock.unlock()
-                start = now - toAbs(Double(tick) * frameNs)
-                continue
+                if lateness > toAbs(frameNs * 3) {
+                    start = now - toAbs(Double(tick) * frameNs)
+                    continue
+                }
             }
             mach_wait_until(target)
         }
@@ -1164,6 +1266,32 @@ final class SwitcherEngine: ObservableObject {
                 lutOut[i.id] = o
             } else if let o = mixer.applyLUT(src, lut: lut, strength: strength, premultiplied: i.alphaPremultiplied) {
                 i.lutCacheSrc = src; i.lutCacheOut = o; i.lutCacheKey = key
+                lutOut[i.id] = o
+            }
+        }
+        // 1b. Alpha / Fill & Key pre-pass (opaque, or key taken from another input)
+        for i in ins {
+            let ak = i.alphaKeySnapshot
+            guard ak.mode != "auto", let fill = lutOut[i.id] ?? i.video.latest() else {
+                if i.keyCacheOut != nil { i.keyCacheOut = nil; i.keyCacheFill = nil; i.keyCacheKey = nil }
+                continue
+            }
+            let keySrc: InputSource? = ak.mode == "key" ? ins.first { $0.id.uuidString == ak.keyInputID && $0.id != i.id } : nil
+            let keyBuf = keySrc?.video.latest()
+            if let o = i.keyCacheOut, i.keyCacheFill === fill, i.keyCacheKey === keyBuf, i.keyCacheSettings == ak {
+                lutOut[i.id] = o
+                continue
+            }
+            var kp = AlphaKeyParams()
+            kp.mode = ak.mode == "opaque" ? 1 : 2
+            kp.keyAlpha = ak.keySignal == "alpha" ? 1 : 0
+            kp.invert = ak.invert ? 1 : 0
+            kp.shaped = ak.shaped ? 1 : 0
+            kp.clipLow = ak.clipLow; kp.clipHigh = max(ak.clipLow + 0.001, ak.clipHigh)
+            let fillPremul = lutOut[i.id] != nil || i.alphaPremultiplied
+            if let o = mixer.applyAlphaKey(fill: fill, fillPremultiplied: fillPremul, key: keyBuf,
+                                           keyPremultiplied: keySrc?.alphaPremultiplied ?? false, params: kp) {
+                i.keyCacheFill = fill; i.keyCacheKey = keyBuf; i.keyCacheOut = o; i.keyCacheSettings = ak
                 lutOut[i.id] = o
             }
         }
@@ -1295,6 +1423,13 @@ final class SwitcherEngine: ObservableObject {
         let pgm = find(st.programID)
         let pvw = find(st.previewID)
 
+        // Track what the program renderer actually consumed. Input arrival statistics alone
+        // cannot tell a fresh frame from a repeated stale frame during a presentation hitch.
+        pgm?.video.markProgramFrameUse()
+        if st.transitionActive { pvw?.video.markProgramFrameUse() }
+        for overlay in st.overlays where overlay.alpha > 0 { find(overlay.id)?.video.markProgramFrameUse() }
+        if let stinger = st.stinger { find(stinger.id)?.video.markProgramFrameUse() }
+
         composeLayers(ins, fmt: fmt)
         tickMarks.append(("state", CACurrentMediaTime()))
         // 2. Program (Output 1)
@@ -1304,7 +1439,7 @@ final class SwitcherEngine: ObservableObject {
         for (i, o) in st.overlays.enumerated() where o.alpha > 0 {
             layers[2 + i] = overlayLayer(find(o.id), alpha: o.alpha, settings: st.overlaySettings[i])
         }
-        if let sg = st.stinger { layers[6] = layer(find(sg.id)) }
+        if let sg = st.stinger { layers[10] = layer(find(sg.id)) }
         let code = st.transitionActive ? st.transition.shaderCode : 0
         let program = mixer?.render(layers: layers, t: t, transition: code, ftb: st.ftb)
         if let program = program {
@@ -1331,6 +1466,10 @@ final class SwitcherEngine: ObservableObject {
                 var clean = layers
                 for i in 2..<MetalMixer.layerCount { clean[i] = LayerInput.empty }
                 f = mixer?.render(layers: clean, t: t, transition: code, ftb: 0)
+            case .overlaysAlpha, .overlaysAlphaStraight:
+                var al = layers
+                al[0] = LayerInput.empty; al[1] = LayerInput.empty; al[6] = LayerInput.empty
+                f = mixer?.render(layers: al, t: 0, transition: 0, ftb: st.ftb, alphaOut: src == .overlaysAlpha ? 1 : 2)
             case .preview:
                 f = mixer?.renderTiles([fullTile(pvw, rect: full)])
             case .input(let id):
@@ -1382,6 +1521,13 @@ final class SwitcherEngine: ObservableObject {
         let n = audioMixer.mix(inputs: ins, weights: weights, frames: frames, isoIDs: Set(isos.keys))
         tickMarks.append(("audio", CACurrentMediaTime()))
         captions.feed(UnsafePointer(audioMixer.bus(captions.feedBus)), frames: n)
+        // Instant replay: record the selected cameras (program format) + master audio, feed live angles
+        if ReplayEngine.shared.wantsFrames {
+            ReplayEngine.shared.renderHook(tick: tick, audio: UnsafePointer(audioMixer.bus(0)), frames: n) { id in
+                guard let i = find(id) else { return nil }
+                return mixer?.renderTiles([fullTile(i, rect: full)])
+            }
+        }
         if st.ftb > 0 {
             let g = 1 - st.ftb
             for b in 0..<AudioMixer.busCount {
@@ -1551,6 +1697,7 @@ final class SwitcherEngine: ObservableObject {
                             masterVolume: masterVolume)
         p.busSettings = busSettings
         p.ducking = ducking
+        p.replay = ReplayEngine.shared.settings
         p.busSources = busSources
         p.stingers = stingers
         p.multiCorder = multiCorderSettings
@@ -1573,8 +1720,8 @@ final class SwitcherEngine: ObservableObject {
         withState { s in s = RenderState() }
         programID = nil
         previewID = nil
-        overlayIDs = [nil, nil, nil, nil]
-        overlayOn = [false, false, false, false]
+        overlayIDs = Array(repeating: nil, count: SwitcherEngine.overlayCount)
+        overlayOn = Array(repeating: false, count: SwitcherEngine.overlayCount)
         ftbOn = false
         stingerActive = nil
         DispatchQueue.global(qos: .userInitiated).async { old.forEach { $0.stop() } }
@@ -1582,10 +1729,19 @@ final class SwitcherEngine: ObservableObject {
         if let t = project.transitions, t.count == 4 { transitionSlots = t }
         if let b = project.busSettings, b.count == AudioMixer.busCount { busSettings = b }
         ducking = project.ducking ?? DuckSettings()
+        if let r = project.replay { ReplayEngine.shared.settings = r }
         masterVolume = project.masterVolume ?? masterVolume
-        if let s = project.stingers, s.count == 4 { stingers = s }
-        if let m = project.multiCorder { multiCorderSettings = m }
-        if let o = project.overlaySettings, o.count == 4 { overlaySettings = o }
+        if let s = project.stingers, let first = s.first { stingers = [first] }
+        else { stingers = [StingerConfig()] }
+        if var m = project.multiCorder {
+            m.folder = DefaultsMigration.modernize(m.folder)
+            multiCorderSettings = m
+        }
+        if let o = project.overlaySettings {
+            var migrated = [OverlaySettings](repeating: OverlaySettings(), count: SwitcherEngine.overlayCount)
+            for (i, setting) in o.prefix(SwitcherEngine.overlayCount).enumerated() { migrated[i] = setting }
+            overlaySettings = migrated
+        }
         dataSources.load(project.dataSources ?? [], project.dataBindings ?? [])
         scheduler.load(project.schedule ?? [])
         rundown.load(project.rundown ?? [])
@@ -1594,7 +1750,15 @@ final class SwitcherEngine: ObservableObject {
         if Thread.isMainThread, project.inputs.contains(where: { $0.kind == .browser && !$0.browserUseWebKit }) {
             _ = mc_web_init()
         }
-        for c in project.inputs {
+        // Older sessions left every previously selected file decoding after it went off-air.
+        // Migrate media sources to pause-on-leave so background clips do not consume decoder,
+        // audio-mix, and memory bandwidth while the operator is working with another source.
+        let loadedInputs = project.inputs.map { source -> InputConfig in
+            var source = source
+            if project.version < 4 && source.kind == .media { source.autoPause = true }
+            return source
+        }
+        for c in loadedInputs {
             let input = InputSource.make(c)
             inputs.append(input)
             watch(input.id, input.objectWillChange)
@@ -1613,7 +1777,7 @@ final class SwitcherEngine: ObservableObject {
 }
 
 struct ProjectFile: Codable {
-    var version = 3
+    var version = 4
     var formatID: String
     var inputs: [InputConfig]
     var outputs: [OutputConfig]
@@ -1631,10 +1795,11 @@ struct ProjectFile: Codable {
     var schedule: [ScheduledAction]? = nil
     var rundown: [RundownItem]? = nil
     var ducking: DuckSettings? = nil
+    var replay: ReplaySettings? = nil
 
     static var autosaveURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("BraceletMix", isDirectory: true)
+            .appendingPathComponent("HongMix", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         return base.appendingPathComponent("last-session.bmix")
     }

@@ -1,13 +1,13 @@
-# BraceletMix 제어 함수 설명서
+# HongMix 제어 함수 설명서
 
-BraceletMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 TCP 8099(`FUNCTION 이름 Input=…&Value=…`)로 제어합니다. 함수 이름과 파라미터 이름(Input, Value, Duration, SelectedName, SelectedIndex)은 vMix 공개 Web/TCP API와 같게 맞췄기 때문에, 기존 Companion·Stream Deck 버튼과 스크립트를 IP만 바꿔서 쓸 수 있습니다. 이 문서는 BraceletMix 동작을 기준으로 새로 작성했습니다.
+HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 TCP 8099(`FUNCTION 이름 Input=…&Value=…`)로 제어합니다. 함수 이름과 파라미터 이름(Input, Value, Duration, SelectedName, SelectedIndex)은 vMix 공개 Web/TCP API와 같게 맞췄기 때문에, 기존 Companion·Stream Deck 버튼과 스크립트를 IP만 바꿔서 쓸 수 있습니다. 이 문서는 HongMix 동작을 기준으로 새로 작성했습니다.
 
 **공통 규칙**
 
 - `Input`에는 입력 번호(1부터), 입력 이름, 또는 key(UUID)를 넣을 수 있습니다.
 - 성공하면 HTTP는 `Function completed successfully.`, TCP는 `FUNCTION OK 이름`을 돌려줍니다.
 - 실패하면 HTTP는 500, TCP는 `FUNCTION ER 메시지`를 돌려줍니다.
-- 일부러 구현하지 않은 함수는 `Not supported in BraceletMix: 이름`으로 응답합니다.
+- 일부러 구현하지 않은 함수는 `Not supported in HongMix: 이름`으로 응답합니다.
 
 ## 커버리지 (vMix 공개 함수 레퍼런스 기준, Replay·PTZ 등 제외 범주 빼고)
 
@@ -66,7 +66,7 @@ BraceletMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)
 | `SetOutputFullscreen / SetOutputFullscreen2` | Value=Output|Output2|Output3|Output4 | 풀스크린 출력에 보낼 Output을 정합니다. |
 | `SetOutputExternal2` | Value=Output|Output2… | 두 번째 NDI/DeckLink 출력의 소스를 정합니다. |
 | `Fullscreen / FullscreenOn / FullscreenOff` |  | 보조 모니터 풀스크린 출력을 켜고 끕니다. |
-| `Snapshot` | [Value=파일 경로] | Output을 PNG로 저장합니다 (기본 위치 ~/Pictures/BraceletMix). |
+| `Snapshot` | [Value=파일 경로] | Output을 PNG로 저장합니다 (기본 위치 ~/Pictures/HongMix). |
 | `SnapshotInput` | Input [Value=경로] | 입력 화면을 PNG로 저장합니다. |
 
 ## 입력 (Input)

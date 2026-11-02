@@ -64,6 +64,7 @@ void mc_float_to_s32(const float *src, int32_t *dst, int samples) {
 #include "mc_util.h"
 #include <libswscale/swscale.h>
 #include <libavutil/opt.h>
+#include <libavutil/cpu.h>
 
 struct SwsContext *mc_sws_get(int sw, int sh, int sfmt, int dw, int dh, int dfmt, int flags) {
     struct SwsContext *c = sws_alloc_context();
@@ -75,7 +76,14 @@ struct SwsContext *mc_sws_get(int sw, int sh, int sfmt, int dw, int dh, int dfmt
     av_opt_set_int(c, "dsth", dh, 0);
     av_opt_set_int(c, "dst_format", dfmt, 0);
     av_opt_set_int(c, "sws_flags", flags, 0);
-    av_opt_set_int(c, "threads", 0, 0);   /* 0 = one slice per CPU core (ignored by old FFmpeg) */
+    // swscale is called once per decoded frame. Letting every source create one worker per
+    // logical CPU multiplies runnable workers across preview, program, and live inputs. Two
+    // workers kept throughput within measurement noise on the 1080p60 and UHD59.94 samples.
+    // This aims to reduce worker contention; live UI/audio benefit still needs measurement. Keep
+    // a single worker on 1-core systems; codec decoder threading remains FFmpeg's automatic choice.
+    int cpu_count = av_cpu_count();
+    int sws_threads = cpu_count > 1 ? 2 : 1;
+    av_opt_set_int(c, "threads", sws_threads, 0);
     if (sws_init_context(c, NULL, NULL) < 0) {
         sws_freeContext(c);
         return sws_getContext(sw, sh, (enum AVPixelFormat)sfmt, dw, dh, (enum AVPixelFormat)dfmt, flags, NULL, NULL, NULL);

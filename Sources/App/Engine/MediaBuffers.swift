@@ -64,18 +64,35 @@ enum PixelBufferFactory {
 /// Holds the most recent frame of a source ("frame sync": the mixer always takes the newest frame).
 final class VideoSlot {
     private let lock = NSLock()
+    private let monitorLock = NSLock()
+    private let monitorQueue = DispatchQueue(label: "hongmix.monitor-proxy", qos: .userInitiated)
     private var buffer: CVPixelBuffer?
     private var pool: CVPixelBufferPool?
     private var poolWidth = 0
     private var poolHeight = 0
     private var frames: UInt64 = 0
     private var lastTime: CFTimeInterval = 0
+    // Low-resolution frame used only by input thumbnails. Program/Preview keep `buffer` untouched.
+    private var monitorBuffer: CVPixelBuffer?
+    private var monitorPool: CVPixelBufferPool?
+    private var monitorPoolSize = (0, 0)
+    private var monitorTransfer: VTPixelTransferSession?
+    private var monitorLastSchedule: CFTimeInterval = 0
+    private var monitorJobPending = false
+    private var monitorGeneration: UInt64 = 0
+    private var monitorConsumers = 0
 
     // Frame-arrival history for the frame-rate label and the Statistics window (vMix "Video" column).
     private var arrivals = [CFTimeInterval](repeating: 0, count: 128)
     private var arrivalIndex = 0
     private var lateFrames = 0          // gaps longer than 1.5 frame periods (≈ vMix "Source Dropped")
     private var lastWidth = 0, lastHeight = 0
+    private var latestPTSUs: Int64 = -1
+    private var lastPTSStepUs: Int64 = 0
+    private var lastStoredSequence: UInt64 = 0
+    private var lastProgramSequence: UInt64 = 0
+    private var repeatedProgramTicks: UInt64 = 0
+    private var maxProgramFrameAgeMs: Double = 0
     /// Sources rendered on demand (web pages, titles, images): they only produce a frame when something
     /// changes, and the mixer re-uses the last one every program frame — so, like vMix, their rate is the
     /// program rate rather than the (variable) update rate.
@@ -85,21 +102,116 @@ final class VideoSlot {
     /// Current program frame rate (set by the engine).
     static var programFPS: Double = 29.97
 
-    func store(_ pb: CVPixelBuffer) {
+    func store(_ pb: CVPixelBuffer, ptsUs: Int64 = -1) {
         let now = CACurrentMediaTime()
         lock.lock()
-        if !followsProgramRate, lastTime > 0, arrivalIndex >= 8 {
+        if !followsProgramRate, lastTime > 0, arrivalIndex >= 2 {
             let avg = averageInterval()
             if avg > 0, now - lastTime > avg * 1.5, now - lastTime < 1 { lateFrames += 1 }
         }
         buffer = pb
         frames &+= 1
+        lastStoredSequence &+= 1
+        if ptsUs >= 0 {
+            if latestPTSUs >= 0 { lastPTSStepUs = ptsUs - latestPTSUs }
+            latestPTSUs = ptsUs
+        }
         lastTime = now
         arrivals[arrivalIndex % arrivals.count] = now
         arrivalIndex += 1
         lastWidth = CVPixelBufferGetWidth(pb)
         lastHeight = CVPixelBufferGetHeight(pb)
         lock.unlock()
+        scheduleMonitorProxy(pb)
+    }
+
+    /// Called by the program render thread for inputs actually contributing to the on-air frame.
+    /// This measures source-frame reuse and age at consumption, separately from decode arrival.
+    func markProgramFrameUse() {
+        let now = CACurrentMediaTime()
+        lock.lock()
+        if lastStoredSequence > 0 {
+            if lastProgramSequence == lastStoredSequence { repeatedProgramTicks &+= 1 }
+            lastProgramSequence = lastStoredSequence
+            maxProgramFrameAgeMs = max(maxProgramFrameAgeMs, max(0, now - lastTime) * 1000)
+        }
+        lock.unlock()
+    }
+
+    /// 480x270 monitor proxy at 6 fps; the full-resolution frame remains the source for the
+    /// switcher and Program output. Scaling is done by VideoToolbox asynchronously. This is an
+    /// operator-grid preview only, so spending half the conversion/Metal work is preferable to
+    /// refreshing tiny thumbnails at a rate that is hard to distinguish visually.
+    private func scheduleMonitorProxy(_ source: CVPixelBuffer) {
+        let width = CVPixelBufferGetWidth(source), height = CVPixelBufferGetHeight(source)
+        guard width > 480 || height > 270 else {
+            monitorLock.lock(); monitorGeneration &+= 1; monitorBuffer = source; monitorLock.unlock()
+            return
+        }
+        let now = CACurrentMediaTime()
+        monitorLock.lock()
+        guard monitorConsumers > 0, !monitorJobPending, now - monitorLastSchedule >= 1.0 / 6.0 else {
+            monitorLock.unlock(); return
+        }
+        monitorJobPending = true
+        monitorLastSchedule = now
+        let generation = monitorGeneration
+        monitorLock.unlock()
+
+        monitorQueue.async { [weak self] in
+            guard let self else { return }
+            let scale = min(480 / Double(width), 270 / Double(height))
+            let outW = max(2, Int((Double(width) * scale / 2).rounded()) * 2)
+            let outH = max(2, Int((Double(height) * scale / 2).rounded()) * 2)
+            if self.monitorTransfer == nil {
+                var session: VTPixelTransferSession?
+                if VTPixelTransferSessionCreate(allocator: kCFAllocatorDefault, pixelTransferSessionOut: &session) == noErr,
+                   let session {
+                    VTSessionSetProperty(session, key: kVTPixelTransferPropertyKey_RealTime, value: kCFBooleanTrue)
+                    VTSessionSetProperty(session, key: kVTPixelTransferPropertyKey_ScalingMode, value: kVTScalingMode_Normal)
+                    self.monitorTransfer = session
+                }
+            }
+            if self.monitorPool == nil || self.monitorPoolSize.0 != outW || self.monitorPoolSize.1 != outH {
+                self.monitorPool = PixelBufferFactory.makePool(width: outW, height: outH, minimumCount: 3)
+                self.monitorPoolSize = (outW, outH)
+            }
+            var result: CVPixelBuffer?
+            if let session = self.monitorTransfer, let pool = self.monitorPool,
+               let dst = PixelBufferFactory.makeBuffer(pool: pool),
+               VTPixelTransferSessionTransferImage(session, from: source, to: dst) == noErr {
+                CVBufferPropagateAttachments(source, dst)
+                result = dst
+            }
+            self.monitorLock.lock()
+            if self.monitorGeneration == generation, let result { self.monitorBuffer = result }
+            self.monitorJobPending = false
+            self.monitorLock.unlock()
+        }
+    }
+
+    func monitorLatest() -> CVPixelBuffer? {
+        monitorLock.lock()
+        let proxy = monitorBuffer
+        monitorLock.unlock()
+        return proxy ?? latest()
+    }
+
+    /// Only generate scaled input-grid frames while a tile is actually visible in a window.
+    /// Program and Preview use `latest()` and are not governed by this demand counter.
+    func setMonitorDemand(_ active: Bool) {
+        monitorLock.lock()
+        if active {
+            monitorConsumers += 1
+            if monitorConsumers == 1 { monitorLastSchedule = 0 }
+        } else {
+            monitorConsumers = max(0, monitorConsumers - 1)
+            if monitorConsumers == 0 {
+                monitorGeneration &+= 1
+                monitorBuffer = nil
+            }
+        }
+        monitorLock.unlock()
     }
 
     /// lock held
@@ -123,9 +235,14 @@ final class VideoSlot {
         var width: Int
         var height: Int
         var intervalsMs: [Double]  // newest last
+        var maxGapMs: Double = 0   // maximum source-frame arrival interval in the rolling 2 s window
         var late: Int
         var updateFPS: Double = 0   // measured arrival rate (on-demand sources: how often it changed)
         var jitterMs: Double = 0    // std-dev of frame intervals over the last ~2 s (cadence evenness)
+        var latestPTSUs: Int64 = -1
+        var lastPTSStepMs: Double = 0
+        var repeatedProgramTicks: UInt64 = 0
+        var maxProgramFrameAgeMs: Double = 0
     }
 
     var stats: Stats {
@@ -144,6 +261,7 @@ final class VideoSlot {
         }
         let measured = live && avg > 0 ? 1 / avg : 0
         var jitter = 0.0
+        var maxGap = 0.0
         if live && n >= 4 {
             let newest = arrivals[(arrivalIndex - 1) % arrivals.count]
             var sum = 0.0, sum2 = 0.0, c = 0.0
@@ -156,21 +274,36 @@ final class VideoSlot {
             }
             if c >= 3 { jitter = (max(0, sum2 / c - (sum / c) * (sum / c))).squareRoot() }
         }
+        if live && n >= 2 {
+            let newestArrival = arrivals[(arrivalIndex - 1) % arrivals.count]
+            for offset in 0..<(n - 1) {
+                let newer = arrivals[(arrivalIndex - 1 - offset) % arrivals.count]
+                let older = arrivals[(arrivalIndex - 2 - offset) % arrivals.count]
+                if newestArrival - older > 2 { break }
+                maxGap = max(maxGap, (newer - older) * 1000)
+            }
+        }
         if followsProgramRate && frames > 0 {
             return Stats(fps: VideoSlot.programFPS, width: lastWidth, height: lastHeight,
-                         intervalsMs: iv, late: 0, updateFPS: measured, jitterMs: jitter)
+                         intervalsMs: iv, maxGapMs: maxGap, late: 0, updateFPS: measured, jitterMs: jitter,
+                         latestPTSUs: latestPTSUs, lastPTSStepMs: Double(lastPTSStepUs) / 1000,
+                         repeatedProgramTicks: repeatedProgramTicks, maxProgramFrameAgeMs: maxProgramFrameAgeMs)
         }
         // a live stream that declares its rate: label it with that (vMix shows the source format),
         // unless delivery is clearly far off (then the measured rate is the useful truth)
         let shown = nominalFPS > 0 && measured > 0 && abs(measured - nominalFPS) / nominalFPS < 0.1 ? nominalFPS : measured
         return Stats(fps: shown, width: lastWidth, height: lastHeight,
-                     intervalsMs: iv, late: lateFrames, updateFPS: measured, jitterMs: jitter)
+                     intervalsMs: iv, maxGapMs: maxGap, late: lateFrames, updateFPS: measured, jitterMs: jitter,
+                     latestPTSUs: latestPTSUs, lastPTSStepMs: Double(lastPTSStepUs) / 1000,
+                     repeatedProgramTicks: repeatedProgramTicks, maxProgramFrameAgeMs: maxProgramFrameAgeMs)
     }
 
     func resetStats() {
         lock.lock()
         lateFrames = 0
         sourceDrops = 0
+        repeatedProgramTicks = 0
+        maxProgramFrameAgeMs = 0
         lock.unlock()
     }
 
@@ -244,13 +377,17 @@ final class VideoSlot {
         lock.lock()
         buffer = nil
         lock.unlock()
+        monitorLock.lock()
+        monitorGeneration &+= 1
+        monitorBuffer = nil
+        monitorLock.unlock()
     }
 
     private var transfer: VTPixelTransferSession?
 
     /// Hardware-decoded frame (NV12 IOSurface from VideoToolbox) → pooled BGRA IOSurface, converted on the
     /// GPU by VTPixelTransferSession. No CPU copy, no CPU colour conversion. Called on the decoder thread.
-    func ingest(pixelBuffer src: CVPixelBuffer) {
+    func ingest(pixelBuffer src: CVPixelBuffer, ptsUs: Int64 = -1) {
         let width = CVPixelBufferGetWidth(src), height = CVPixelBufferGetHeight(src)
         guard width > 0, height > 0 else { return }
         let fmt = CVPixelBufferGetPixelFormatType(src)
@@ -264,7 +401,7 @@ final class VideoSlot {
                                       height >= 720 ? kCVImageBufferYCbCrMatrix_ITU_R_709_2 : kCVImageBufferYCbCrMatrix_ITU_R_601_4,
                                       .shouldPropagate)
             }
-            store(src)
+            store(src, ptsUs: ptsUs)
             return
         }
         if transfer == nil {
@@ -287,16 +424,17 @@ final class VideoSlot {
         }
         guard let pool = pool, let t = transfer, let dst = PixelBufferFactory.makeBuffer(pool: pool) else { return }
         if VTPixelTransferSessionTransferImage(t, from: src, to: dst) == noErr {
-            store(dst)
+            store(dst, ptsUs: ptsUs)
         }
     }
 
     deinit {
         if let t = transfer { VTPixelTransferSessionInvalidate(t) }
+        if let t = monitorTransfer { VTPixelTransferSessionInvalidate(t) }
     }
 
     /// Copies a BGRA frame from C memory into a pooled pixel buffer. Called on the producer thread.
-    func ingest(bgra: UnsafePointer<UInt8>, width: Int, height: Int, stride: Int) {
+    func ingest(bgra: UnsafePointer<UInt8>, width: Int, height: Int, stride: Int, ptsUs: Int64 = -1) {
         guard width > 0, height > 0 else { return }
         if pool == nil || poolWidth != width || poolHeight != height {
             pool = PixelBufferFactory.makePool(width: width, height: height)
@@ -317,7 +455,7 @@ final class VideoSlot {
             }
         }
         CVPixelBufferUnlockBaseAddress(pb, [])
-        store(pb)
+        store(pb, ptsUs: ptsUs)
     }
 }
 
@@ -328,6 +466,10 @@ final class AudioRing {
     private let data: UnsafeMutablePointer<Float>
     private var readPos = 0
     private var count = 0
+    private var written: Int64 = 0
+    private var readFrames: Int64 = 0
+    private var shortReads: Int64 = 0
+    private var clearGeneration: UInt64 = 0
 
     init(seconds: Double = 2.0) {
         capacity = Int(48000 * seconds)
@@ -343,6 +485,13 @@ final class AudioRing {
         lock.lock()
         defer { lock.unlock() }
         return count
+    }
+
+    /// Snapshot used by the audio mixer to notice a pause/seek clear and re-prime safely.
+    var mixSnapshot: (available: Int, generation: UInt64) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (count, clearGeneration)
     }
 
     func write(_ src: UnsafePointer<Float>, frames: Int) {
@@ -367,6 +516,7 @@ final class AudioRing {
             if w == capacity { w = 0 }
         }
         count += n
+        written += Int64(n)
         lock.unlock()
     }
 
@@ -383,6 +533,8 @@ final class AudioRing {
         }
         readPos = r
         count -= n
+        readFrames += Int64(n)
+        if n < frames { shortReads += 1 }
         lock.unlock()
         return n
     }
@@ -399,8 +551,65 @@ final class AudioRing {
         lock.lock()
         readPos = 0
         count = 0
+        clearGeneration &+= 1
         lock.unlock()
     }
+
+    var diagnostics: (available: Int, written: Int64, read: Int64, shortReads: Int64) {
+        lock.lock(); defer { lock.unlock() }
+        return (count, written, readFrames, shortReads)
+    }
+
+    func resetDiagnostics() {
+        lock.lock(); shortReads = 0; lock.unlock()
+    }
+}
+
+/// SPSC queue dedicated to CoreAudio render callbacks. Unlike AudioRing (which allows
+/// occasional UI/transport clears), this ring uses C11 atomics so the realtime reader never
+/// waits on a mutex. Its lifecycle guarantees one mixer writer and one CoreAudio reader.
+final class RealtimeAudioRing {
+    private let handle: OpaquePointer
+
+    init(seconds: Double = 3.0) {
+        let frames = max(2, Int((48000 * seconds).rounded()))
+        guard let ring = mc_audio_ring_create(Int32(frames)) else {
+            fatalError("Could not allocate realtime audio ring")
+        }
+        handle = ring
+    }
+
+    deinit { mc_audio_ring_destroy(handle) }
+
+    var available: Int { Int(mc_audio_ring_available(handle)) }
+
+    @discardableResult
+    func write(_ src: UnsafePointer<Float>, frames: Int) -> Int {
+        Int(mc_audio_ring_write(handle, src, Int32(clamping: frames)))
+    }
+
+    @discardableResult
+    func read(into dst: UnsafeMutablePointer<Float>, frames: Int) -> Int {
+        Int(mc_audio_ring_read(handle, dst, Int32(clamping: frames)))
+    }
+
+    @discardableResult
+    func skip(frames: Int) -> Int {
+        Int(mc_audio_ring_skip(handle, Int32(clamping: frames)))
+    }
+
+    func clear() { mc_audio_ring_clear(handle) }
+
+    var diagnostics: (shortReads: UInt64, shortFrames: UInt64, primingSilenceFrames: UInt64, availableFrames: Int) {
+        (mc_audio_ring_short_reads(handle), mc_audio_ring_short_frames(handle),
+         mc_audio_ring_priming_silence_frames(handle), available)
+    }
+
+    func notePrimingSilence(frames: Int) {
+        mc_audio_ring_note_priming_silence(handle, UInt64(max(0, frames)))
+    }
+
+    func resetDiagnostics() { mc_audio_ring_reset_diagnostics(handle) }
 }
 
 

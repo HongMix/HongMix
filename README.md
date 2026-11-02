@@ -10,10 +10,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 1.2 (beta)</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 1.3.26</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
+
+### Latest update · 1.3.26
+- Folded inputs move into narrow vertical tabs on the left, reclaiming empty tile space while preserving input numbers and order.
+- Select a tab to load it into Preview; use its arrow to restore the full tile.
+- Ongoing reliability work covers media playback, audio handling, and input-monitor rendering. See the [release notes](docs/RELEASE-NOTES-1.3.26.md) for details.
 
 
 <p align="center">
@@ -128,7 +133,7 @@ Manuals: `docs/HongMix-Manual-EN.txt` (English) · `docs/HongMix-설명서.txt` 
 ```bash
 xcode-select --install                 # Command Line Tools (Xcode not required)
 ./scripts/build-ffmpeg-lgpl.sh         # LGPL FFmpeg → build/ffmpeg-lgpl (once)
-./scripts/build-cli.sh                 # → build/cli/BraceletMix.app
+./scripts/build-cli.sh                 # → build/cli/HongMix.app
 ./scripts/make-dmg.sh                  # → build/dist/HongMix-<version>.dmg / .pkg
 ```
 

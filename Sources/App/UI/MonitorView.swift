@@ -105,12 +105,12 @@ final class MonitorDisplayLoop {
     private var renderers: [ObjectIdentifier: () -> MonitorRenderer?] = [:]
     private let queue: MTLCommandQueue
     private let cache: CVMetalTextureCache
-    private var thread: Thread?
+    private var displayLink: CVDisplayLink?
 
     private init() {
         let dev = MetalContext.shared.device
         queue = dev.makeCommandQueue()!
-        queue.label = "BraceletMix.monitors"
+        queue.label = "HongMix.monitors"
         var c: CVMetalTextureCache?
         CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, dev, nil, &c)
         cache = c!
@@ -130,39 +130,37 @@ final class MonitorDisplayLoop {
     }
 
     private func startIfNeeded() {
-        guard thread == nil else { return }
-        let t = Thread { [weak self] in self?.run() }
-        t.name = "BraceletMix.monitors"
-        t.qualityOfService = .userInteractive
-        thread = t
-        t.start()
+        guard displayLink == nil else { return }
+        var link: CVDisplayLink?
+        guard CVDisplayLinkCreateWithActiveCGDisplays(&link) == kCVReturnSuccess, let link else { return }
+        let context = Unmanaged.passUnretained(self).toOpaque()
+        CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, context in
+            guard let context else { return kCVReturnError }
+            Unmanaged<MonitorDisplayLoop>.fromOpaque(context).takeUnretainedValue().drawFrame()
+            return kCVReturnSuccess
+        }, context)
+        displayLink = link
+        CVDisplayLinkStart(link)
     }
 
-    private func run() {
-        var tick: Int = 0
-        while true {
-            let start = CACurrentMediaTime()
-            let hz = Double(NSScreen.main?.maximumFramesPerSecond ?? 60)
-            let period = 1.0 / max(30, min(120, hz))
-            autoreleasepool {
-                lock.lock()
-                let list = renderers.values.compactMap { $0() }
-                lock.unlock()
-                guard !list.isEmpty, let cmd = queue.makeCommandBuffer() else { return }
-                var keep: [CVMetalTexture] = []
-                var drawables: [CAMetalDrawable] = []
-                for r in list {
-                    if let d = r.render(into: cmd, cache: cache, now: start, keep: &keep) { drawables.append(d) }
-                }
-                if drawables.isEmpty { return }
-                for d in drawables { cmd.present(d) }
-                cmd.addCompletedHandler { _ in _ = keep }
-                cmd.commit()
+    /// Called by CoreVideo on the display's real vertical-refresh clock. A free-running 60 Hz sleep
+    /// loop beats against 59.94 media and produces a visible hitch even when decode/render drop 0.
+    private func drawFrame() {
+        let start = CACurrentMediaTime()
+        autoreleasepool {
+            lock.lock()
+            let list = renderers.values.compactMap { $0() }
+            lock.unlock()
+            guard !list.isEmpty, let cmd = queue.makeCommandBuffer() else { return }
+            var keep: [CVMetalTexture] = []
+            var drawables: [CAMetalDrawable] = []
+            for r in list {
+                if let d = r.render(into: cmd, cache: cache, now: start, keep: &keep) { drawables.append(d) }
             }
-            tick += 1
-            if tick % 600 == 0 { CVMetalTextureCacheFlush(cache, 0) }
-            let left = period - (CACurrentMediaTime() - start)
-            if left > 0 { Thread.sleep(forTimeInterval: left) }
+            if drawables.isEmpty { return }
+            for d in drawables { cmd.present(d) }
+            cmd.addCompletedHandler { _ in _ = keep }
+            cmd.commit()
         }
     }
 }
@@ -171,6 +169,9 @@ final class MonitorDisplayLoop {
 final class MonitorLayerView: NSView {
     let metalLayer = CAMetalLayer()
     var renderer: MonitorRenderer?
+    var visibilityChange: ((Bool) -> Void)?
+    private var isMonitorVisible = false
+    private var isRendererRegistered = false
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -191,6 +192,7 @@ final class MonitorLayerView: NSView {
     override func layout() {
         super.layout()
         updateSize()
+        updateMonitorVisibility()
     }
 
     override func viewDidChangeBackingProperties() {
@@ -200,10 +202,26 @@ final class MonitorLayerView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if let r = renderer {
-            if window != nil { MonitorDisplayLoop.shared.add(r) } else { MonitorDisplayLoop.shared.remove(r) }
-        }
         updateSize()
+        updateMonitorVisibility()
+    }
+
+    private func updateMonitorVisibility() {
+        let visible = window != nil && !visibleRect.isEmpty && visibleRect.width >= 2 && visibleRect.height >= 2
+        if visible != isMonitorVisible {
+            isMonitorVisible = visible
+            visibilityChange?(visible)
+        }
+        guard let renderer, visible != isRendererRegistered else { return }
+        isRendererRegistered = visible
+        if visible { MonitorDisplayLoop.shared.add(renderer) }
+        else { MonitorDisplayLoop.shared.remove(renderer) }
+    }
+
+    func stopMonitoring() {
+        if isMonitorVisible { isMonitorVisible = false; visibilityChange?(false) }
+        if isRendererRegistered, let renderer { MonitorDisplayLoop.shared.remove(renderer) }
+        isRendererRegistered = false
     }
 
     private func updateSize() {
@@ -216,6 +234,7 @@ final class MonitorLayerView: NSView {
 struct MonitorView: NSViewRepresentable {
     let fps: Int
     var countDraws = false
+    var onActiveChange: ((Bool) -> Void)? = nil
     let source: () -> CVPixelBuffer?
 
     func makeNSView(context: Context) -> MonitorLayerView {
@@ -223,15 +242,17 @@ struct MonitorView: NSViewRepresentable {
         let r = MonitorRenderer(layer: v.metalLayer, fps: fps, source: source)
         r.countDraws = countDraws
         v.renderer = r
+        v.visibilityChange = onActiveChange
         return v
     }
 
     func updateNSView(_ v: MonitorLayerView, context: Context) {
         v.renderer?.source = source
         v.renderer?.fps = fps
+        v.visibilityChange = onActiveChange
     }
 
     static func dismantleNSView(_ v: MonitorLayerView, coordinator: ()) {
-        if let r = v.renderer { MonitorDisplayLoop.shared.remove(r) }
+        v.stopMonitoring()
     }
 }

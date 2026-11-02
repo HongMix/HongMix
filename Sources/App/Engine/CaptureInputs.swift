@@ -220,6 +220,7 @@ private final class BrowserAudioBridge: NSObject, WKScriptMessageHandler {
             for i in 0..<count { scratch[i] = Float(src[i]) / 32768 }
         }
         if abs(rate - 48000) < 1 {
+            owner.noteAudioFrame()
             scratch.withUnsafeBufferPointer { owner.audio.write($0.baseAddress!, frames: frames) }
         } else {
             // simple linear resample to 48 kHz (only if WebKit ignored the requested rate)
@@ -232,6 +233,7 @@ private final class BrowserAudioBridge: NSObject, WKScriptMessageHandler {
                 out[2 * o] = scratch[2 * i] * (1 - f) + scratch[2 * j] * f
                 out[2 * o + 1] = scratch[2 * i + 1] * (1 - f) + scratch[2 * j + 1] * f
             }
+            owner.noteAudioFrame()
             out.withUnsafeBufferPointer { owner.audio.write($0.baseAddress!, frames: outFrames) }
         }
     }
@@ -398,6 +400,7 @@ final class BrowserInput: InputSource {
             audioScratch[2 * i] = l[i]
             audioScratch[2 * i + 1] = r[i]
         }
+        noteAudioFrame()
         audioScratch.withUnsafeBufferPointer { audio.write($0.baseAddress!, frames: frames) }
         _ = rate   // requested 48 kHz from Chromium
     }
@@ -745,6 +748,7 @@ private final class AudioCaptureDelegate: NSObject, AVCaptureAudioDataOutputSamp
         scratch.withUnsafeMutableBytes { raw in
             guard let base = raw.baseAddress else { return }
             if CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: bytes, destination: base) == kCMBlockBufferNoErr {
+                owner.noteAudioFrame()
                 owner.audio.write(base.assumingMemoryBound(to: Float.self), frames: min(frames, floats / 2))
             }
         }

@@ -14,6 +14,10 @@ FFmpeg — LGPL v3 (configured with --enable-version3, WITHOUT --enable-gpl / --
     Opus (BSD-3-Clause) https://opus-codec.org
     libvpx (BSD-3-Clause) https://chromium.googlesource.com/webm/libvpx
     OpenSSL (Apache 2.0) https://www.openssl.org
+Apple VideoToolbox / CoreVideo / Metal — Apple system frameworks used for hardware decode,
+  IOSurface-backed frame transfer, and GPU compositing. These are supplied by macOS and are not
+  bundled third-party open-source libraries; their use does not change the FFmpeg LGPL build.
+  The application falls back to FFmpeg software decoding when VideoToolbox cannot provide a frame.
 Chromium Embedded Framework (BSD-3-Clause) — see CEF-LICENSE.txt and CREDITS.html (Chromium notices).
 NDI® — NDI® is a registered trademark of Vizrt NDI AB. https://ndi.video
   HongMix is not a product of NDI; NDI is used only to be compatible with NDI products.

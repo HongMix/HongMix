@@ -13,9 +13,10 @@ struct StatisticsSheet: View {
                 Text("Statistics").font(.headline)
                 Spacer()
                 Button("Reset") {
-                    for i in engine.inputs { i.video.resetStats() }
+                    for i in engine.inputs { i.video.resetStats(); i.resetAudioDiagnostics() }
+                    engine.audioMixer.resetOutputDiagnostics()
                 }
-                .help(L("입력별 '늦은 프레임' 카운터를 0으로 (녹화·송출은 영향 없음)"))
+                .help(L("프레임 지연·믹서 및 CoreAudio 언더런 누적값을 초기화합니다. 녹화·송출에는 영향이 없습니다."))
             }
             .padding()
 
@@ -25,9 +26,10 @@ struct StatisticsSheet: View {
                         rendererSection
                         HealthGraphsSection(stats: engine.stats, frameMs: 1000 / max(1, engine.format.fps))
                         inputsSection
+                        audioOutputSection
                         srtSection
                         outputsSection
-                        Text(L("Video: 직전 프레임들의 도착 간격(ms). 30p는 약 33, 59.94p는 약 17이 일정하게 나와야 정상입니다. 값이 들쭉날쭉하거나 크게 튀면 소스(카메라·네트워크) 쪽 문제입니다. 늦은 프레임은 1.5 프레임 이상 늦게 도착한 횟수입니다."))
+                        Text(L("Video 간격/최대 간격은 입력 프레임이 HongMix에 도착한 시각입니다. PTS step은 파일의 미디어 시간 간격, Frame age는 프로그램 합성 시 마지막 입력 프레임의 나이, Program reuse는 같은 입력 프레임을 출력 틱에서 다시 사용한 횟수입니다. CoreAudio 출력 언더런과 입력 PCM/Mix 언더런은 아래에서 구분합니다. Reset 후 문제 구간을 재생해 값을 확인하세요."))
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -64,12 +66,15 @@ struct StatisticsSheet: View {
         GroupBox(L("입력")) {
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
                 GridRow {
-                    head("#"); head("Input"); head("Format"); head("FPS"); head("Video (ms)"); head(L("늦은 프레임")); head("Source Dropped")
-                    head("Audio buffer"); head("Status")
+                    head("#"); head("Input"); head("Format"); head("FPS"); head("Video (ms)"); head("Max gap (2s)"); head("PTS step"); head("Frame age max"); head("Program reuse")
+                    head(L("늦은 프레임")); head("Source Dropped"); head("Audio buffer"); head("PCM short reads"); head("Mix underruns"); head("Status")
                 }
                 Divider()
                 ForEach(engine.inputs) { i in
                     let st = i.video.stats
+                    let audio = i.audio.diagnostics
+                    let mixAudio = i.mixAudioDiagnostics
+                    let decodeMode = (i as? FFmpegInput)?.videoDecodeModeName() ?? "—"
                     GridRow {
                         Text("\(engine.number(of: i))").monospacedDigit()
                         Text(i.name).lineLimit(1).frame(maxWidth: 200, alignment: .leading)
@@ -81,16 +86,59 @@ struct StatisticsSheet: View {
                              : st.intervalsMs.map { String(format: "%.0f", $0) }.joined(separator: " ")
                                + String(format: "  ±%.1f", st.jitterMs))
                             .monospacedDigit()
+                        Text(st.maxGapMs > 0 ? String(format: "%.1f ms", st.maxGapMs) : "—")
+                            .monospacedDigit().foregroundColor(st.maxGapMs > 50 ? .orange : .primary)
+                        Text(st.lastPTSStepMs != 0 ? String(format: "%.1f ms", st.lastPTSStepMs) : "—").monospacedDigit()
+                        Text(st.maxProgramFrameAgeMs > 0 ? String(format: "%.1f ms", st.maxProgramFrameAgeMs) : "—")
+                            .monospacedDigit().foregroundColor(st.maxProgramFrameAgeMs > 50 ? .orange : .primary)
+                        Text("\(st.repeatedProgramTicks)").monospacedDigit()
                         Text("\(st.late)").monospacedDigit().foregroundColor(st.late > 0 ? .orange : .primary)
                         Text("\(i.video.sourceDropped)").monospacedDigit()
                             .foregroundColor(i.video.sourceDropped > 0 ? .orange : .primary)
                         Text(String(format: "%.0f ms", Double(i.audio.available) / 48.0)).monospacedDigit()
-                        Text(i.status).lineLimit(1).foregroundColor(.secondary).frame(maxWidth: 220, alignment: .leading)
+                        Text("\(audio.shortReads)").monospacedDigit()
+                            .foregroundColor(audio.shortReads > 0 ? .orange : .primary)
+                        Text("\(mixAudio.underflows)").monospacedDigit()
+                            .foregroundColor(mixAudio.underflows > 0 ? .red : .primary)
+                        Text(i.status + (decodeMode == "—" || decodeMode == "Pending" ? "" : " · " + (decodeMode == "VideoToolbox" ? "VT" : "CPU")))
+                            .lineLimit(1).foregroundColor(decodeMode == "Software" ? .orange : .secondary)
+                            .frame(maxWidth: 220, alignment: .leading)
                     }
                     .font(.system(size: 12))
                 }
             }
             .padding(4)
+        }
+    }
+
+    private var audioOutputSection: some View {
+        GroupBox(L("최종 CoreAudio 출력 링")) {
+            let rows = engine.audioMixer.outputRingStats
+            if rows.isEmpty {
+                Text(L("현재 모니터링 또는 지정된 CoreAudio 출력이 없습니다."))
+                    .foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 4) {
+                    GridRow {
+                        head(L("장치/버스")); head(L("출력 언더런")); head(L("빠진 오디오")); head(L("초기/재버퍼 무음")); head(L("현재 대기"))
+                    }
+                    Divider()
+                    ForEach(rows, id: \.name) { row in
+                        GridRow {
+                            Text(row.name)
+                            Text("\(row.shortReads)").foregroundColor(row.shortReads > 0 ? .red : .primary)
+                            Text(String(format: "%.1f ms", Double(row.shortFrames) / 48.0))
+                                .foregroundColor(row.shortFrames > 0 ? .red : .primary)
+                            Text(String(format: "%.1f ms", Double(row.primingSilenceFrames) / 48.0))
+                                .foregroundColor(.secondary)
+                            Text(String(format: "%.1f ms", Double(row.availableFrames) / 48.0)).monospacedDigit()
+                        }
+                        .font(.system(size: 12))
+                    }
+                }
+                Text(L("출력 언더런은 재생 시작 후 CoreAudio 콜백에 공급하지 못한 프레임입니다. 초기/재버퍼 무음은 링을 채우는 동안 출력한 무음과 구분합니다. 누적값이므로 Reset 전후를 비교하세요."))
+                    .font(.caption).foregroundColor(.secondary)
+            }
         }
     }
 

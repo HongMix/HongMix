@@ -1,7 +1,7 @@
 #!/bin/bash
-# Xcode 없이 Command Line Tools만으로 BraceletMix.app 빌드 (Apple Silicon)
+# Xcode 없이 Command Line Tools만으로 HongMix.app 빌드 (Apple Silicon)
 #   bash scripts/build-cli.sh [release|debug]   (default: release)
-# 결과: build/cli/BraceletMix.app, 로그: build/logs/cli-build.log, 오류 요약: build/logs/errors.txt
+# 결과: build/cli/HongMix.app, 로그: build/logs/cli-build.log, 오류 요약: build/logs/errors.txt
 cd "$(dirname "$0")/.."
 if ! command -v brew >/dev/null 2>&1; then
   for p in "$HOME/.homebrew/bin/brew" /opt/homebrew/bin/brew /usr/local/bin/brew; do
@@ -15,6 +15,20 @@ FF="$PWD/build/ffmpeg-lgpl"
 [ -d "$FF/include/libavformat" ] || FF="$BREW/opt/ffmpeg-full"
 [ -d "$FF/include/libavformat" ] || FF="$BREW/opt/ffmpeg"
 [ -d "$FF/include/libavformat" ] || FF="$BREW"
+# The LGPL FFmpeg dylibs carry absolute install names (their build folder). If the project folder was
+# moved or renamed, point them at the current location again (and re-sign: arm64 requires a valid signature).
+if [ "$FF" = "$PWD/build/ffmpeg-lgpl" ]; then
+  for d in "$FF"/lib/lib*.dylib; do
+    [ -L "$d" ] && continue
+    id="$(otool -D "$d" | tail -1)"
+    changed=0
+    case "$id" in "$FF/lib/"*) ;; *) install_name_tool -id "$FF/lib/$(basename "$id")" "$d" 2>/dev/null; changed=1 ;; esac
+    for dep in $(otool -L "$d" | awk 'NR>1 && /\/build\/ffmpeg-lgpl\/lib\//{print $1}'); do
+      case "$dep" in "$FF/lib/"*) ;; *) install_name_tool -change "$dep" "$FF/lib/$(basename "$dep")" "$d" 2>/dev/null; changed=1 ;; esac
+    done
+    [ "$changed" = 1 ] && codesign --force --sign - "$d" 2>/dev/null && echo "  FFmpeg 경로 갱신: $(basename "$d")"
+  done
+fi
 # @State is avoided in the sources (see UI/ViewState.swift), so the default SDK works without Xcode.
 SDK="$(xcrun --show-sdk-path 2>/dev/null)"
 echo "SDK: $SDK"
@@ -32,9 +46,10 @@ MODE="${1:-release}"   # optimized by default (debug builds are 3-10x slower in 
 [ "$MODE" = "debug" ] && [ "${BM_DEBUG:-0}" != "1" ] && MODE=release
 OUT=build/cli
 OBJ=$OUT/obj
-APP=$OUT/BraceletMix.app
+APP=$OUT/HongMix.app
 LOG=build/logs/cli-build.log
 mkdir -p "$OBJ" build/logs
+mkdir -p build/module-cache
 : > "$LOG"
 rm -f build/logs/errors.txt
 
@@ -73,7 +88,7 @@ if [ -f "$CEF_WRAPPER" ] && [ -d "$CEF_FW" ]; then
   echo "== 내장 브라우저 엔진 (CEF $(cat $CEF/CEF_DIST.txt 2>/dev/null | sed -E 's/cef_binary_([^+]+).*/\1/'))"
   clang++ "${CEFFLAGS[@]}" -I"$CEF" -DMC_HAVE_CEF=1 -fobjc-arc -c Sources/Core/mc_web.mm -o "$OBJ/mc_web.o" >>"$LOG" 2>&1 || fail
   OBJS+=("$OBJ/mc_web.o" "$CEF_WRAPPER")
-  clang++ "${CEFFLAGS[@]}" -I"$CEF" Sources/Core/mc_web_helper.cpp "$CEF_WRAPPER" -o "$OBJ/BraceletMix Helper" >>"$LOG" 2>&1 || fail
+  clang++ "${CEFFLAGS[@]}" -I"$CEF" Sources/Core/mc_web_helper.cpp "$CEF_WRAPPER" -o "$OBJ/HongMix Helper" >>"$LOG" 2>&1 || fail
   HAVE_CEF=1
 else
   echo "== 내장 브라우저 엔진 없음 (scripts/fetch-cef.sh 로 받으면 포함됩니다)"
@@ -91,9 +106,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 SWIFT_FILES=()
 while IFS= read -r f; do SWIFT_FILES+=("$f"); done < <(find Sources/App -name "*.swift" | sort)
 swiftc -parse-as-library -swift-version 5 $SWIFT_OPT -g -file-prefix-map "$PWD"=. -sdk "$SDK" -continue-building-after-errors \
+  -module-cache-path "$PWD/build/module-cache" \
   -target arm64-apple-macos14.0 \
-  -module-name BraceletMix \
-  -import-objc-header Sources/Core/BraceletMix-Bridging-Header.h \
+  -module-name HongMix \
+  -import-objc-header Sources/Core/HongMix-Bridging-Header.h \
   "${PLUGIN_ARGS[@]}" \
   -ISources/Core -Xcc -I"$FF/include" \
   "${SWIFT_FILES[@]}" "${OBJS[@]}" \
@@ -102,11 +118,11 @@ swiftc -parse-as-library -swift-version 5 $SWIFT_OPT -g -file-prefix-map "$PWD"=
   -framework VideoToolbox -framework CoreVideo -framework CoreMedia -framework CoreFoundation \
   -framework AppKit -framework IOSurface \
   -Xlinker -rpath -Xlinker "$FF/lib" \
-  -o "$APP/Contents/MacOS/BraceletMix" >>"$LOG" 2>&1 || fail
+  -o "$APP/Contents/MacOS/HongMix" >>"$LOG" 2>&1 || fail
 
 echo "== 앱 번들 구성"
-sed -e 's/$(EXECUTABLE_NAME)/BraceletMix/' -e 's/$(PRODUCT_BUNDLE_IDENTIFIER)/com.hongseunghoon.HongMix/' \
-    -e 's/$(PRODUCT_NAME)/BraceletMix/' -e 's/$(MACOSX_DEPLOYMENT_TARGET)/14.0/' \
+sed -e 's/$(EXECUTABLE_NAME)/HongMix/' -e 's/$(PRODUCT_BUNDLE_IDENTIFIER)/com.hongseunghoon.HongMix/' \
+    -e 's/$(PRODUCT_NAME)/HongMix/' -e 's/$(MACOSX_DEPLOYMENT_TARGET)/14.0/' \
     Resources/Info.plist > "$APP/Contents/Info.plist"
 cp Sources/Shaders/Mixer.metal "$APP/Contents/Resources/"
 [ -f Resources/en.json ] && cp Resources/en.json "$APP/Contents/Resources/"
@@ -118,17 +134,17 @@ if [ "$HAVE_CEF" = 1 ]; then
   cp "$CEF/LICENSE.txt" "$APP/Contents/Resources/CEF-LICENSE.txt" 2>/dev/null
   # Chromium looks for these helper bundles next to the framework (one binary, five roles)
   for SUFFIX in "" " (GPU)" " (Renderer)" " (Plugin)" " (Alerts)"; do
-    H="$APP/Contents/Frameworks/BraceletMix Helper$SUFFIX.app"
+    H="$APP/Contents/Frameworks/HongMix Helper$SUFFIX.app"
     mkdir -p "$H/Contents/MacOS"
-    cp "$OBJ/BraceletMix Helper" "$H/Contents/MacOS/BraceletMix Helper$SUFFIX"
+    cp "$OBJ/HongMix Helper" "$H/Contents/MacOS/HongMix Helper$SUFFIX"
     ID=$(echo "$SUFFIX" | tr -d ' ()' | tr 'A-Z' 'a-z'); [ -n "$ID" ] && ID=".$ID"
     cat > "$H/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleExecutable</key><string>BraceletMix Helper$SUFFIX</string>
+<key>CFBundleExecutable</key><string>HongMix Helper$SUFFIX</string>
 <key>CFBundleIdentifier</key><string>com.hongseunghoon.HongMix.helper$ID</string>
-<key>CFBundleName</key><string>BraceletMix Helper$SUFFIX</string>
+<key>CFBundleName</key><string>HongMix Helper$SUFFIX</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>1.0</string>
 <key>CFBundleVersion</key><string>1</string>
@@ -142,7 +158,7 @@ fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 if [ "$HAVE_CEF" = 1 ]; then
   codesign --force --sign - "$APP/Contents/Frameworks/Chromium Embedded Framework.framework" >>"$LOG" 2>&1
-  for H in "$APP/Contents/Frameworks/"BraceletMix\ Helper*.app; do codesign --force --sign - "$H" >>"$LOG" 2>&1; done
+  for H in "$APP/Contents/Frameworks/"HongMix\ Helper*.app; do codesign --force --sign - "$H" >>"$LOG" 2>&1; done
 fi
 codesign --force --sign - "$APP" >>"$LOG" 2>&1 || echo "  (codesign 경고 — 로그 참고)"
 

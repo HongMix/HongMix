@@ -78,18 +78,12 @@ extension SwitcherEngine {
         // 7. audio
         let m = audioMixer.master
         let peak = max(m.0, m.1)
-        let lr = audioMixer.loudness.current
         if peak < 0.003 {
             add(.warn, L("오디오"), L("Master에 소리가 없습니다 (마이크/입력 확인)"))
         } else if peak > 0.99 {
             add(.warn, L("오디오"), L("Master가 0 dBFS에 닿습니다 (클리핑)"))
         } else {
-            let t = LoudnessTarget.saved.rawValue
-            if lr.shortTerm.isFinite && abs(lr.shortTerm - t) > 6 {
-                add(.warn, L("오디오"), String(format: L("숏텀 %.1f LUFS — 목표 %.0f에서 %.0f LU 차이"), lr.shortTerm, t, lr.shortTerm - t))
-            } else {
-                add(.ok, L("오디오"), lr.shortTerm.isFinite ? String(format: L("숏텀 %.1f LUFS"), lr.shortTerm) : L("소리 있음"))
-            }
+            add(.ok, L("오디오"), L("Master 신호 정상"))
         }
 
         // 8. renderer

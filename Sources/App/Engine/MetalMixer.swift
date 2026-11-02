@@ -52,6 +52,17 @@ struct MixParams {
     var ftb: Float = 0
     var outW: Float = 0
     var outH: Float = 0
+    var alphaOut: Int32 = 0
+}
+
+/// Must match `AlphaKeyParams` in Mixer.metal.
+struct AlphaKeyParams {
+    var mode: Int32 = 0
+    var keyAlpha: Int32 = 0
+    var invert: Int32 = 0
+    var shaped: Int32 = 1
+    var clipLow: Float = 0
+    var clipHigh: Float = 1
 }
 
 /// Must match `TileParams` in Mixer.metal.
@@ -205,10 +216,10 @@ final class MetalContext {
     }
 }
 
-/// GPU compositor: program mix (A/B transition, 4 overlays, FTB, stinger) and tile renders for
+/// GPU compositor: program mix (A/B transition, 8 overlays, FTB, stinger) and tile renders for
 /// auxiliary buses and MultiView.
 final class MetalMixer {
-    static let layerCount = 7
+    static let layerCount = 11
 
     let format: VideoFormat
     private let ctx = MetalContext.shared
@@ -234,7 +245,7 @@ final class MetalMixer {
             return nil
         }
         guard let q = ctx.device.makeCommandQueue() else { return nil }
-        q.label = "BraceletMix.mixer"
+        q.label = "HongMix.mixer"
         queue = q
         var cache: CVMetalTextureCache?
         CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, ctx.device, nil, &cache)
@@ -345,6 +356,56 @@ final class MetalMixer {
         return out
     }
 
+    // MARK: Alpha / Fill & Key pre-pass
+
+    private lazy var alphaKeyPipeline: MTLComputePipelineState? = {
+        guard let fn = ctx.library.makeFunction(name: "alphaKeyKernel") else { return nil }
+        return try? ctx.device.makeComputePipelineState(function: fn)
+    }()
+
+    /// Fill (+ optional key frame) → premultiplied BGRA frame the size of the fill.
+    func applyAlphaKey(fill: CVPixelBuffer, fillPremultiplied: Bool, key: CVPixelBuffer?, keyPremultiplied: Bool,
+                       params: AlphaKeyParams) -> CVPixelBuffer? {
+        guard let pso = alphaKeyPipeline, let src = inputTexture(fill) else { return nil }
+        let w = src.width, h = src.height
+        let poolKey = w << 16 | h
+        if lutPools[poolKey] == nil {
+            if lutPools.count > 8 { lutPools.removeAll() }
+            lutPools[poolKey] = PixelBufferFactory.makePool(width: w, height: h, minimumCount: 4)
+        }
+        guard let pool = lutPools[poolKey], let out = PixelBufferFactory.makeBuffer(pool: pool),
+              let outTex = outputTexture(out), let cmd = queue.makeCommandBuffer(),
+              let enc = cmd.makeComputeCommandEncoder() else { return nil }
+        var lf = LayerParams()
+        lf.has = 1; lf.yuv = src.yuv; lf.premul = fillPremultiplied ? 1 : 0
+        lf.srcW = Float(w); lf.srcH = Float(h)
+        var lk = LayerParams()
+        let k = key.flatMap { inputTexture($0) }
+        if let k = k {
+            lk.has = 1; lk.yuv = k.yuv; lk.premul = keyPremultiplied ? 1 : 0
+            lk.srcW = Float(k.width); lk.srcH = Float(k.height)
+        }
+        var kp = params
+        enc.setComputePipelineState(pso)
+        enc.setTexture(src.luma, index: 0)
+        enc.setTexture(outTex, index: 1)
+        enc.setTexture(src.chroma ?? dummy, index: 2)
+        enc.setTexture(k?.luma ?? dummy, index: 3)
+        enc.setTexture(k?.chroma ?? dummy, index: 4)
+        enc.setBytes(&lf, length: MemoryLayout<LayerParams>.stride, index: 0)
+        enc.setBytes(&lk, length: MemoryLayout<LayerParams>.stride, index: 1)
+        enc.setBytes(&kp, length: MemoryLayout<AlphaKeyParams>.stride, index: 2)
+        let tg = threadgroup(pso)
+        enc.dispatchThreadgroups(MTLSize(width: (w + tg.width - 1) / tg.width, height: (h + tg.height - 1) / tg.height, depth: 1),
+                                 threadsPerThreadgroup: tg)
+        enc.endEncoding()
+        cmd.commit()
+        cmd.waitUntilCompleted()
+        _ = src.keep
+        _ = k?.keep
+        return out
+    }
+
     private func outputTexture(_ pb: CVPixelBuffer) -> MTLTexture? {
         guard let surf = CVPixelBufferGetIOSurface(pb)?.takeUnretainedValue() else { return nil }
         let id = IOSurfaceGetID(surf)
@@ -365,7 +426,7 @@ final class MetalMixer {
     }
 
     /// Program mix. `layers` must have `layerCount` entries. Blocks until the GPU is done.
-    func render(layers: [LayerInput], t: Float, transition: Int32, ftb: Float) -> CVPixelBuffer? {
+    func render(layers: [LayerInput], t: Float, transition: Int32, ftb: Float, alphaOut: Int32 = 0) -> CVPixelBuffer? {
         guard let out = PixelBufferFactory.makeBuffer(pool: pool), let outTex = outputTexture(out),
               let cmd = queue.makeCommandBuffer(), let enc = cmd.makeComputeCommandEncoder() else {
             return nil
@@ -378,21 +439,21 @@ final class MetalMixer {
             if i < layers.count, let pb = layers[i].buffer, let src = inputTexture(pb) {
                 keep.append(contentsOf: src.keep)
                 enc.setTexture(src.luma, index: i)
-                enc.setTexture(src.chroma ?? dummy, index: 8 + i)
+                enc.setTexture(src.chroma ?? dummy, index: MetalMixer.layerCount + 1 + i)
                 lp.has = 1
                 lp.yuv = src.yuv
                 lp.srcW = Float(src.width)
                 lp.srcH = Float(src.height)
             } else {
                 enc.setTexture(dummy, index: i)
-                enc.setTexture(dummy, index: 8 + i)
+                enc.setTexture(dummy, index: MetalMixer.layerCount + 1 + i)
                 lp.has = 0
             }
             params[i] = lp
         }
         enc.setTexture(outTex, index: MetalMixer.layerCount)
         var mp = MixParams(t: t, transition: transition, ftb: ftb,
-                           outW: Float(format.width), outH: Float(format.height))
+                           outW: Float(format.width), outH: Float(format.height), alphaOut: alphaOut)
         enc.setBytes(&mp, length: MemoryLayout<MixParams>.stride, index: 0)
         params.withUnsafeBytes { raw in
             enc.setBytes(raw.baseAddress!, length: raw.count, index: 1)

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Mac에서 실행: Release 빌드 → FFmpeg 라이브러리 앱 내부 포함 → 서명(ad-hoc) → BraceletMix.dmg 생성
+# Mac에서 실행: Release 빌드 → FFmpeg 라이브러리 앱 내부 포함 → 서명(ad-hoc) → HongMix.dmg 생성
 # 사용법: ./scripts/make-dmg.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -10,7 +10,7 @@ if ! command -v brew >/dev/null 2>&1; then
 fi
 export HOMEBREW_PREFIX="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
 
-APP_NAME="BraceletMix"
+APP_NAME="HongMix"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Resources/Info.plist 2>/dev/null || echo 1.0)"
 BUILD_DIR="build"
 APP="$BUILD_DIR/Build/Products/Release/$APP_NAME.app"
@@ -79,10 +79,11 @@ codesign --verify --deep --strict "$APP" && echo "  서명 확인 OK"
 PRODUCT="HongMix"
 echo "==> 배포용 앱: $PRODUCT.app (실행 파일 이름도 $PRODUCT)"
 STAGE="$(mktemp -d)"
-DIST="$BUILD_DIR/dist"; rm -rf "$DIST"; mkdir -p "$DIST"
+# Allow choosing a delivery folder and preserve files from earlier builds.
+DIST="${HONGMIX_DIST_DIR:-$BUILD_DIR/dist}"; mkdir -p "$DIST"
 cp -R "$APP" "$STAGE/$PRODUCT.app"
 SA="$STAGE/$PRODUCT.app"
-mv "$SA/Contents/MacOS/$APP_NAME" "$SA/Contents/MacOS/$PRODUCT"
+[ "$APP_NAME" = "$PRODUCT" ] || mv "$SA/Contents/MacOS/$APP_NAME" "$SA/Contents/MacOS/$PRODUCT"
 # 배포본에는 디버그 정보(dSYM, 심볼) 없이 — 개발 경로·소스 파일 이름이 들어가지 않도록
 rm -rf "$SA/Contents/MacOS/"*.dSYM
 strip -S -x "$SA/Contents/MacOS/$PRODUCT" 2>/dev/null || true
