@@ -45,6 +45,7 @@ struct SchedulerSheet: View {
                 if let (a, t) = scheduler.nextUp {
                     Text(Lf("다음: %@ · %@", "\(a.name.isEmpty ? a.function : a.name)", "\(SchedulerSheet.whenText(t))"))
                         .font(.system(size: 12)).foregroundColor(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
                 }
             }
             .padding()
@@ -107,11 +108,11 @@ struct SchedulerSheet: View {
                 Text(L("앱이 켜져 있는 동안 1초 단위로 실행됩니다. 꺼져 있던 동안 지난 일정은 실행하지 않습니다."))
                     .font(.caption).foregroundColor(.secondary)
                 Spacer()
-                Button(L("닫기")) { dismiss() }.keyboardShortcut(.defaultAction)
+                Button(L("닫기")) { dismiss() }.keyboardShortcut(.defaultAction).fixedSize()
             }
             .padding()
         }
-        .frame(width: 760, height: 520)
+        .frame(width: 860, height: 540)
     }
 
     private func add() {
@@ -141,7 +142,7 @@ struct SchedulerSheet: View {
                            displayedComponents: .date)
             } else {
                 HStack(spacing: 4) {
-                    Text(L("요일"))
+                    Text(L("요일")).lineLimit(1).fixedSize()
                     ForEach(1...7, id: \.self) { d in
                         let on = a.wrappedValue.weekdays.contains(d)
                         Button(SchedulerSheet.dayNames[d - 1]) {
@@ -150,8 +151,10 @@ struct SchedulerSheet: View {
                         .buttonStyle(.borderedProminent)
                         .tint(on ? .accentColor : .gray.opacity(0.4))
                         .controlSize(.small)
+                        .fixedSize()
                     }
                     Text(a.wrappedValue.weekdays.isEmpty ? L("(매일)") : "").font(.caption).foregroundColor(.secondary)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 }
             }
             HStack {
@@ -173,10 +176,11 @@ struct SchedulerSheet: View {
             TextField(L("값 (Value)"), text: a.value)
             TextField(L("추가 파라미터"), text: a.extra, prompt: Text(L("예: Duration=1000&SelectedName=Headline.Text")))
             HStack {
-                Button(L("지금 실행 (테스트)")) { scheduler.runNow(a.wrappedValue.id, engine) }
+                Button(L("지금 실행 (테스트)")) { scheduler.runNow(a.wrappedValue.id, engine) }.fixedSize()
                 Spacer()
                 if let t = a.wrappedValue.nextFire(after: Date()) {
                     Text(L("다음 실행: ") + SchedulerSheet.whenText(t)).font(.caption).foregroundColor(.secondary)
+                        .lineLimit(2).multilineTextAlignment(.trailing)
                 } else {
                     Text(a.wrappedValue.enabled ? L("예정 없음") : L("꺼짐")).font(.caption).foregroundColor(.orange)
                 }

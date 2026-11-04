@@ -115,7 +115,7 @@ struct TriggersEditor: View {
         if input.triggers.indices.contains(i) {
             HStack(spacing: 6) {
                 Toggle("", isOn: $input.triggers[i].enabled).labelsHidden()
-                TextField(L("기능"), text: $input.triggers[i].action.function).frame(width: 140)
+                TextField(L("기능"), text: $input.triggers[i].action.function).frame(minWidth: 90, idealWidth: 140, maxWidth: 140)
                 Picker("", selection: $input.triggers[i].action.input) {
                     Text(L("입력 없음")).tag("")
                     Text(L("이 입력")).tag(InputTrigger.selfInput)
@@ -125,9 +125,9 @@ struct TriggersEditor: View {
                         Text(cur).tag(cur)
                     }
                 }
-                .labelsHidden().frame(width: 150)
-                TextField(L("값"), text: $input.triggers[i].action.value).frame(width: 70)
-                TextField(L("추가 (Duration=…)"), text: $input.triggers[i].action.extra).frame(width: 110)
+                .labelsHidden().frame(minWidth: 100, idealWidth: 150, maxWidth: 150)
+                TextField(L("값"), text: $input.triggers[i].action.value).frame(minWidth: 50, idealWidth: 70, maxWidth: 70)
+                TextField(L("추가 (Duration=…)"), text: $input.triggers[i].action.extra).frame(minWidth: 70, idealWidth: 110, maxWidth: 110)
                 Stepper(Lf("%@ms 후", "\(input.triggers[i].delayMs)"), value: $input.triggers[i].delayMs, in: 0...600_000, step: 100)
                     .fixedSize()
                 Button { test(i) } label: { Image(systemName: "play.circle") }
@@ -196,8 +196,10 @@ struct ListEditor: View {
             Label(L("규격이 달라도 재생됩니다. 노란색은 내부 변환, 초록색은 출력 규격 일치를 뜻합니다. 원본 파일은 변경하지 않습니다."),
                   systemImage: "waveform.badge.magnifyingglass")
                 .font(.caption).foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Text(L("더블클릭 = 그 항목 재생. 한 파일이 끝나면 다음 파일이 자동으로 이어집니다. 마지막 파일이 끝나면 OnCompletion 트리거가 실행됩니다. API: NextItem · PreviousItem · SelectIndex Value=n · ListAdd · ListRemove · ListShuffle"))
                 .font(.caption).foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 6)
         .onAppear { inspector.inspect(input.playlist) }

@@ -15,10 +15,12 @@ struct Sparkline: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Text(title).font(.system(size: 11)).foregroundColor(.secondary)
-                Spacer()
+                    .lineLimit(1).truncationMode(.tail).minimumScaleFactor(0.85)
+                Spacer(minLength: 4)
                 Text(String(format: format, values.last ?? 0) + " " + unit)
                     .font(.system(size: 11, weight: .semibold).monospacedDigit())
                     .foregroundColor((warn.map { (values.last ?? 0) > $0 } ?? false) ? .orange : .primary)
+                    .lineLimit(1).fixedSize()
             }
             Canvas { ctx, size in
                 let cap = Double(HealthHistory.capacity)
@@ -72,7 +74,7 @@ struct HealthGraphsSection: View {
                               minScale: 20, color: .purple)
                     Sparkline(title: L("SRT 손실률 (최악 링크)"), values: h.series(\.srtLossPct), unit: "%",
                               minScale: 1, warn: 0.5, color: .pink, format: "%.2f")
-                    Sparkline(title: L("UI 멈춤"), values: h.series(\.uiStallMs), unit: "ms",
+                    Sparkline(title: L("UI 응답 지연 (최대/1초)"), values: h.series(\.uiStallMs), unit: "ms",
                               minScale: 50, warn: 100, color: .gray, format: "%.0f")
                 }
                 HStack(spacing: 16) {
@@ -90,6 +92,7 @@ struct HealthGraphsSection: View {
         HStack(spacing: 4) {
             Circle().fill(ago == nil ? Color.green : (ago! < 10 ? .red : .orange)).frame(width: 7, height: 7)
             Text(label + ": " + (ago.map { Lf("%@초 전", "\(Int($0))") } ?? L("없음"))).foregroundColor(.secondary)
+                .lineLimit(1).minimumScaleFactor(0.85)
         }
     }
 }

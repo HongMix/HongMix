@@ -165,6 +165,15 @@ static void set_color(AVCodecContext *c) {
     c->color_trc = AVCOL_TRC_BT709;
 }
 
+/* "prores" = 422 standard; "prores_proxy" / "prores_lt" / "prores_hq" pick the ProRes profile. */
+static int is_prores_name(const char *vc) { return vc && strncmp(vc, "prores", 6) == 0; }
+static const char *prores_profile(const char *vc) {
+    if (vc && strcmp(vc, "prores_proxy") == 0) return "proxy";
+    if (vc && strcmp(vc, "prores_lt") == 0) return "lt";
+    if (vc && strcmp(vc, "prores_hq") == 0) return "hq";
+    return "standard";
+}
+
 static AVCodecContext *try_open_video(mc_output *o, const char *name, const enum AVPixelFormat *fmts,
                                       int global_header) {
     const AVCodec *codec = avcodec_find_encoder_by_name(name);
@@ -189,8 +198,15 @@ static AVCodecContext *try_open_video(mc_output *o, const char *name, const enum
         set_color(c);
         AVDictionary *opts = NULL;
         int is_prores = strstr(name, "prores") != NULL;
-        if (!is_prores) {
-            int64_t br = (int64_t)(o->cfg.video_kbps > 0 ? o->cfg.video_kbps : 6000) * 1000;
+        // video_kbps < 0 = constant quality (VideoToolbox 1–100, Apple Silicon): intra-only replay
+        // otherwise undershoots its bitrate target and looks soft (measured: 35 → 25 Mb/s).
+        int cq = !is_prores && o->cfg.video_kbps < 0 && strstr(name, "videotoolbox") ? -o->cfg.video_kbps : 0;
+        if (cq > 0) {
+            c->flags |= AV_CODEC_FLAG_QSCALE;
+            c->global_quality = FF_QP2LAMBDA * (cq > 100 ? 100 : cq);
+        } else if (!is_prores) {
+            int64_t kb = o->cfg.video_kbps > 0 ? o->cfg.video_kbps : (o->cfg.video_kbps < 0 ? 40000 : 6000);
+            int64_t br = kb * 1000;
             c->bit_rate = br;
             c->rc_max_rate = br;
             c->rc_buffer_size = (int)(br * (o->is_network ? 1 : 2));
@@ -200,7 +216,7 @@ static AVCodecContext *try_open_video(mc_output *o, const char *name, const enum
             av_dict_set(&opts, "realtime", "1", 0);
             av_dict_set(&opts, "allow_sw", "1", 0);
             if (strstr(name, "h264")) av_dict_set(&opts, "profile", "high", 0);
-            if (is_prores) av_dict_set(&opts, "profile", "standard", 0);
+            if (is_prores) av_dict_set(&opts, "profile", prores_profile(o->vcodec), 0);
         } else if (strcmp(name, "libx264") == 0) {
             av_dict_set(&opts, "preset", "veryfast", 0);
             if (o->is_network) av_dict_set(&opts, "tune", "zerolatency", 0);
@@ -208,11 +224,35 @@ static AVCodecContext *try_open_video(mc_output *o, const char *name, const enum
         } else if (strcmp(name, "libx265") == 0) {
             av_dict_set(&opts, "preset", "veryfast", 0);
         } else if (strcmp(name, "prores_ks") == 0) {
-            av_dict_set(&opts, "profile", "standard", 0);
+            av_dict_set(&opts, "profile", prores_profile(o->vcodec), 0);
         }
         int ret = avcodec_open2(c, codec, &opts);
         av_dict_free(&opts);
         if (ret >= 0) return c;
+        if (cq > 0) {
+            // Constant quality unsupported (older macOS / Intel): same encoder, fixed bitrate.
+            avcodec_free_context(&c);
+            c = avcodec_alloc_context3(codec);
+            if (!c) return NULL;
+            c->width = o->cfg.width; c->height = o->cfg.height;
+            c->time_base = (AVRational){fps_den, fps_num};
+            c->framerate = (AVRational){fps_num, fps_den};
+            c->sample_aspect_ratio = (AVRational){1, 1};
+            c->pix_fmt = fmts[i];
+            if (fmts[i] == AV_PIX_FMT_VIDEOTOOLBOX) c->sw_pix_fmt = AV_PIX_FMT_NV12;
+            c->gop_size = gop; c->max_b_frames = 0;
+            set_color(c);
+            c->bit_rate = c->rc_max_rate = (int64_t)cq * 900 * 1000;   // q65 ≈ 58 Mb/s ceiling
+            c->rc_buffer_size = (int)(c->bit_rate * 2);
+            if (global_header) c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+            AVDictionary *o2 = NULL;
+            av_dict_set(&o2, "realtime", "1", 0);
+            av_dict_set(&o2, "allow_sw", "1", 0);
+            if (strstr(name, "h264")) av_dict_set(&o2, "profile", "high", 0);
+            ret = avcodec_open2(c, codec, &o2);
+            av_dict_free(&o2);
+            if (ret >= 0) return c;
+        }
         avcodec_free_context(&c);
     }
     return NULL;
@@ -227,7 +267,7 @@ static AVCodecContext *open_video_encoder(mc_output *o, int global_header) {
     static const enum AVPixelFormat vt_hw[] = {AV_PIX_FMT_VIDEOTOOLBOX, AV_PIX_FMT_NONE};
     if (o->cfg.pixelbuffer_input && o->cfg.hardware) {
         const char *vc0 = o->vcodec ? o->vcodec : "h264";
-        const char *name = strcmp(vc0, "prores") == 0 ? "prores_videotoolbox"
+        const char *name = is_prores_name(vc0) ? "prores_videotoolbox"
                          : (strcmp(vc0, "hevc") == 0 || strcmp(vc0, "h265") == 0) ? "hevc_videotoolbox"
                          : "h264_videotoolbox";
         AVCodecContext *c = try_open_video(o, name, vt_hw, global_header);
@@ -240,7 +280,7 @@ static AVCodecContext *open_video_encoder(mc_output *o, int global_header) {
     if (strcmp(vc, "hevc") == 0 || strcmp(vc, "h265") == 0) {
         hw[0] = "hevc_videotoolbox";
         sw[0] = "libx265";
-    } else if (strcmp(vc, "prores") == 0) {
+    } else if (is_prores_name(vc)) {
         hw[0] = "prores_videotoolbox";
         sw[0] = "prores_ks";
         sw[1] = "prores";
@@ -347,7 +387,7 @@ static int osession_open(mc_output *o, osession *s, char *err, int errlen) {
         snprintf(err, errlen, "비디오 인코더를 열 수 없음 (%s)", o->vcodec ? o->vcodec : "h264");
         return -1;
     }
-    int pcm = o->vcodec && strcmp(o->vcodec, "prores") == 0 &&
+    int pcm = is_prores_name(o->vcodec) &&
               (strcmp(s->oc->oformat->name, "mov") == 0);
     s->aenc = open_audio_encoder(o, pcm, gh);
     if (!s->aenc) {

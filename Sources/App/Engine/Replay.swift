@@ -4,34 +4,95 @@ import AppKit
 
 // MARK: - Instant Replay
 //
-// Recording: every selected camera is rendered at the program format each frame, encoded as intra-only
-// H.264 (VideoToolbox) and written frame-indexed into the replay store (segment files on disk). Master
-// audio is stored per frame as PCM. Frame numbers are the engine's render ticks, so all angles line up.
-// Playback: two channels (Replay A / Replay B inputs). Each plays any camera at any speed (slow motion,
-// reverse, frame steps); camera changes are frame-synchronous. Events = Mark In / Mark Out pairs.
-// When the disk runs low the oldest minute of all angles is deleted and recording continues.
+// Recording: up to 4 sources (CAM 1–4) are rendered at the program format each frame, encoded intra-only
+// (H.264, or ProRes on the hardware ProRes engine) and written frame-indexed into the replay store
+// (segment files on disk). Master audio is stored per frame as PCM. Frame numbers are the engine's
+// render ticks, so all angles line up. The 4 slots are fixed streams: a slot's source can be changed
+// or added while recording without touching the other cameras or the timecode.
+// Wall-clock time of every recorded frame comes from anchors (tick → time) taken while recording,
+// so it stays correct after the oldest footage is deleted or recording is stopped and restarted.
+// Playback: two channels (Deck A / Deck B, shown in the window and on Replay A/B inputs). Slow motion
+// is smoothed: AI-interpolated clip (background) → real-time AI (fast Macs) → GPU frame blending.
 
 struct ReplaySettings: Codable, Equatable {
-    var cameraIDs: [String] = []          // up to 8 inputs (UUID strings)
-    var quality: Int = 35_000             // kbps per camera (intra-only H.264)
+    var cameraIDs: [String] = Array(repeating: "", count: ReplaySettings.maxCameras)  // CAM 1–4, "" = empty
+    var quality: Int = 100_000            // kbps per camera (H.264 intra)
+    var codec: String = "hevc"            // "hevc" (default), "h264", "prores_proxy", "prores_lt"
+    var hevcQuality: Int = 65             // HEVC intra constant quality (VideoToolbox 1–100)
+    var formatRev = 2                     // 2 = HEVC default (1.3.37); older projects are migrated
+    var smoothSlow = true                 // GPU blending between frames in slow motion
+    var audioFollowsCamera = true         // replay plays the shown angle's own audio (else program audio)
+    var aiSlow = true                     // AI frame interpolation for slow motion
     var folder: String = ""               // "" = ~/Movies/HongMix/Replay
     var maxGB: Double = 0                 // 0 = use the free space (minus a reserve)
     var autoDelete = true                 // delete the oldest footage when the limit is reached
     var autoReturn = true                 // "Replay → Program" cuts back when the event ends
     var preRoll: Double = 0               // seconds added before Mark In when playing events
 
-    static let maxCameras = 8
+    static let maxCameras = 4
 
     var folderPath: String {
         ((folder.isEmpty ? "~/Movies/HongMix/Replay" : folder) as NSString).expandingTildeInPath
+    }
+
+    /// CAM 1–4 → input ID (nil = empty slot).
+    var slots: [UUID?] {
+        (0..<Self.maxCameras).map { i in i < cameraIDs.count ? UUID(uuidString: cameraIDs[i]) : nil }
+    }
+
+    var assignedCount: Int { slots.compactMap { $0 }.count }
+    var isProRes: Bool { codec.hasPrefix("prores") }
+    var isHEVC: Bool { codec == "hevc" }
+    /// Decoder family for a stored session: 0 = H.264, 1 = ProRes, 2 = HEVC.
+    static func codecKind(_ codec: String) -> Int { codec.hasPrefix("prores") ? 1 : (codec == "hevc" ? 2 : 0) }
+    /// Value for mc_output_config.video_kbps (negative = constant quality).
+    var encoderKbps: Int32 { isHEVC ? -Int32(hevcQuality) : Int32(quality) }
+
+    static func normalized(_ ids: [String]) -> [String] {
+        var a = Array(ids.prefix(maxCameras))
+        while a.count < maxCameras { a.append("") }
+        return a
+    }
+
+    /// Approximate video bitrate per camera (kbps) at the given program format.
+    func kbpsPerCamera(width: Int, height: Int, fps: Double) -> Double {
+        let scale = Double(width * height) / (1920 * 1080) * max(1, fps) / 59.94
+        if isHEVC {
+            // measured on 1080p59.94 poker footage (VideoToolbox HEVC intra, constant quality)
+            let table: [(Int, Double)] = [(55, 30_000), (65, 42_000), (72, 59_000), (80, 85_000)]
+            let base = table.min(by: { abs($0.0 - hevcQuality) < abs($1.0 - hevcQuality) })?.1 ?? 42_000
+            return base * scale
+        }
+        guard isProRes else { return Double(quality) }
+        // Apple ProRes white paper, 1920×1080 at 29.97: Proxy 45, LT 102 Mb/s; scales with pixels × rate.
+        let base: Double = codec == "prores_proxy" ? 45_000 : 102_000
+        return base * Double(width * height) / (1920 * 1080) * max(1, fps) / 29.97
+    }
+
+    var codecLabel: String {
+        switch codec {
+        case "prores_proxy": return "ProRes 422 Proxy"
+        case "prores_lt": return "ProRes 422 LT"
+        case "hevc": return "HEVC Intra q\(hevcQuality)"
+        default: return "H.264 Intra \(quality / 1000)Mb"
+        }
     }
 
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = ReplaySettings()
-        cameraIDs = c.value(.cameraIDs, d.cameraIDs)
+        cameraIDs = Self.normalized(c.value(.cameraIDs, d.cameraIDs))
         quality = c.value(.quality, d.quality)
+        codec = c.value(.codec, d.codec)
+        hevcQuality = c.value(.hevcQuality, d.hevcQuality)
+        // Before 1.3.37 the default was H.264 Intra 35 Mb/s, which measured soft (SSIM 0.968):
+        // move those projects to HEVC Intra (same size class, ProRes-Proxy-like quality).
+        if c.value(.formatRev, 1) < 2 && codec == "h264" { codec = "hevc" }
+        formatRev = 2
+        smoothSlow = c.value(.smoothSlow, d.smoothSlow)
+        aiSlow = c.value(.aiSlow, d.aiSlow)
+        audioFollowsCamera = c.value(.audioFollowsCamera, d.audioFollowsCamera)
         folder = c.value(.folder, d.folder)
         maxGB = c.value(.maxGB, d.maxGB)
         autoDelete = c.value(.autoDelete, d.autoDelete)
@@ -49,6 +110,14 @@ struct ReplayEvent: Identifiable, Equatable {
     var name: String = ""
 }
 
+/// Background AI slow-motion render of one clip.
+struct ReplayAIClipState: Equatable {
+    var camera: Int
+    var progress: Double = 0
+    var ready = false
+    var failed = false
+}
+
 /// What the UI shows for one channel (published ~10×/s).
 struct ReplayChannelUI: Equatable {
     var live = true
@@ -60,6 +129,7 @@ struct ReplayChannelUI: Equatable {
     var behindLive: Double = 0      // seconds behind the recording head
     var eventNumber: Int?
     var attached = false            // a Replay A/B input exists
+    var smoothing = ""              // "", "BLEND", "AI", "AI RT"
 }
 
 struct ReplayStatus: Equatable {
@@ -88,16 +158,32 @@ final class ReplayInput: InputSource {
 
 final class ReplayEngine: ObservableObject {
     static let shared = ReplayEngine()
+    static let cams = ReplaySettings.maxCameras
+    // Store streams: 0…3 = CAM 1–4 video, 4 = program (master) audio, 5…8 = CAM 1–4 source audio.
+    private static let audioStream = Int32(ReplaySettings.maxCameras)
+    private static func camAudioStream(_ k: Int) -> Int32 { Int32(ReplaySettings.maxCameras + 1 + k) }
+    private static let streamCount = Int32(ReplaySettings.maxCameras * 2 + 1)
+    private static let silence: UnsafeMutablePointer<Float> = {
+        let p = UnsafeMutablePointer<Float>.allocate(capacity: 48_000 * 2)
+        p.initialize(repeating: 0, count: 48_000 * 2)
+        return p
+    }()
 
-    @Published var settings = ReplaySettings() { didSet { if settings != oldValue { refreshLimit() } } }
+    @Published var settings = ReplaySettings() { didSet { if settings != oldValue { settingsChanged(oldValue) } } }
     @Published private(set) var recording = false
     @Published private(set) var recordingStartedAt: Date?
     @Published private(set) var events: [ReplayEvent] = []
     @Published private(set) var channelsUI = [ReplayChannelUI(), ReplayChannelUI()]
     @Published private(set) var status = ReplayStatus()
     @Published private(set) var pendingIn: Int64?
+    @Published private(set) var aiClips: [UUID: ReplayAIClipState] = [:]
+    /// How slow motion is smoothed on this Mac (shown in the settings).
+    @Published private(set) var aiInfo = ""
     /// Channels the transport buttons act on (A, B or both).
     @Published var selected: Set<Int> = [0]
+
+    /// Deck A / Deck B pictures for the replay window (filled even without Replay A/B inputs).
+    let deckSlots = [VideoSlot(), VideoSlot()]
 
     weak var engine: SwitcherEngine?
 
@@ -113,18 +199,37 @@ final class ReplayEngine: ObservableObject {
         var eventNumber: Int?
         var shown: Int64 = -1
         var shownCamera = -1
+        var shownSmooth = false
+        var shownPos: Double = -1
+        var smoothing = ""
         var finished = false
         var gen = 0                 // bumped by every user change (player never overwrites a newer change)
+    }
+    private struct AIClipRef {
+        let id: UUID
+        let inFrame: Int64
+        let outFrame: Int64
+        let camera: Int
+        let store: OpaquePointer
     }
     private let lock = NSLock()
     private var ch = [ChannelState(), ChannelState()]
     private var inputsByChannel: [Int: [ReplayInput]] = [:]
     private var store: OpaquePointer?
-    private var outs: [OpaquePointer] = []
-    private var sinks: [OpaquePointer] = []
-    private var recCameras: [UUID] = []           // cameras of the current store (angle 1…n)
-    private var liveFrames: [CVPixelBuffer?] = []
+    private var outs = [OpaquePointer?](repeating: nil, count: ReplayEngine.cams)
+    private var sinks = [OpaquePointer?](repeating: nil, count: ReplayEngine.cams)
+    private var recCameras = [UUID?](repeating: nil, count: ReplayEngine.cams)   // source of each CAM slot
+    private var recCodec = "h264"
+    private var liveFrames = [CVPixelBuffer?](repeating: nil, count: ReplayEngine.cams)
     private var head: Int64 = -1                   // newest frame recorded
+    private var clockAnchors: [(tick: Int64, time: Double)] = []
+    private var needAnchor = true
+    private var aiIndex: [AIClipRef] = []
+    private var aiCancelled: Set<UUID> = []
+    private var aiEpoch = 0
+    private var playerSmooth = true
+    private var playerAI = true
+    private var playerAudioFollow = true
     private var fps: Double = 59.94
     private var format = VideoFormat.defaultFormat
 
@@ -132,11 +237,22 @@ final class ReplayEngine: ObservableObject {
     private let queue = DispatchQueue(label: "replay.player", qos: .userInteractive)
     private var timer: DispatchSourceTimer?
     private var decoders: [OpaquePointer?] = [nil, nil]
+    private var decoderKind = -1
+    private var aiDecoders: [OpaquePointer?] = [nil, nil]
+    private var frameCache: [[(frame: Int64, cam: Int, pb: CVPixelBuffer)]] = [[], []]
     private var pool: CVPixelBufferPool?
     private var poolSize = (0, 0)
+    private let blender = FrameBlender()
+    private var rtAI: AIInterpolator?              // player queue only (fast Macs)
     private var uiCounter = 0
     private var returnToID: UUID?
     private var statusTimer: Timer?
+
+    // background AI
+    private let aiQueue = DispatchQueue(label: "replay.ai", qos: .utility)          // clip renders (cancel fast)
+    private let aiLoadQueue = DispatchQueue(label: "replay.ai.load", qos: .utility) // ML model loading (slow)
+    private var bgAI: AIInterpolator?              // lock; used only on aiQueue
+    private var aiPreparedSize = (0, 0)            // lock
 
     var frameRate: Double { fps }
 
@@ -159,30 +275,127 @@ final class ReplayEngine: ObservableObject {
         publishUI()
     }
 
-    /// Render thread: replay needs camera frames this tick (recording, or a replay input showing live).
+    /// Render thread: replay needs camera frames this tick — while recording, or when a deck shows a
+    /// live angle (replay window open or a Replay A/B input exists). Idle replay costs no GPU time.
     var wantsFrames: Bool {
         lock.lock(); defer { lock.unlock() }
-        return store != nil && (!outs.isEmpty || inputsByChannel.values.contains { !$0.isEmpty })
-            || !outs.isEmpty
+        guard store != nil else { return false }
+        if outs.contains(where: { $0 != nil }) { return true }
+        let liveDeck = ch.indices.contains { ch[$0].live && (windowVisible || !(inputsByChannel[$0] ?? []).isEmpty) }
+        return liveDeck
     }
 
-    /// Cameras of the current recording (angle 1…n).
-    var cameraIDs: [UUID] {
+    private var windowVisible = false
+    /// The replay window reports whether its deck monitors are on screen.
+    func setWindowVisible(_ on: Bool) {
+        lock.lock(); windowVisible = on; lock.unlock()
+        if on { startPlayer() }
+    }
+
+    /// Inputs whose own (pre-fader) audio the mixer must provide this tick: the recording CAM sources.
+    var sourceAudioIDs: Set<UUID> {
+        lock.lock(); defer { lock.unlock() }
+        var ids = Set<UUID>()
+        for k in 0..<Self.cams where outs[k] != nil { if let id = recCameras[k] { ids.insert(id) } }
+        return ids
+    }
+
+    /// Sources of the current recording, CAM 1–4 (nil = empty).
+    var recordingSlots: [UUID?] {
         lock.lock(); defer { lock.unlock() }
         return recCameras
     }
 
+    // MARK: Sources (CAM 1–4)
+
+    /// Assigns an input to a CAM slot (nil clears it). An input already used by another slot moves.
+    func setSource(_ slot: Int, _ id: UUID?) {
+        guard slot >= 0, slot < Self.cams else { return }
+        var ids = ReplaySettings.normalized(settings.cameraIDs)
+        if let id = id {
+            for k in ids.indices where ids[k] == id.uuidString { ids[k] = "" }
+            ids[slot] = id.uuidString
+        } else {
+            ids[slot] = ""
+        }
+        settings.cameraIDs = ids
+    }
+
+    /// CAM slot (0…3) an input is assigned to.
+    func slot(of id: UUID) -> Int? {
+        settings.slots.firstIndex(where: { $0 == id })
+    }
+
+    private func settingsChanged(_ old: ReplaySettings) {
+        lock.lock()
+        playerSmooth = settings.smoothSlow
+        playerAI = settings.aiSlow
+        playerAudioFollow = settings.audioFollowsCamera
+        lock.unlock()
+        if settings.slots != old.slots { applySlots() }
+        if settings.aiSlow && !old.aiSlow { prepareAI() }
+        refreshLimit()
+    }
+
+    /// While recording, start/stop per-slot encoders so a source can be added, swapped or removed live.
+    private func applySlots() {
+        guard let e = engine else { return }
+        let want = settings.slots.map { id in id.flatMap { e.input(withID: $0) != nil ? $0 : nil } }
+        lock.lock()
+        let st = store
+        if st != nil { recCameras = want }
+        let current = outs
+        lock.unlock()
+        guard recording, let st = st else { return }
+        var closing: [(OpaquePointer, OpaquePointer?)] = []
+        for k in 0..<Self.cams {
+            if want[k] != nil && current[k] == nil {
+                if let (o, s) = openEncoder(slot: k, store: st) {
+                    lock.lock(); outs[k] = o; sinks[k] = s; lock.unlock()
+                }
+            } else if want[k] == nil, let o = current[k] {
+                lock.lock(); let s = sinks[k]; outs[k] = nil; sinks[k] = nil; lock.unlock()
+                closing.append((o, s))
+            }
+        }
+        if !closing.isEmpty {
+            DispatchQueue.global(qos: .userInitiated).async {
+                for (o, s) in closing { mc_output_close(o); if let s = s { mc_replay_sink_free(s) } }
+            }
+        }
+        refreshStatus()
+    }
+
     // MARK: Recording
+
+    private func openEncoder(slot k: Int, store st: OpaquePointer) -> (OpaquePointer, OpaquePointer?)? {
+        guard let sink = mc_replay_sink_new(st, Int32(k)) else { return nil }
+        var cfg = mc_output_config()
+        cfg.width = Int32(format.width); cfg.height = Int32(format.height)
+        cfg.fps_num = Int32(format.fpsNum); cfg.fps_den = Int32(format.fpsDen)
+        cfg.video_kbps = settings.encoderKbps
+        cfg.audio_kbps = 64
+        cfg.keyint_frames = 1                   // intra-only: every frame decodes on its own
+        cfg.hardware = 1
+        cfg.pixelbuffer_input = 1
+        cfg.packet_cb = mc_replay_sink_cb
+        cfg.packet_user = UnsafeMutableRawPointer(sink)
+        let u = strdup("replay:"), f = strdup("null"), v = strdup(recCodec)
+        cfg.url = UnsafePointer(u); cfg.format = UnsafePointer(f); cfg.video_codec = UnsafePointer(v)
+        let h = mc_output_open(&cfg, nil, nil)
+        free(u); free(f); free(v)
+        guard let h = h else { mc_replay_sink_free(sink); return nil }
+        return (h, sink)
+    }
 
     func startRecording() -> String? {
         guard let e = engine else { return "Engine not ready" }
         if recording { return nil }
-        let cams = settings.cameraIDs.compactMap { UUID(uuidString: $0) }.filter { e.input(withID: $0) != nil }
-            .prefix(ReplaySettings.maxCameras)
-        guard !cams.isEmpty else { return L("리플레이할 카메라를 먼저 고르세요 (Replay 설정)") }
+        let slots = settings.slots.map { id in id.flatMap { e.input(withID: $0) != nil ? $0 : nil } }
+        guard slots.contains(where: { $0 != nil }) else { return L("리플레이 소스(CAM 1–4)를 먼저 고르세요") }
         let fmt = e.format
         lock.lock()
-        let sameSetup = store != nil && recCameras == Array(cams) && format.width == fmt.width && format.height == fmt.height
+        let sameSetup = store != nil && recCodec == settings.codec && format.width == fmt.width && format.height == fmt.height
             && format.fpsNum == fmt.fpsNum && format.fpsDen == fmt.fpsDen
         lock.unlock()
         if !sameSetup { closeStore() }
@@ -194,48 +407,38 @@ final class ReplayEngine: ObservableObject {
         }
         if !sameSetup {
             let dir = (folder as NSString).appendingPathComponent("session")
-            guard let st = mc_replay_store_open(dir, Int32(cams.count + 1), Int32((60 * fps).rounded())) else {
+            guard let st = mc_replay_store_open(dir, Self.streamCount, Int32((60 * fps).rounded())) else {
                 return L("리플레이 저장소를 열 수 없음")
             }
             lock.lock()
             store = st
-            recCameras = Array(cams)
-            liveFrames = Array(repeating: nil, count: cams.count)
+            recCodec = settings.codec
+            liveFrames = Array(repeating: nil, count: Self.cams)
             head = -1
+            clockAnchors = []
             lock.unlock()
             events.removeAll()
             pendingIn = nil
         }
-        var newOuts: [OpaquePointer] = []
-        var newSinks: [OpaquePointer] = []
-        lock.lock(); let st = store; lock.unlock()
-        for k in 0..<cams.count {
-            guard let st = st, let sink = mc_replay_sink_new(st, Int32(k)) else { continue }
-            var cfg = mc_output_config()
-            cfg.width = Int32(fmt.width); cfg.height = Int32(fmt.height)
-            cfg.fps_num = Int32(fmt.fpsNum); cfg.fps_den = Int32(fmt.fpsDen)
-            cfg.video_kbps = Int32(settings.quality)
-            cfg.audio_kbps = 64
-            cfg.keyint_frames = 1                   // intra-only: every frame decodes on its own
-            cfg.hardware = 1
-            cfg.pixelbuffer_input = 1
-            cfg.packet_cb = mc_replay_sink_cb
-            cfg.packet_user = UnsafeMutableRawPointer(sink)
-            let u = strdup("replay:"), f = strdup("null"), v = strdup("h264")
-            cfg.url = UnsafePointer(u); cfg.format = UnsafePointer(f); cfg.video_codec = UnsafePointer(v)
-            let h = mc_output_open(&cfg, nil, nil)
-            free(u); free(f); free(v)
-            if let h = h { newOuts.append(h); newSinks.append(sink) } else { mc_replay_sink_free(sink) }
-        }
-        guard !newOuts.isEmpty else { return L("리플레이 인코더를 시작할 수 없음") }
         lock.lock()
-        outs = newOuts
-        sinks = newSinks
+        recCameras = slots
+        needAnchor = true
+        let st = store
         lock.unlock()
+        guard let st = st else { return L("리플레이 저장소를 열 수 없음") }
+        var opened = 0
+        for k in 0..<Self.cams where slots[k] != nil {
+            if let (o, s) = openEncoder(slot: k, store: st) {
+                lock.lock(); outs[k] = o; sinks[k] = s; lock.unlock()
+                opened += 1
+            }
+        }
+        guard opened > 0 else { return L("리플레이 인코더를 시작할 수 없음") }
         recording = true
         recordingStartedAt = Date()
         refreshLimit()
         startPlayer()
+        prepareAI()
         if statusTimer == nil {
             let t = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.refreshStatus() }
             RunLoop.main.add(t, forMode: .common)
@@ -248,12 +451,13 @@ final class ReplayEngine: ObservableObject {
         guard recording else { return }
         lock.lock()
         let o = outs, s = sinks
-        outs = []; sinks = []
+        outs = Array(repeating: nil, count: Self.cams)
+        sinks = Array(repeating: nil, count: Self.cams)
         lock.unlock()
         recording = false
         DispatchQueue.global(qos: .userInitiated).async {
-            for h in o { mc_output_close(h) }          // flushes the last frames into the store
-            for k in s { mc_replay_sink_free(k) }
+            for h in o.compactMap({ $0 }) { mc_output_close(h) }          // flushes the last frames into the store
+            for k in s.compactMap({ $0 }) { mc_replay_sink_free(k) }
         }
         refreshStatus()
     }
@@ -275,37 +479,83 @@ final class ReplayEngine: ObservableObject {
         lock.lock()
         let st = store
         store = nil
-        recCameras = []
-        liveFrames = []
+        recCameras = Array(repeating: nil, count: Self.cams)
+        liveFrames = Array(repeating: nil, count: Self.cams)
         head = -1
+        clockAnchors = []
+        let clips = aiIndex
+        aiIndex = []
+        aiEpoch += 1
         for i in 0..<2 { ch[i] = ChannelState() }
         lock.unlock()
-        if let st = st { queue.sync { mc_replay_store_close(st, 1) } }
+        aiClips = [:]
+        aiQueue.sync {}      // a running clip render sees the new epoch within one frame and stops
+        queue.sync {
+            for c in 0..<2 {
+                if let d = decoders[c] { mc_replay_dec_close(d) }
+                if let d = aiDecoders[c] { mc_replay_dec_close(d) }
+                decoders[c] = nil; aiDecoders[c] = nil
+                frameCache[c] = []
+            }
+            for clip in clips { mc_replay_store_close(clip.store, 1) }
+            if let st = st { mc_replay_store_close(st, 1) }
+        }
     }
 
     /// Render thread, once per tick (after the audio mix).
-    func renderHook(tick: Int64, audio: UnsafePointer<Float>, frames n: Int, render: (UUID) -> CVPixelBuffer?) {
+    func renderHook(tick: Int64, audio: UnsafePointer<Float>, frames n: Int,
+                    sourceAudio: (UUID) -> UnsafePointer<Float>?, render: (UUID) -> CVPixelBuffer?) {
         lock.lock()
         let cams = recCameras, o = outs, st = store
         lock.unlock()
         guard let st = st else { return }
-        var live: [CVPixelBuffer?] = []
-        for (k, id) in cams.enumerated() {
-            let pb = render(id)
-            live.append(pb)
-            if k < o.count, let pb = pb {
-                mc_output_push_pixelbuffer(o[k], Unmanaged.passUnretained(pb).toOpaque(), tick)
+        var live = [CVPixelBuffer?](repeating: nil, count: Self.cams)
+        var recordingNow = false
+        for k in 0..<Self.cams {
+            guard let id = cams[k], let pb = render(id) else { continue }
+            live[k] = pb
+            if let out = o[k] {
+                mc_output_push_pixelbuffer(out, Unmanaged.passUnretained(pb).toOpaque(), tick)
+                recordingNow = true
             }
         }
-        if !o.isEmpty, n > 0 {
-            mc_replay_store_write(st, Int32(cams.count), tick, UnsafeRawPointer(audio).assumingMemoryBound(to: UInt8.self),
-                                  Int32(n * 2 * MemoryLayout<Float>.size))
+        if recordingNow, n > 0 {
+            let bytes = Int32(n * 2 * MemoryLayout<Float>.size)
+            mc_replay_store_write(st, Self.audioStream, tick, UnsafeRawPointer(audio).assumingMemoryBound(to: UInt8.self), bytes)
+            // each CAM's own audio (silence for a source without audio), so a replay angle sounds like its camera
+            for k in 0..<Self.cams where o[k] != nil {
+                guard let id = cams[k], n <= 48_000 else { continue }
+                let p = sourceAudio(id) ?? UnsafePointer(Self.silence)
+                mc_replay_store_write(st, Self.camAudioStream(k), tick, UnsafeRawPointer(p).assumingMemoryBound(to: UInt8.self), bytes)
+            }
         }
         lock.lock()
         liveFrames = live
-        if !o.isEmpty { head = tick }
+        if recordingNow {
+            head = tick
+            // Re-anchor tick → wall clock every second: render-loop catch-ups never accumulate.
+            if needAnchor || (clockAnchors.last.map { tick - $0.tick >= 60 } ?? true) {
+                clockAnchors.append((tick, Date().timeIntervalSince1970))
+                needAnchor = false
+            }
+        }
         lock.unlock()
     }
+
+    /// Wall-clock time a frame was recorded (nil before anything was recorded).
+    func wallTime(_ frame: Int64) -> Date? {
+        lock.lock(); defer { lock.unlock() }
+        guard !clockAnchors.isEmpty else { return nil }
+        var lo = 0, hi = clockAnchors.count - 1
+        while lo < hi {
+            let mid = (lo + hi + 1) / 2
+            if clockAnchors[mid].tick <= frame { lo = mid } else { hi = mid - 1 }
+        }
+        let a = clockAnchors[lo]
+        return Date(timeIntervalSince1970: a.time + Double(frame - a.tick) / fps)
+    }
+
+    private func firstFrame(_ st: OpaquePointer) -> Int64 { mc_replay_store_first(st, Self.audioStream) }
 
     // MARK: Disk limit / status
 
@@ -332,20 +582,27 @@ final class ReplayEngine: ObservableObject {
 
     func refreshStatus() {
         lock.lock()
-        let st = store, cams = recCameras.count, h = head
+        let st = store, cams = recCameras.compactMap { $0 }.count, h = head
+        if let st = st {
+            // drop clock anchors older than the oldest footage (keep the one that covers it)
+            let first = firstFrame(st)
+            if first >= 0, clockAnchors.count > 2,
+               let k = clockAnchors.lastIndex(where: { $0.tick <= first }), k > 0 {
+                clockAnchors.removeFirst(k)
+            }
+        }
         lock.unlock()
         var s = status
         s.cameras = cams
-        if let st = st, cams > 0 {
-            let first = mc_replay_store_first(st, 0)
+        if let st = st {
+            let first = firstFrame(st)
             s.bufferedSeconds = first >= 0 && h >= first ? Double(h - first) / fps : 0
             s.bytes = mc_replay_store_bytes(st)
         } else {
             s.bufferedSeconds = 0; s.bytes = 0
         }
         s.free = OutputConfig.freeSpace(at: settings.folderPath) ?? 0
-        let camCount = max(1, cams > 0 ? cams : settings.cameraIDs.count)
-        let perHour = (Double(settings.quality) * 1000 / 8 * Double(camCount) + 48_000 * 8) * 3600
+        let perHour = Double(estimate(cameras: max(1, cams > 0 ? cams : settings.assignedCount)).perHour)
         s.hoursLeft = perHour > 0 ? Double(max(0, s.free - ReplayEngine.reserve)) / perHour : 0
         if s != status { status = s }
         if Date().timeIntervalSince(lastLimitRefresh) > 5 { lastLimitRefresh = Date(); refreshLimit() }
@@ -353,8 +610,10 @@ final class ReplayEngine: ObservableObject {
 
     /// Estimated recording time for the given settings and disk (shown before recording starts).
     func estimate(cameras: Int) -> (perHour: Int64, hours: Double, free: Int64) {
+        let fmt = engine?.format ?? format
         let free = OutputConfig.freeSpace(at: settings.folderPath) ?? 0
-        let perHour = Int64((Double(settings.quality) * 1000 / 8 * Double(max(1, cameras)) + 48_000 * 8) * 3600)
+        let kbps = settings.kbpsPerCamera(width: fmt.width, height: fmt.height, fps: fmt.fps)
+        let perHour = Int64((kbps * 1000 / 8 * Double(max(1, cameras)) + 48_000 * 8) * 3600)
         let usable = settings.maxGB > 0 ? min(Int64(settings.maxGB * 1e9), free - ReplayEngine.reserve) : free - ReplayEngine.reserve
         return (perHour, perHour > 0 ? Double(max(0, usable)) / Double(perHour) : 0, free)
     }
@@ -374,48 +633,86 @@ final class ReplayEngine: ObservableObject {
     private func pixelBuffer() -> CVPixelBuffer? {
         let w = format.width, h = format.height
         if pool == nil || poolSize != (w, h) {
-            pool = PixelBufferFactory.makePool(width: w, height: h, minimumCount: 6)
+            pool = PixelBufferFactory.makePool(width: w, height: h, minimumCount: 10)
             poolSize = (w, h)
         }
         guard let p = pool else { return nil }
         return PixelBufferFactory.makeBuffer(pool: p)
     }
 
-    private func decode(stream: Int, frame: Int64, st: OpaquePointer, channel: Int) -> CVPixelBuffer? {
-        var data: UnsafeMutablePointer<UInt8>?
-        var got: Int64 = 0
-        let n = mc_replay_store_read(st, Int32(stream), frame, &data, &got)
-        guard n > 0, let d = data else { return nil }
-        defer { free(d) }
-        if decoders[channel] == nil { decoders[channel] = mc_replay_dec_open() }
-        guard let dec = decoders[channel], let pb = pixelBuffer() else { return nil }
+    private static func decodeInto(_ dec: OpaquePointer, _ data: UnsafeMutablePointer<UInt8>, _ n: Int32, _ pb: CVPixelBuffer,
+                                   _ w: Int, _ h: Int) -> Bool {
         CVPixelBufferLockBaseAddress(pb, [])
         defer { CVPixelBufferUnlockBaseAddress(pb, []) }
-        guard let base = CVPixelBufferGetBaseAddress(pb) else { return nil }
-        let ok = mc_replay_dec_decode(dec, d, n, base.assumingMemoryBound(to: UInt8.self),
-                                      Int32(CVPixelBufferGetBytesPerRow(pb)), Int32(format.width), Int32(format.height))
-        return ok == 0 ? pb : nil
+        guard let base = CVPixelBufferGetBaseAddress(pb) else { return false }
+        return mc_replay_dec_decode(dec, data, n, base.assumingMemoryBound(to: UInt8.self),
+                                    Int32(CVPixelBufferGetBytesPerRow(pb)), Int32(w), Int32(h)) == 0
+    }
+
+    /// Hardware (VideoToolbox) decode → NV12 IOSurface the GPU reads directly; software → BGRA.
+    private static func decodeHW(_ dec: OpaquePointer, _ data: UnsafeMutablePointer<UInt8>, _ n: Int32, _ w: Int, _ h: Int) -> CVPixelBuffer? {
+        var out: UnsafeMutableRawPointer?
+        guard mc_replay_dec_decode_pb(dec, data, n, Int32(w), Int32(h), &out) == 0, let p = out else { return nil }
+        return Unmanaged<CVPixelBuffer>.fromOpaque(p).takeRetainedValue()
+    }
+
+    /// Player queue: decoded recorded frame (cached: slow motion reuses the last few frames).
+    private func frame(_ f: Int64, cam: Int, st: OpaquePointer, channel c: Int, kind: Int) -> CVPixelBuffer? {
+        if let hit = frameCache[c].first(where: { $0.frame == f && $0.cam == cam }) { return hit.pb }
+        var data: UnsafeMutablePointer<UInt8>?
+        var got: Int64 = 0
+        let n = mc_replay_store_read(st, Int32(cam), f, &data, &got)
+        guard n > 0, let d = data else { return nil }
+        defer { free(d) }
+        if decoderKind != kind {
+            for k in 0..<2 { if let x = decoders[k] { mc_replay_dec_close(x) }; decoders[k] = nil }
+            decoderKind = kind
+        }
+        if decoders[c] == nil { decoders[c] = mc_replay_dec_open_hw(Int32(kind)) }
+        guard let dec = decoders[c], let pb = Self.decodeHW(dec, d, n, format.width, format.height) else { return nil }
+        frameCache[c].append((f, cam, pb))
+        if frameCache[c].count > 4 { frameCache[c].removeFirst() }
+        return pb
+    }
+
+    /// Player queue: AI-rendered in-between frame of a clip (quarter phases 1…3).
+    private func aiFrame(_ clip: AIClipRef, frame f: Int64, quarter k: Int, channel c: Int) -> CVPixelBuffer? {
+        let idx = (f - clip.inFrame) * 4 + Int64(k)
+        var data: UnsafeMutablePointer<UInt8>?
+        var got: Int64 = 0
+        let n = mc_replay_store_read(clip.store, 0, idx, &data, &got)
+        guard n > 0, let d = data else { return nil }
+        defer { free(d) }
+        guard got == idx else { return nil }
+        if aiDecoders[c] == nil { aiDecoders[c] = mc_replay_dec_open_hw(2) }
+        return aiDecoders[c].flatMap { Self.decodeHW($0, d, n, format.width, format.height) }
     }
 
     private func playerTick() {
         lock.lock()
-        let st = store, h = head, live = liveFrames, nCams = recCameras.count
-        let first = st.map { mc_replay_store_first($0, 0) } ?? -1
+        let st = store, h = head, live = liveFrames
+        let kind = ReplaySettings.codecKind(recCodec)
+        let first = st.map { firstFrame($0) } ?? -1
         var states = ch
         let targets = inputsByChannel
+        let clips = aiIndex
+        let smooth = playerSmooth, useAI = playerAI, audioFollow = playerAudioFollow
         lock.unlock()
         var finishedChannels: [Int] = []
         for c in 0..<2 {
             var s = states[c]
             let ins = targets[c] ?? []
+            func show(_ pb: CVPixelBuffer) {
+                deckSlots[c].ingest(pixelBuffer: pb)
+                for i in ins { i.video.ingest(pixelBuffer: pb) }
+            }
             if s.live {
-                if s.camera < live.count, let pb = live[s.camera] {
-                    for i in ins { i.video.ingest(pixelBuffer: pb) }
-                }
+                if s.camera < live.count, let pb = live[s.camera] { show(pb) }
+                s.smoothing = ""
                 states[c] = s
                 continue
             }
-            guard let st = st, nCams > 0 else { continue }
+            guard let st = st else { continue }
             if s.playing {
                 s.pos += (s.reverse ? -1 : 1) * s.speed
                 if let stop = s.stopFrame, !s.reverse, s.pos >= Double(stop) {
@@ -426,17 +723,49 @@ final class ReplayEngine: ObservableObject {
             }
             if first >= 0 { s.pos = max(Double(first), s.pos) }
             let f = Int64(s.pos.rounded(.down))
-            if f != s.shown || s.camera != s.shownCamera {
-                if let pb = decode(stream: min(s.camera, nCams - 1), frame: f, st: st, channel: c) {
-                    for i in ins { i.video.ingest(pixelBuffer: pb) }
-                    s.shown = f; s.shownCamera = s.camera
+            let phase = s.pos - Double(f)
+            var smoothed: CVPixelBuffer?
+            var mode = ""
+            // Slow motion between two recorded frames: AI clip → real-time AI → GPU blend.
+            let unchangedStill = !s.playing && s.shownSmooth && s.shownPos == s.pos && s.shownCamera == s.camera
+            if s.speed < 0.99, phase > 0.02, phase < 0.98, h < 0 || f + 1 <= h, !unchangedStill {
+                let k = Int((phase * 4).rounded())
+                if useAI, k >= 1, k <= 3,
+                   let clip = clips.first(where: { $0.camera == s.camera && f >= $0.inFrame && f < $0.outFrame }),
+                   let pb = aiFrame(clip, frame: f, quarter: k, channel: c) {
+                    smoothed = pb; mode = "AI"
+                } else if let a = frame(f, cam: s.camera, st: st, channel: c, kind: kind),
+                          let b = frame(f + 1, cam: s.camera, st: st, channel: c, kind: kind) {
+                    if useAI, let rt = rtAI, let p = pool,
+                       let out = rt.interpolate(a, b, phases: [Float(phase)], bgraPool: p)?.first {
+                        smoothed = out; mode = "AI RT"
+                    } else if smooth, let dst = pixelBuffer(), blender.blend(a, b, phase: phase, into: dst) {
+                        smoothed = dst; mode = "BLEND"
+                    }
                 }
             }
+            if let pb = smoothed {
+                show(pb)
+                s.shown = f; s.shownCamera = s.camera; s.shownSmooth = true; s.shownPos = s.pos
+            } else if unchangedStill {
+                mode = s.smoothing
+            } else if f != s.shown || s.camera != s.shownCamera || s.shownSmooth {
+                if let pb = frame(f, cam: min(s.camera, Self.cams - 1), st: st, channel: c, kind: kind) {
+                    show(pb)
+                    s.shown = f; s.shownCamera = s.camera; s.shownSmooth = false
+                }
+            }
+            s.smoothing = mode
             // audio only at normal forward speed (no time-stretch)
             if s.playing && !s.reverse && abs(s.speed - 1) < 0.001, !ins.isEmpty {
                 var data: UnsafeMutablePointer<UInt8>?
                 var got: Int64 = 0
-                let n = mc_replay_store_read(st, Int32(nCams), f, &data, &got)
+                // the shown angle's own audio; program audio if that CAM has none for this frame
+                var n = audioFollow ? mc_replay_store_read(st, Self.camAudioStream(s.camera), f, &data, &got) : -1
+                if n <= 0 || got != f {
+                    if let d = data { free(d); data = nil }
+                    n = mc_replay_store_read(st, Self.audioStream, f, &data, &got)
+                }
                 if n > 0, let d = data {
                     if got == f {
                         d.withMemoryRebound(to: Float.self, capacity: Int(n) / 4) { p in
@@ -451,10 +780,14 @@ final class ReplayEngine: ObservableObject {
         }
         lock.lock()
         // keep the user's latest changes; only take over what the player advanced
-        for c in 0..<2 where ch[c].gen == states[c].gen && !states[c].live {
+        for c in 0..<2 {
+            ch[c].smoothing = states[c].smoothing
+            guard ch[c].gen == states[c].gen && !states[c].live else { continue }
             ch[c].pos = states[c].pos
             ch[c].shown = states[c].shown
             ch[c].shownCamera = states[c].shownCamera
+            ch[c].shownSmooth = states[c].shownSmooth
+            ch[c].shownPos = states[c].shownPos
             ch[c].playing = states[c].playing
         }
         lock.unlock()
@@ -472,8 +805,10 @@ final class ReplayEngine: ObservableObject {
         for c in 0..<2 {
             let s = ch[c]
             ui[c] = ReplayChannelUI(live: s.live, camera: s.camera, playing: s.playing, speed: s.speed, reverse: s.reverse,
-                                    position: Int64(s.pos), behindLive: s.live || h < 0 ? 0 : Double(h) / fps - s.pos / fps,
-                                    eventNumber: s.eventNumber, attached: !(inputsByChannel[c] ?? []).isEmpty)
+                                    position: s.live ? max(0, h) : Int64(s.pos),
+                                    behindLive: s.live || h < 0 ? 0 : Double(h) / fps - s.pos / fps,
+                                    eventNumber: s.eventNumber, attached: !(inputsByChannel[c] ?? []).isEmpty,
+                                    smoothing: s.smoothing)
         }
         lock.unlock()
         if ui != channelsUI { channelsUI = ui }
@@ -487,9 +822,185 @@ final class ReplayEngine: ObservableObject {
         publishUI()
     }
 
-    private var headFrame: Int64 {
-        lock.lock(); defer { lock.unlock() }
-        return head
+    // MARK: AI slow motion
+
+    /// Loads the ML interpolator for the program size in the background, measures this Mac once,
+    /// and decides between real-time AI and background AI clips.
+    func prepareAI() {
+        guard settings.aiSlow else { return }
+        guard ReplayCaps.aiSupported else {
+            aiInfo = L("이 맥/macOS 는 AI 보간 미지원 — GPU 블렌딩으로 부드럽게")
+            return
+        }
+        let fmt = engine?.format ?? format
+        let w = fmt.width, h = fmt.height, rate = fmt.fps
+        lock.lock(); let ready = bgAI != nil && aiPreparedSize == (w, h); lock.unlock()
+        if ready { return }
+        aiInfo = L("AI 모델 준비 중… (이 맥에서 처음 한 번 10초 정도)")
+        aiLoadQueue.async {
+            lock_: do {
+                self.lock.lock(); let done = self.bgAI != nil && self.aiPreparedSize == (w, h); self.lock.unlock()
+                if done { break lock_ }
+                guard let ai = AIInterpolator(width: w, height: h),
+                      let p = PixelBufferFactory.makePool(width: w, height: h, minimumCount: 4) else {
+                    DispatchQueue.main.async { self.aiInfo = L("AI 보간을 시작할 수 없음 — GPU 블렌딩 사용") }
+                    return
+                }
+                let cost = ReplayCaps.aiCostMs(width: w, height: h) ?? ai.measure(bgraPool: p) ?? 999
+                self.lock.lock(); self.bgAI = ai; self.aiPreparedSize = (w, h); self.lock.unlock()
+                let realtime = ReplayCaps.aiRealtime(width: w, height: h, fps: rate)
+                if realtime {
+                    let rt = AIInterpolator(width: w, height: h)
+                    self.queue.async { self.rtAI = rt }
+                }
+                DispatchQueue.main.async {
+                    self.aiInfo = realtime
+                        ? Lf("AI 실시간 보간 (%@ · %@ ms/프레임)", ReplayCaps.chip, String(format: "%.0f", cost))
+                        : Lf("AI 클립 백그라운드 렌더 + 실시간 GPU 블렌딩 (%@ · %@ ms/프레임)", ReplayCaps.chip, String(format: "%.0f", cost))
+                }
+            }
+        }
+    }
+
+    private var aiRealtimeActive: Bool {
+        let fmt = engine?.format ?? format
+        return ReplayCaps.aiRealtime(width: fmt.width, height: fmt.height, fps: fmt.fps)
+    }
+
+    /// Renders AI in-between frames (¼, ½, ¾) of a clip in the background. Slow Macs only; on fast
+    /// Macs playback interpolates in real time instead.
+    private func scheduleAI(_ e: ReplayEvent) {
+        guard settings.aiSlow, ReplayCaps.aiSupported, !aiRealtimeActive else { return }
+        lock.lock()
+        let st = store, epoch = aiEpoch
+        let kind = ReplaySettings.codecKind(recCodec)
+        aiCancelled.remove(e.id)
+        lock.unlock()
+        guard let st = st, e.outFrame > e.inFrame else { return }
+        aiClips[e.id] = ReplayAIClipState(camera: e.camera)
+        let fmt = format, quality = settings.quality
+        let dir = (settings.folderPath as NSString).appendingPathComponent("session-ai/\(e.id.uuidString)")
+        aiQueue.async { [weak self] in
+            self?.renderAIClip(e, store: st, kind: kind, epoch: epoch, fmt: fmt, quality: quality, dir: dir)
+        }
+    }
+
+    private func renderAIClip(_ e: ReplayEvent, store st: OpaquePointer, kind: Int, epoch: Int, fmt: VideoFormat,
+                              quality: Int, dir: String) {
+        func cancelled() -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            return aiEpoch != epoch || aiCancelled.contains(e.id)
+        }
+        func finish(failed: Bool) {
+            DispatchQueue.main.async {
+                if failed { self.aiClips[e.id]?.failed = true }
+            }
+        }
+        // The model loads on aiLoadQueue; wait for it here, staying cancellable.
+        var model: AIInterpolator?
+        for _ in 0..<1200 {
+            if cancelled() { return }
+            lock.lock()
+            if aiPreparedSize == (fmt.width, fmt.height) { model = bgAI }
+            lock.unlock()
+            if model != nil { break }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        guard let ai = model, let pool = PixelBufferFactory.makePool(width: fmt.width, height: fmt.height, minimumCount: 8),
+              let dec = mc_replay_dec_open_codec(Int32(kind)) else { return finish(failed: true) }
+        defer { mc_replay_dec_close(dec) }
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        guard let ast = mc_replay_store_open(dir, 1, 4 * 3600),
+              let sink = mc_replay_sink_new(ast, 0) else { return finish(failed: true) }
+        var cfg = mc_output_config()
+        cfg.width = Int32(fmt.width); cfg.height = Int32(fmt.height)
+        cfg.fps_num = Int32(fmt.fpsNum); cfg.fps_den = Int32(fmt.fpsDen)
+        cfg.video_kbps = -72                    // HEVC intra, constant quality (high)
+        cfg.audio_kbps = 64
+        cfg.keyint_frames = 1
+        cfg.hardware = 1
+        cfg.pixelbuffer_input = 1
+        cfg.packet_cb = mc_replay_sink_cb
+        cfg.packet_user = UnsafeMutableRawPointer(sink)
+        let u = strdup("replay:"), f = strdup("null"), v = strdup("hevc")
+        cfg.url = UnsafePointer(u); cfg.format = UnsafePointer(f); cfg.video_codec = UnsafePointer(v)
+        let out = mc_output_open(&cfg, nil, nil)
+        free(u); free(f); free(v)
+        guard let out = out else {
+            mc_replay_sink_free(sink); mc_replay_store_close(ast, 1)
+            return finish(failed: true)
+        }
+        func decode(_ frame: Int64) -> CVPixelBuffer? {
+            var data: UnsafeMutablePointer<UInt8>?
+            var got: Int64 = 0
+            let n = mc_replay_store_read(st, Int32(e.camera), frame, &data, &got)
+            guard n > 0, let d = data else { return nil }
+            defer { free(d) }
+            guard let pb = PixelBufferFactory.makeBuffer(pool: pool),
+                  Self.decodeInto(dec, d, n, pb, fmt.width, fmt.height) else { return nil }
+            return pb
+        }
+        var ok = true
+        var prev = decode(e.inFrame)
+        let total = Double(e.outFrame - e.inFrame)
+        for fr in e.inFrame..<e.outFrame {
+            if cancelled() { ok = false; break }
+            let next = decode(fr + 1)
+            if let a = prev, let b = next {
+                let t0 = CACurrentMediaTime()
+                if let mids = ai.interpolate(a, b, phases: [0.25, 0.5, 0.75], bgraPool: pool) {
+                    for (k, pb) in mids.enumerated() {
+                        mc_output_push_pixelbuffer(out, Unmanaged.passUnretained(pb).toOpaque(), (fr - e.inFrame) * 4 + Int64(k + 1))
+                    }
+                }
+                // Leave GPU time for the live program: never use more than ~2/3 of the GPU.
+                let spent = CACurrentMediaTime() - t0
+                Thread.sleep(forTimeInterval: max(0.004, spent * 0.5))
+                // keep the encoder queue (8 frames) from overflowing
+                var stt = mc_output_stats()
+                for _ in 0..<50 {
+                    mc_output_get_stats(out, &stt)
+                    if stt.queue_depth <= 3 { break }
+                    Thread.sleep(forTimeInterval: 0.005)
+                }
+            }
+            prev = next
+            if (fr - e.inFrame) % 15 == 0 {
+                let p = Double(fr - e.inFrame) / max(1, total)
+                DispatchQueue.main.async { self.aiClips[e.id]?.progress = p }
+            }
+        }
+        mc_output_close(out)                // flush the last frames into the clip store
+        mc_replay_sink_free(sink)
+        lock.lock()
+        let stillValid = ok && aiEpoch == epoch && !aiCancelled.contains(e.id)
+        if stillValid {
+            aiIndex.removeAll { $0.id == e.id }
+            aiIndex.append(AIClipRef(id: e.id, inFrame: e.inFrame, outFrame: e.outFrame, camera: e.camera, store: ast))
+        }
+        lock.unlock()
+        if !stillValid {
+            mc_replay_store_close(ast, 1)
+            return
+        }
+        DispatchQueue.main.async {
+            if self.aiClips[e.id] != nil {
+                self.aiClips[e.id]?.progress = 1
+                self.aiClips[e.id]?.ready = true
+            }
+        }
+    }
+
+    /// Drops an event's AI clip (deleted, or its angle changed).
+    private func dropAI(_ id: UUID) {
+        lock.lock()
+        aiCancelled.insert(id)
+        let clips = aiIndex.filter { $0.id == id }
+        aiIndex.removeAll { $0.id == id }
+        lock.unlock()
+        aiClips[id] = nil
+        // close on the player queue: a tick may still hold the clip from its snapshot
+        queue.async { for c in clips { mc_replay_store_close(c.store, 1) } }
     }
 
     // MARK: Transport (selected channels)
@@ -517,7 +1028,7 @@ final class ReplayEngine: ObservableObject {
     func jump(frames: Int) {
         modify { s, h in
             self.enterReplay(&s, h)
-            s.pos = min(Double(max(h, 0)), max(0, s.pos + Double(frames)))
+            s.pos = min(Double(max(h, 0)), max(0, s.pos.rounded(.down) + Double(frames)))
             s.stopFrame = nil
         }
     }
@@ -564,16 +1075,29 @@ final class ReplayEngine: ObservableObject {
         guard outFrame > inFrame, outFrame >= 0 else { return }
         lock.lock(); let cam = ch[selected.min() ?? 0].camera; lock.unlock()
         let n = (events.map { $0.number }.max() ?? 0) + 1
-        events.append(ReplayEvent(number: n, inFrame: inFrame, outFrame: outFrame, camera: cam))
+        let e = ReplayEvent(number: n, inFrame: inFrame, outFrame: outFrame, camera: cam)
+        events.append(e)
+        scheduleAI(e)
     }
 
-    func deleteEvent(_ id: UUID) { events.removeAll { $0.id == id } }
-    func deleteLastEvent() { if !events.isEmpty { events.removeLast() } }
+    func deleteEvent(_ id: UUID) {
+        events.removeAll { $0.id == id }
+        dropAI(id)
+    }
+
+    func deleteLastEvent() {
+        if let e = events.last { deleteEvent(e.id) }
+    }
+
     func renameEvent(_ id: UUID, _ name: String) {
         if let i = events.firstIndex(where: { $0.id == id }) { events[i].name = name }
     }
+
     func setEventCamera(_ id: UUID, _ cam: Int) {
-        if let i = events.firstIndex(where: { $0.id == id }) { events[i].camera = cam }
+        guard let i = events.firstIndex(where: { $0.id == id }), events[i].camera != cam else { return }
+        events[i].camera = cam
+        dropAI(id)
+        scheduleAI(events[i])
     }
 
     func playEvent(_ e: ReplayEvent, channels: Set<Int>? = nil) {
@@ -614,22 +1138,30 @@ final class ReplayEngine: ObservableObject {
         if e.input(withID: back) != nil { e.cutDirect(back) }
     }
 
+    // MARK: Timecode
+
     func timecode(_ frame: Int64) -> String {
         lock.lock(); let st = store; lock.unlock()
-        let first = st.map { mc_replay_store_first($0, 0) } ?? 0
+        let first = st.map { firstFrame($0) } ?? 0
         return elapsedTimecode(frames: max(0, frame - max(0, first)))
     }
 
     func recordTimecode() -> String {
         lock.lock(); let st = store, h = head; lock.unlock()
         guard let st = st, h >= 0 else { return "00:00:00:00" }
-        let first = mc_replay_store_first(st, 0)
+        let first = firstFrame(st)
         return elapsedTimecode(frames: first >= 0 ? max(0, h - first) : 0)
     }
 
     func selectedTimecode() -> String {
         let c = selected.min() ?? 0
         return timecode(channelsUI[c].position)
+    }
+
+    /// Recording time (system clock) of the selected deck's position.
+    func selectedClock() -> String {
+        let c = selected.min() ?? 0
+        return recordedClockTimecode(channelsUI[c].position)
     }
 
     func systemTimecode(_ date: Date = Date()) -> String {
@@ -640,15 +1172,10 @@ final class ReplayEngine: ObservableObject {
         return String(format: "%02d:%02d:%02d:%02d", c.hour ?? 0, c.minute ?? 0, c.second ?? 0, frame)
     }
 
-    /// Wall-clock time at which a replay frame was recorded. The replay store uses the switcher's
-    /// global render ticks, so anchor the oldest stored frame to the recording start and keep the
-    /// display frame-accurate at the current project rate.
+    /// Wall-clock time (HH:MM:SS:FF) at which a replay frame was recorded.
     func recordedClockTimecode(_ frame: Int64) -> String {
-        guard let started = recordingStartedAt else { return "--:--:--:--" }
-        lock.lock(); let st = store; lock.unlock()
-        let first = st.map { mc_replay_store_first($0, 0) } ?? frame
-        let date = started.addingTimeInterval(Double(max(0, frame - max(0, first))) / fps)
-        return systemTimecode(date)
+        guard let d = wallTime(frame) else { return "--:--:--:--" }
+        return systemTimecode(d)
     }
 
     func recordingStartText() -> String {
@@ -659,7 +1186,7 @@ final class ReplayEngine: ObservableObject {
     func timelineBounds() -> ClosedRange<Double> {
         lock.lock(); let st = store, h = head; lock.unlock()
         guard let st = st, h >= 0 else { return 0...1 }
-        let first = mc_replay_store_first(st, 0)
+        let first = firstFrame(st)
         let lo = Double(max(0, first))
         return lo...max(lo + 1, Double(h))
     }
@@ -667,7 +1194,7 @@ final class ReplayEngine: ObservableObject {
     func seekTimeline(_ frame: Double, channel: Int) {
         modify([channel]) { s, h in
             s.live = frame >= Double(h - 1)
-            s.pos = max(0, min(Double(h), frame))
+            s.pos = max(0, min(Double(h), frame.rounded(.down)))
             s.playing = false
             s.shown = -1
             s.eventNumber = nil

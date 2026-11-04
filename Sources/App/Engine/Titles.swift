@@ -253,11 +253,18 @@ final class TitleInput: InputSource {
         publishCountdown()
     }
 
+    /// vMix StopCountdown behavior: stop and restore the configured starting duration.
     func stopCountdown() {
+        resetCountdown()
+    }
+
+    /// Restore the title's configured countdown duration and leave it stopped.
+    func resetCountdown() {
         stateLock.lock()
         cdRunning = false
         cdPaused = false
         cdRemaining = document.countdownSeconds
+        cdCompletedFired = false
         dirty = true
         stateLock.unlock()
         publishCountdown()

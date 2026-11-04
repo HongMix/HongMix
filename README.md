@@ -10,24 +10,34 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 1.3.26</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 1.3.39</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
-### Latest update · 1.3.26
-- Folded inputs move into narrow vertical tabs on the left, reclaiming empty tile space while preserving input numbers and order.
-- Select a tab to load it into Preview; use its arrow to restore the full tile.
-- Ongoing reliability work covers media playback, audio handling, and input-monitor rendering. See the [release notes](docs/RELEASE-NOTES-1.3.26.md) for details.
+### Latest update · 1.3.39
+- **Video files no longer stutter:** camera MP4s store video up to 0.6 s ahead of their audio. HongMix now reads compressed video ahead on its own decode thread with one shared A/V clock. Measured: 233 → 1 late audio chunks and 7 → 0 mixer underflows in 60 s.
+- **Instant Replay, 4 sources (CAM 1–4):**
+  - assign sources from the replay window or the **R1–R4** chip on any input tile; change them while recording
+  - **recording time** next to TC
+  - each angle replays **its own audio**
+- **Slow motion:** real-time AI interpolation on fast Macs; on others, AI clips render in the background and GPU blending covers the meantime.
+- **Replay quality:** HEVC Intra by default (SSIM 0.968 → 0.986), with ProRes Proxy/LT on the hardware ProRes engine; replay playback decodes in hardware.
+- **vMix-style audio mixer:** ON AIR / AUTO / ON / MUTE buttons, and input-level meters on off-air channels.
+- **UI clipping pass** in English, plus 135 added translations. See the [release notes](docs/RELEASE-NOTES-1.3.39.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-main-switcher.jpg" alt="HongMix 1.3.26 main switcher with folded input tabs" width="100%"><br><sub>Input tiles fold into numbered vertical tabs</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-audio-mixer.jpg" alt="HongMix 1.3.26 audio mixer" width="100%"><br><sub>Audio mixer and channel controls</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-replay-4cam.jpg" alt="HongMix 1.3.39 Instant Replay with CAM 1–4 sources and recording time" width="100%"><br><sub>Instant Replay: CAM 1–4 sources, TC + recording time</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-audio-mixer.jpg" alt="HongMix 1.3.39 audio mixer with ON AIR / AUTO / ON buttons" width="100%"><br><sub>Audio mixer: ON AIR / AUTO / ON, input-level meters</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-media-demo.jpg" alt="HongMix media input and playback controls" width="100%"><br><sub>Media input and playback workflow</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-replay.jpg" alt="HongMix replay interface" width="100%"><br><sub>Replay interface and timecode controls</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-main-switcher.jpg" alt="HongMix 1.3.39 main switcher with replay R chips" width="100%"><br><sub>Main switcher with replay R1–R4 chips</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-replay-settings.jpg" alt="HongMix 1.3.39 replay settings: HEVC / ProRes recording formats" width="100%"><br><sub>Replay settings: HEVC Intra / ProRes hardware formats</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-audio-fix-measured.jpg" alt="Measured file audio dropouts before and after" width="100%"><br><sub>File audio dropouts, measured before/after</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-replay-quality-measured.jpg" alt="Measured replay recording quality by format" width="100%"><br><sub>Replay recording quality by format (SSIM)</sub></td>
   </tr>
 </table>
 

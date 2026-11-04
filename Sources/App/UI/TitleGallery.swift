@@ -12,13 +12,18 @@ struct TitleGallery: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("", selection: $category) {
-                Text(L("전체")).tag("전체")
-                ForEach(TitleTemplate.Category.allCases) { Text(L($0.rawValue)).tag($0.rawValue) }
-                if !library.templates.isEmpty { Text(L("내 템플릿")).tag("내 템플릿") }
+            // 7–8 segments are ~650 pt wide in English: scroll instead of widening the parent Form (left-edge clipping)
+            ScrollView(.horizontal, showsIndicators: false) {
+                Picker("", selection: $category) {
+                    Text(L("전체")).tag("전체")
+                    ForEach(TitleTemplate.Category.allCases) { Text(L($0.rawValue)).tag($0.rawValue) }
+                    if !library.templates.isEmpty { Text(L("내 템플릿")).tag("내 템플릿") }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            .fixedSize(horizontal: false, vertical: true)
 
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 10) {
@@ -49,6 +54,8 @@ struct TitleGallery: View {
                 Spacer()
                 Text(L("타이틀 편집에서 '내 템플릿으로 저장'한 디자인이 ★로 표시됩니다."))
                     .font(.caption).foregroundColor(.secondary)
+                    .multilineTextAlignment(.trailing)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

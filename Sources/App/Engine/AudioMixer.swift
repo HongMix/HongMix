@@ -133,6 +133,9 @@ final class AudioMixer {
 
     private let lock = NSLock()
     private var meters: [UUID: (Float, Float)] = [:]
+    // Per input, last tick: bit 0 = reaching Master now, bit 1 = on air via Follow (lock).
+    private var audioFlags: [UUID: UInt8] = [:]
+    private var flagsScratch: [UUID: UInt8] = [:]    // render thread
     // Reuse this render-thread scratch map instead of allocating a fresh dictionary every video tick.
     private var meterScratch: [UUID: (Float, Float)] = [:]
     private var busMeters = [(Float, Float)](repeating: (0, 0), count: AudioMixer.busCount)
@@ -251,6 +254,12 @@ final class AudioMixer {
         }
     }
 
+    /// Input reached the Master bus in the last mix tick.
+    func reachesMaster(_ id: UUID) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return (audioFlags[id] ?? 0) & 1 != 0
+    }
+
     func meter(for id: UUID) -> (Float, Float) {
         lock.lock()
         defer { lock.unlock() }
@@ -299,6 +308,7 @@ final class AudioMixer {
         var triggerPeak: Float = 0
         var anySolo = busSet.dropFirst().contains { $0.solo }
         meterScratch.removeAll(keepingCapacity: true)
+        flagsScratch.removeAll(keepingCapacity: true)
 
         // drop ISO buffers no longer needed
         for (id, p) in isoBufs where !isoIDs.contains(id) {
@@ -325,8 +335,17 @@ final class AudioMixer {
             // retain their existing full processing paths.
             if params.followsVideo, (weights[input.id] ?? 0) <= 0,
                input.mixLastGains[0] == 0, !isoIDs.contains(input.id), !input.audioMixHeld {
-                ring.skip(frames: n)
-                meterScratch[input.id] = (0, 0)
+                // Off air: no DSP, but still show the input level (dimmed in the UI) so the operator
+                // can see the source has sound before taking it.
+                let got = ring.read(into: tmpBuf, frames: n)
+                if got > 0 {
+                    let pk = peaks(tmpBuf, got)
+                    let g = params.gain
+                    meterScratch[input.id] = (pk.0 * g, pk.1 * g)
+                } else {
+                    meterScratch[input.id] = (0, 0)
+                }
+                flagsScratch[input.id] = 0
                 continue
             }
             // mc_input.c releases file audio 100 ms ahead of its media PTS. A 120 ms
@@ -388,6 +407,8 @@ final class AudioMixer {
                 }
                 iso.update(from: tmpBuf, count: n * 2)
             }
+            // Meter = input level after the fader (not after Follow/Mute), so off-air sources still show.
+            let inPeak = peaks(tmpBuf, n)
             var target = params.muted ? 0 : params.gain
             if params.followsVideo { target *= weights[input.id] ?? 0 }
             if params.fx.ducked && !params.fx.duckTrigger { target *= duckGain }
@@ -412,7 +433,12 @@ final class AudioMixer {
             if params.solo {
                 for i in 0..<(n * 2) { soloBuf[i] += tmpBuf[i] }
             }
-            meterScratch[input.id] = (peakL, peakR)
+            _ = (peakL, peakR)
+            meterScratch[input.id] = (inPeak.0 * params.gain, inPeak.1 * params.gain)
+            var fl: UInt8 = 0
+            if target > 0.0001 && params.busMask & 1 != 0 { fl |= 1 }
+            if params.followsVideo && (weights[input.id] ?? 0) > 0 { fl |= 2 }
+            flagsScratch[input.id] = fl
             if params.fx.duckTrigger && !params.muted { triggerPeak = max(triggerPeak, peakL, peakR) }
         }
         triggerPeakPrev = triggerPeak
@@ -456,6 +482,7 @@ final class AudioMixer {
         if meters.count > meterScratch.count {
             for key in Array(meters.keys) where meterScratch[key] == nil { meters.removeValue(forKey: key) }
         }
+        audioFlags = flagsScratch
         for b in 0..<AudioMixer.busCount {
             busMeters[b] = (max(busPeaks[b].0, busMeters[b].0 * 0.85), max(busPeaks[b].1, busMeters[b].1 * 0.85))
         }
@@ -553,7 +580,10 @@ final class AudioMixer {
                 let wasPrimed = primed.value
                 let got = wasPrimed ? ring.read(into: scratch, frames: n) : 0
                 if !wasPrimed { ring.notePrimingSilence(frames: n) }
-                if got < n { primed.value = false }
+                // 1.3.32: a short underrun used to drop the monitor back into the startup-prime
+                // state, muting it for another ≥50 ms (up to 250 ms on large device callbacks)
+                // until the cushion refilled — the audible "audio frame drops" on headphones/monitor.
+                // Same policy as the main output: conceal only the missing samples and keep going.
                 guard abl.count >= 2,
                       let l = abl[0].mData?.assumingMemoryBound(to: Float.self),
                       let r = abl[1].mData?.assumingMemoryBound(to: Float.self) else { return noErr }

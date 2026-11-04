@@ -10,24 +10,34 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 1.3.26 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 1.3.39 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
-### 최신 업데이트 · 1.3.26
-- 입력을 접으면 왼쪽의 좁은 세로 탭으로 정리해 빈 타일 공간을 줄입니다. 번호와 입력 순서는 유지됩니다.
-- 탭을 눌러 프리뷰를 선택하고, 화살표로 타일을 다시 펼칠 수 있습니다.
-- 미디어 재생·오디오 처리와 입력 모니터 표시를 포함한 안정성 개선을 이어가고 있습니다. 세부 변경은 [릴리스 노트](docs/RELEASE-NOTES-1.3.26.md)를 참고하세요.
+### 최신 업데이트 · 1.3.39
+- **동영상 파일 버벅임 해결:** 카메라 MP4 는 영상이 오디오보다 최대 0.6초 앞에 저장돼 있습니다. 압축 영상을 미리 읽고 영상을 전용 스레드에서 디코드하며, 영상과 오디오가 하나의 시계를 쓰도록 바꿨습니다. 측정: 60초 재생에서 늦은 오디오 233 → 1, 언더런 7 → 0.
+- **인스턴트 리플레이 소스 4개 (CAM 1–4):**
+  - 리플레이 창이나 입력 타일의 **R1–R4** 칩으로 지정하고, 녹화 중에도 바꿀 수 있습니다
+  - TC 옆에 **녹화 시각** 표시
+  - 앵글마다 **그 소스의 소리**로 재생
+- **슬로모션:** 빠른 맥은 실시간 AI 보간, 그 밖의 맥은 백그라운드 AI 클립을 만들고 그동안은 GPU 블렌딩으로 부드럽게 보여 줍니다.
+- **리플레이 화질:** 기본 HEVC Intra (SSIM 0.968 → 0.986), ProRes Proxy/LT 하드웨어 녹화 옵션, 재생은 하드웨어 디코드.
+- **vMix 방식 오디오 믹서:** ON AIR / AUTO / ON / MUTE 버튼, 출력 안 된 채널도 입력 레벨 미터 표시.
+- **UI 잘림 점검**과 영어 번역 135개 추가. 자세한 내용은 [릴리스 노트](docs/RELEASE-NOTES-1.3.39.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-main-switcher.jpg" alt="HongMix 1.3.26 메인 스위처와 접힌 입력 탭" width="100%"><br><sub>입력 타일을 번호가 유지되는 세로 탭으로 접기</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-audio-mixer.jpg" alt="HongMix 1.3.26 오디오 믹서" width="100%"><br><sub>오디오 믹서와 채널 조작 화면</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-replay-4cam.jpg" alt="HongMix 1.3.39 인스턴트 리플레이 CAM 1–4" width="100%"><br><sub>인스턴트 리플레이: CAM 1–4 소스, TC + 녹화 시각</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-audio-mixer.jpg" alt="HongMix 1.3.39 오디오 믹서" width="100%"><br><sub>오디오 믹서: ON AIR / AUTO / ON, 입력 레벨 미터</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-media-demo.jpg" alt="HongMix 미디어 입력과 재생 조작" width="100%"><br><sub>미디어 입력 및 재생 흐름</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.26-replay.jpg" alt="HongMix 리플레이 화면" width="100%"><br><sub>리플레이 화면과 타임코드 조작</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-main-switcher.jpg" alt="HongMix 1.3.39 메인 스위처와 R 칩" width="100%"><br><sub>메인 스위처와 리플레이 R1–R4 칩</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-replay-settings.jpg" alt="HongMix 1.3.39 리플레이 설정" width="100%"><br><sub>리플레이 설정: HEVC Intra / ProRes 하드웨어 형식</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-audio-fix-measured.jpg" alt="파일 오디오 끊김 수정 전후 측정" width="100%"><br><sub>파일 오디오 끊김, 수정 전/후 측정</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-replay-quality-measured.jpg" alt="리플레이 녹화 형식별 화질 측정" width="100%"><br><sub>리플레이 녹화 형식별 화질 (SSIM)</sub></td>
   </tr>
 </table>
 

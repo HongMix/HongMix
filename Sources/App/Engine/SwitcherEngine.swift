@@ -382,6 +382,11 @@ final class SwitcherEngine: ObservableObject {
 
     func startEngine() {
         guard !running else { return }
+        // Do not let the first watchdog sample after an engine restart compare against
+        // the previous run's last tick; that interval is downtime, not a UI stall.
+        uiLastTick = CACurrentMediaTime()
+        uiMaxGap = 0
+        uiStallMs = 0
         ReplayEngine.shared.engine = self
         audioMixer.setOutputRoutes(audioOutputRoutes)
         let hp = audioOutputRoutes[8]
@@ -422,6 +427,8 @@ final class SwitcherEngine: ObservableObject {
 
     private func startRenderThread() {
         VideoSlot.programFPS = format.fps
+        // program rate changed → re-evaluate each file's 60 ↔ 59.94 conform
+        NotificationCenter.default.post(name: .hongMixRateConformChanged, object: nil)
         mixer = MetalMixer(format: format)
         renderFormat = format
         stateLock.lock()
@@ -1518,12 +1525,14 @@ final class SwitcherEngine: ObservableObject {
         let frames = audioAccumulator / fmt.fpsNum
         audioAccumulator -= frames * fmt.fpsNum
         tickMarks.append(("tally", CACurrentMediaTime()))
-        let n = audioMixer.mix(inputs: ins, weights: weights, frames: frames, isoIDs: Set(isos.keys))
+        let replayAudioIDs = ReplayEngine.shared.sourceAudioIDs
+        let n = audioMixer.mix(inputs: ins, weights: weights, frames: frames, isoIDs: Set(isos.keys).union(replayAudioIDs))
         tickMarks.append(("audio", CACurrentMediaTime()))
         captions.feed(UnsafePointer(audioMixer.bus(captions.feedBus)), frames: n)
         // Instant replay: record the selected cameras (program format) + master audio, feed live angles
         if ReplayEngine.shared.wantsFrames {
-            ReplayEngine.shared.renderHook(tick: tick, audio: UnsafePointer(audioMixer.bus(0)), frames: n) { id in
+            ReplayEngine.shared.renderHook(tick: tick, audio: UnsafePointer(audioMixer.bus(0)), frames: n,
+                                           sourceAudio: { [audioMixer] id in audioMixer.iso(id) }) { id in
                 guard let i = find(id) else { return nil }
                 return mixer?.renderTiles([fullTile(i, rect: full)])
             }

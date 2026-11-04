@@ -64,7 +64,10 @@ final class FFmpegInput: CallbackInput {
         playlist = config.playlist
         playlistIndex = max(0, min(config.playlistIndex, max(0, config.playlist.count - 1)))
         if playlist.indices.contains(playlistIndex) { self.config.url = playlist[playlistIndex] }
+        conformObserver = NotificationCenter.default.addObserver(forName: .hongMixRateConformChanged, object: nil,
+                                                                 queue: .main) { [weak self] _ in self?.applyTransport() }
     }
+    private var conformObserver: NSObjectProtocol?
 
     override func currentConfig() -> InputConfig {
         var c = super.currentConfig()
@@ -151,6 +154,18 @@ final class FFmpegInput: CallbackInput {
         }
     }
 
+    /// File audio waiting in the timestamp-paced FFmpeg release queue.
+    func audioQueueDiagnostics() -> mc_input_audio_queue_stats? {
+        var stats = mc_input_audio_queue_stats()
+        var ok: Int32 = 0
+        withHandle { h in ok = mc_input_get_audio_queue_stats(h, &stats) }
+        return ok != 0 ? stats : nil
+    }
+
+    func resetAudioQueueDiagnostics() {
+        withHandle { h in mc_input_reset_audio_queue_stats(h) }
+    }
+
     private func withHandle(_ body: (OpaquePointer) -> Void) {
         handleLock.lock()
         if let h = handle { body(h) }
@@ -158,7 +173,7 @@ final class FFmpegInput: CallbackInput {
     }
 
     override func applyTransport() {
-        let paused = !playing, loop = looping && !isList, rate = self.rate
+        let paused = !playing, loop = looping && !isList, rate = self.rate * conformFactor
         let mi = markIn >= 0 ? Int64(markIn * 1_000_000) : -1
         let mo = markOut > 0 ? Int64(markOut * 1_000_000) : -1
         if paused { audio.clear() }
@@ -175,7 +190,33 @@ final class FFmpegInput: CallbackInput {
     func pollNominalRate() {
         var f = 0.0
         withHandle { h in f = mc_input_nominal_fps(h) }
-        if video.nominalFPS != f { video.nominalFPS = f }
+        if video.nominalFPS != f {
+            video.nominalFPS = f
+            if kind == .media { applyTransport() }   // re-evaluate 60 ↔ 59.94 conform for the new file
+        }
+    }
+
+    static let rateConformKey = "fileRateConform"
+
+    /// vMix-style frame-rate conform for files: a 60.00 fps file in a 59.94 program (or 59.94 in 60)
+    /// otherwise drops (or repeats) one frame every ~17 s. Playing it 0.1 % slower/faster makes every
+    /// source frame land on exactly one program frame. Audio is resampled to match (inaudible).
+    var conformFactor: Double {
+        guard kind == .media,
+              UserDefaults.standard.object(forKey: Self.rateConformKey) as? Bool ?? true else { return 1 }
+        let src = video.nominalFPS, prog = VideoSlot.programFPS
+        guard src > 1, prog > 1 else { return 1 }
+        let ntsc = 1000.0 / 1001.0
+        // try both directions and integer multiples (60 → 59.94, 30 → 29.97/59.94, 50 ↔ 50 is untouched)
+        for factor in [ntsc, 1 / ntsc] {
+            let conformed = src * factor
+            let ratio = prog / conformed
+            let k = ratio.rounded()
+            if k >= 1, abs(ratio - k) < 0.0002 { return factor }
+            let inv = (conformed / prog).rounded()
+            if inv >= 1, abs(conformed / prog - inv) < 0.0002 { return factor }
+        }
+        return 1
     }
 
     override func pollPosition() {

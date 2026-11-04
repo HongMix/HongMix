@@ -4,6 +4,7 @@ import AppKit
 /// Settings › General: language.
 struct GeneralSettings: View {
     @AppStorage(AppLanguage.defaultsKey) private var language = AppLanguage.current.rawValue
+    @AppStorage(FFmpegInput.rateConformKey) private var rateConform = true
 
     var body: some View {
         Form {
@@ -16,6 +17,14 @@ struct GeneralSettings: View {
             .pickerStyle(.radioGroup)
             Text(L("바꾸면 화면이 바로 새 언어로 바뀝니다. 송출·녹화는 그대로 계속됩니다."))
                 .font(.caption).foregroundColor(.secondary)
+            Section(L("재생")) {
+                Toggle(L("파일 프레임레이트 맞춤 (60 ↔ 59.94)"), isOn: Binding(get: { rateConform }, set: { v in
+                    rateConform = v
+                    NotificationCenter.default.post(name: .hongMixRateConformChanged, object: nil)
+                }))
+                Text(L("60.00fps 파일을 59.94 프로그램에서 0.1% 느리게 재생해 약 17초마다 생기던 프레임 드랍을 없앱니다. 오디오도 같이 맞춰져 음정 차이는 들리지 않습니다."))
+                    .font(.caption).foregroundColor(.secondary)
+            }
         }
         .formStyle(.grouped)
     }
@@ -27,6 +36,15 @@ struct AboutView: View {
     @ViewState private var showSecret = false
 
     var body: some View {
+        // Settings window is a fixed 860×520; with the secret note shown the page can be taller,
+        // so fall back to scrolling instead of clipping the top/bottom.
+        ViewThatFits(in: .vertical) {
+            content
+            ScrollView { content }
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 14) {
             Spacer(minLength: 6)
             Image(nsImage: NSApp.applicationIconImage)
@@ -104,4 +122,8 @@ struct AboutView: View {
 enum AppInfo {
     static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
     static let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+}
+
+extension Notification.Name {
+    static let hongMixRateConformChanged = Notification.Name("HongMixRateConformChanged")
 }

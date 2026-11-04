@@ -2,12 +2,26 @@ import SwiftUI
 import CoreVideo
 import AppKit
 
-/// Colours follow vMix: Output (program) = green, Preview = orange, active overlay = light green,
-/// red = live record/stream/alarm states.
+/// Colours follow vMix conventions for Preview/Program. Overlay channels have their own
+/// control-surface colors; these are UI indicators and never tint the broadcast picture.
 enum Theme {
     static let program = Color(red: 0.20, green: 0.66, blue: 0.22)
     static let preview = Color(red: 0.93, green: 0.52, blue: 0.10)
     static let overlay = Color(red: 0.42, green: 0.80, blue: 0.36)
+    static func overlayChannel(_ channel: Int) -> Color {
+        // Deliberately avoid Program green so on-air tally stays unambiguous.
+        let palette: [Color] = [
+            Color(red: 0.88, green: 0.40, blue: 0.10), // 1 amber
+            Color(red: 0.16, green: 0.48, blue: 0.88), // 2 blue
+            Color(red: 0.60, green: 0.34, blue: 0.82), // 3 violet
+            Color(red: 0.08, green: 0.62, blue: 0.72), // 4 cyan
+            Color(red: 0.82, green: 0.30, blue: 0.55), // 5 magenta
+            Color(red: 0.70, green: 0.55, blue: 0.08), // 6 yellow/ochre
+            Color(red: 0.12, green: 0.58, blue: 0.46), // 7 teal
+            Color(red: 0.82, green: 0.24, blue: 0.25)  // 8 red
+        ]
+        return palette[max(0, min(palette.count - 1, channel - 1))]
+    }
     static let live = Color(red: 0.86, green: 0.16, blue: 0.16)
     static let window = Color(red: 0.13, green: 0.14, blue: 0.16)
     static let panel = Color(red: 0.18, green: 0.19, blue: 0.21)
@@ -147,6 +161,10 @@ struct SwitcherLayout {
     static let header: CGFloat = 22
     static let transport: CGFloat = 26      // vMix video controls row under each monitor
     static let stripWidth: CGFloat = 72
+    /// Smallest height the TransitionColumn's fixed controls need (header gap, Quick Play, Cut,
+    /// 4 transition rows, Stinger, Overlay 1–8, T-bar min 56, FTB + spacing). Below this the
+    /// column overflowed its frame and its top/bottom buttons were pushed outside.
+    static let transitionMinHeight: CGFloat = 414
 
     let monitorWidth: CGFloat
     let topHeight: CGFloat
@@ -162,9 +180,11 @@ struct SwitcherLayout {
             mw = (h - Self.header - Self.transport) * 16 / 9
         }
         monitorWidth = mw
-        topHeight = h
+        topHeight = max(h, Self.transitionMinHeight)
         let want = CGFloat(strips) * Self.stripWidth + 12
-        let minimumMixerWidth: CGFloat = inputStripsCollapsed ? 120 : 300
+        // wide enough for the mixer header's title + buttons (it overflowed and pushed the
+        // collapse chevron off-screen at 120 / 300)
+        let minimumMixerWidth: CGFloat = inputStripsCollapsed ? 250 : 340
         mixerWidth = mixerVisible ? min(max(minimumMixerWidth, want + (inputStripsCollapsed ? 36 : 0)), size.width * 0.45) : 0
     }
 }
@@ -190,6 +210,7 @@ struct TopBar: View {
             Text(engine.format.name)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(.secondary)
+                .lineLimit(1)
             if let t = engine.undoTitle {
                 Button { engine.undoClose() } label: {
                     HStack(spacing: 4) {
@@ -380,6 +401,7 @@ struct BrowserBadge: View {
             HStack(spacing: 4) {
                 Image(systemName: browser.keyboardFocused ? "keyboard.fill" : "cursorarrow.click")
                 Text(browser.keyboardFocused ? L("키보드 입력 중 · Esc 해제") : L("클릭해서 조작"))
+                    .lineLimit(1).truncationMode(.tail)
             }
             .font(.system(size: 10, weight: .semibold))
             .padding(.horizontal, 6)
@@ -482,7 +504,7 @@ struct BottomBar: View {
             .buttonStyle(.plain)
             .help(L("Statistics — 입력별 프레임레이트·드롭, 출력 비트레이트, 렌더 시간"))
             .sheet(isPresented: $showStats) {
-                StatisticsSheet().environmentObject(engine)
+                StatisticsSheet(engine: engine)
             }
             VStack(alignment: .trailing, spacing: 1) {
                 Text(engine.apiStatus)
@@ -497,8 +519,12 @@ struct BottomBar: View {
                         .font(.system(size: 10))
                         .foregroundColor(.orange)
                         .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: 360, alignment: .trailing)
+                        .help(engine.lastMessage)
                 }
             }
+            .layoutPriority(-1)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
@@ -708,6 +734,7 @@ struct MultiCorderSheet: View {
             HStack {
                 Text(engine.multiCorderOn ? L("녹화 중에는 설정을 바꿀 수 없습니다") : "")
                     .font(.caption).foregroundColor(.orange)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Button(L("닫기")) { dismiss() }.keyboardShortcut(.defaultAction)
             }
@@ -822,6 +849,7 @@ private struct DelayChip: View {
         HStack(spacing: 4) {
             Text(output.delayDumped ? L("DELAY 해제됨 (실시간)") : delayText)
                 .font(.system(size: 11, weight: .bold).monospacedDigit())
+                .lineLimit(1).truncationMode(.middle)
                 .foregroundColor(.white)
                 .padding(.horizontal, 6).padding(.vertical, 1)
                 .background(output.delayDumped ? Color.gray : Color.purple.opacity(0.8))

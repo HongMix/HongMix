@@ -213,11 +213,15 @@ struct LaunchScreen: View {
                         Text(s.title)
                             .font(.system(size: 12, weight: s.state == .running ? .semibold : .regular))
                             .foregroundColor(s.state == .waiting ? Color(white: 0.38) : Color(white: 0.90))
+                            .lineLimit(1)
+                            .layoutPriority(1)      // keep the step title; the detail truncates first
                         Spacer(minLength: 8)
                         Text(s.detail)
                             .font(.system(size: 11).monospacedDigit())
                             .foregroundColor(s.state == .warning ? .orange : Color(white: 0.55))
                             .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(s.detail)
                     }
                     .animation(.easeOut(duration: 0.2), value: s.state == .done)
                 }

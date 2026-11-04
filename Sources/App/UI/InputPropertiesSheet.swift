@@ -24,6 +24,7 @@ struct InputPropertiesSheet: View {
             HStack {
                 Image(systemName: input.kind.symbol)
                 Text(Lf("%@. %@ — 속성", "\(engine.number(of: input))", "\(input.name)")).font(.headline)
+                    .lineLimit(1).truncationMode(.middle)
                 InputFormatLabel(slot: input.video, size: 11)
                 Spacer()
                 MonitorView(fps: 12) { input.monitorFrame() }
@@ -196,7 +197,8 @@ struct InputPropertiesSheet: View {
     private func slider(_ label: String, _ value: Binding<Float>, _ range: ClosedRange<Float>, format: String = "%.2f",
                         reset: Float) -> some View {
         HStack {
-            Text(label).frame(width: 110, alignment: .leading)
+            // natural width (never wraps/truncates English labels like "Gate Threshold dB"), min 120 keeps columns aligned
+            Text(label).lineLimit(1).fixedSize().frame(minWidth: 120, alignment: .leading)
             Slider(value: value, in: range)
             Text(String(format: format, value.wrappedValue))
                 .font(.system(size: 11).monospacedDigit())
@@ -391,12 +393,16 @@ struct TitleEditorSheet: View {
                     .frame(width: 480, height: 270)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(Lf("%@. %@ — 타이틀 편집", "\(engine.number(of: title))", "\(title.name)")).font(.headline)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     Text(Lf("템플릿: %@", "\(title.document.displayName)")).font(.caption).foregroundColor(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
                     Text(L("미리보기에서 상자를 드래그해 위치를, 노란 모서리로 크기를 바꿉니다."))
                         .font(.caption).foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(Lf("API: SetText Input=%@ SelectedName=<필드 이름> Value=<텍스트>", "\(engine.number(of: title))"))
                         .font(.caption.monospaced())
                         .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                     Spacer()
                     HStack {
@@ -427,6 +433,20 @@ struct TitleEditorSheet: View {
                 }
                 if title.document.fields.contains(where: { $0.mode == .countdown }) {
                     Section(L("카운트다운")) {
+                        TimelineView(.periodic(from: .now, by: 1)) { _ in
+                            HStack {
+                                Text(L("현재 타이틀에 표시되는 시간"))
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                if let field = title.document.fields.first(where: { $0.mode == .countdown }) {
+                                    Text(title.displayText(field))
+                                        .font(.system(.title3, design: .monospaced).weight(.semibold))
+                                        .monospacedDigit()
+                                } else {
+                                    Text("—").foregroundColor(.secondary)
+                                }
+                            }
+                        }
                         HStack {
                             TextField(L("시간 (mm:ss 또는 hh:mm:ss)"), text: $countdownText)
                                 .frame(width: 140)
@@ -436,7 +456,8 @@ struct TitleEditorSheet: View {
                             Button(title.countdownRunning && !title.countdownPaused ? L("일시정지") : L("시작")) {
                                 if title.countdownRunning { title.pauseCountdown() } else { title.startCountdown() }
                             }
-                            Button(L("정지/리셋")) { title.stopCountdown() }
+                            Button(L("정지 + 처음 값으로 리셋")) { title.resetCountdown() }
+                                .help(L("카운트다운을 멈추고 설정된 시작 시간으로 되돌립니다. Output/오버레이의 타이틀은 그대로 유지됩니다."))
                             Button(L("+30초")) { title.adjustCountdown(by: 30) }
                             Button(L("-30초")) { title.adjustCountdown(by: -30) }
                         }
@@ -499,7 +520,7 @@ struct TitleEditorSheet: View {
             }
             .padding()
         }
-        .frame(width: 900, height: 820)
+        .frame(width: 900, height: 760)   // ≤ 780 main window / 13" screen; the Form below scrolls
         .onAppear {
             countdownText = TitleInput.formatCountdown(title.document.countdownSeconds)
         }
@@ -573,7 +594,7 @@ struct TitleEditorSheet: View {
                 Toggle("", isOn: $title.document.fields[i].visible)
                     .labelsHidden()
                     .help(L("보이기 (SetTextVisible)"))
-                Button(f.id) { selectedField = f.id }
+                Button { selectedField = f.id } label: { Text(f.id).lineLimit(1).truncationMode(.middle) }
                     .buttonStyle(.plain)
                     .font(.system(size: 11, weight: .semibold).monospaced())
                     .foregroundColor(selectedField == f.id ? .yellow : .primary)

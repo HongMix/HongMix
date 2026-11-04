@@ -109,7 +109,7 @@ private struct SourceRow: View {
     @ObservedObject var source: DataSource
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(source.config.name).font(.system(size: 13, weight: .semibold))
+            Text(source.config.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
             Text(source.status).font(.system(size: 11)).foregroundColor(.secondary).lineLimit(1)
         }
         .padding(.vertical, 2)
@@ -131,28 +131,31 @@ private struct SourceDetail: View {
             HStack {
                 TextField(L("이름"), text: $source.config.name).textFieldStyle(.roundedBorder).frame(width: 160)
                 TextField("URL", text: $source.config.url).textFieldStyle(.roundedBorder)
-                Button(L("지금 새로고침")) { source.fetch { manager.apply() } }
-                Button(role: .destructive) { manager.remove(source) } label: { Text(L("삭제")) }
+                Button(L("지금 새로고침")) { source.fetch { manager.apply() } }.fixedSize()
+                Button(role: .destructive) { manager.remove(source) } label: { Text(L("삭제")) }.fixedSize()
             }
             HStack(spacing: 16) {
                 NumberField(L("갱신 간격"), value: Binding(get: { Int(source.config.pollSeconds) },
                                                        set: { source.config.pollSeconds = Double($0) }), in: 1...3600, unit: L("초"))
-                    .frame(width: 200)
-                Toggle(L("첫 행은 제목"), isOn: $source.config.hasHeader)
+                    .fixedSize()
+                Toggle(L("첫 행은 제목"), isOn: $source.config.hasHeader).fixedSize()
                 Spacer()
                 Text(source.status).font(.caption).foregroundColor(.secondary)
+                    .lineLimit(2).multilineTextAlignment(.trailing)
             }
             // row control
             HStack(spacing: 8) {
                 Button { manager.step(source, by: -1) } label: { Label(L("이전 행"), systemImage: "chevron.up") }
                 Button { manager.step(source, by: 1) } label: { Label(L("다음 행"), systemImage: "chevron.down") }
                 Text(Lf("선택 행: %@ / %@", "\(source.rows.isEmpty ? 0 : source.config.row + 1)", "\(source.rows.count)")).monospacedDigit()
+                    .minimumScaleFactor(0.8)
                 Spacer()
-                Toggle(L("자동 다음 행"), isOn: $source.config.autoNext)
+                Toggle(L("자동 다음 행"), isOn: $source.config.autoNext).fixedSize()
                 NumberField(L("간격"), value: Binding(get: { Int(source.config.autoNextSeconds) },
                                                   set: { source.config.autoNextSeconds = Double($0) }), in: 1...600, unit: L("초"))
-                    .frame(width: 150)
+                    .fixedSize()
             }
+            .lineLimit(1)
             // table
             ScrollView([.horizontal, .vertical]) {
                 Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
@@ -188,6 +191,7 @@ private struct SourceDetail: View {
                         HStack {
                             let t = engine.input(withID: b.inputID)
                             Text("\(t.map { "\(engine.number(of: $0)). \($0.name)" } ?? "(삭제된 입력)") · \(b.fieldID)")
+                                .lineLimit(1).truncationMode(.middle)
                             Image(systemName: "arrow.left")
                             Text(source.headers.indices.contains(b.column) ? source.headers[b.column] : Lf("열 %@", "\(b.column + 1)"))
                                 .bold()
@@ -203,24 +207,25 @@ private struct SourceDetail: View {
                             Text(L("선택")).tag(UUID?.none)
                             ForEach(titles) { t in Text("\(engine.number(of: t)). \(t.name)").tag(UUID?.some(t.id)) }
                         }
-                        .frame(width: 220)
+                        .frame(minWidth: 150, idealWidth: 220, maxWidth: 220)
                         Picker(L("필드"), selection: $bindField) {
                             Text(L("선택")).tag("")
                             if let t = titles.first(where: { $0.id == bindInput }) {
                                 ForEach(t.document.fields.filter { $0.kind == .text }) { f in Text(f.id).tag(f.id) }
                             }
                         }
-                        .frame(width: 200)
+                        .frame(minWidth: 130, idealWidth: 200, maxWidth: 200)
                         Picker(L("열"), selection: $bindColumn) {
                             ForEach(Array(source.headers.enumerated()), id: \.offset) { c in Text(c.element).tag(c.offset) }
                         }
-                        .frame(width: 180)
+                        .frame(minWidth: 120, idealWidth: 180, maxWidth: 180)
                         Button(L("연결")) {
                             guard let i = bindInput, !bindField.isEmpty else { return }
                             manager.bindings.append(DataBinding(inputID: i, fieldID: bindField, sourceID: source.id, column: bindColumn))
                             manager.apply()
                         }
                         .disabled(bindInput == nil || bindField.isEmpty)
+                        .fixedSize()
                     }
                     if titles.isEmpty {
                         Text(L("먼저 Add Input → Title로 타이틀 입력을 추가하세요.")).font(.caption).foregroundColor(.secondary)

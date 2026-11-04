@@ -256,7 +256,7 @@ struct ScopesView: View {
         }
         .padding(10)
         .background(Color(white: 0.08))
-        .frame(minWidth: 760, minHeight: 460)
+        .frame(minWidth: 900, minHeight: 460)
         .onAppear { scopes.start(engine) }
         .onDisappear { scopes.stop() }
     }
@@ -277,7 +277,7 @@ struct ScopesView: View {
                     Image(systemName: "video").font(.system(size: 11))
                     Text(sourceName).lineLimit(1).truncationMode(.tail)
                 }
-                .frame(width: 210, alignment: .leading)
+                .frame(minWidth: 150, idealWidth: 210, maxWidth: 210, alignment: .leading)
             }
             .menuStyle(.borderlessButton)
             .padding(.horizontal, 8).frame(height: 24)
@@ -304,7 +304,7 @@ struct ScopesView: View {
             Text(String(format: L("클리핑 %.1f%% · 블랙 %.1f%%"), scopes.clipHigh, scopes.clipLow))
                 .font(.system(size: 11).monospacedDigit())
                 .foregroundColor(scopes.clipHigh > 1 ? .orange : .secondary)
-                .lineLimit(1)
+                .lineLimit(1).minimumScaleFactor(0.8)
         }
     }
 
@@ -339,6 +339,7 @@ struct ScopesView: View {
         return ZStack(alignment: .topLeading) {
             Color.black
             Text(title).font(.system(size: 10, weight: .semibold)).foregroundColor(.white.opacity(0.7))
+                .lineLimit(1)
                 .padding(.leading, 7).padding(.top, 4)
             Group {
                 if let img = img {

@@ -89,10 +89,12 @@ struct PositionEditLayer: View {
                     let a = l.input.adjust
                     Text("\(l.label)  X \(String(format: "%.2f", a.panX))  Y \(String(format: "%.2f", a.panY))  Zoom \(String(format: "%.2f", a.zoom))")
                         .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                        .lineLimit(1).truncationMode(.head)
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .background(Color.black.opacity(0.7))
                         .foregroundColor(.yellow)
-                        .offset(x: min(max(0, r.minX * size.width), size.width - 240),
+                        .frame(width: 240, alignment: .leading)   // label never wider than the 240 pt the offset clamp assumes
+                        .offset(x: min(max(0, r.minX * size.width), max(0, size.width - 240)),
                                 y: r.minY * size.height > 18 ? r.minY * size.height - 18 : r.maxY * size.height + 2)
                         .allowsHitTesting(false)
                 }

@@ -702,6 +702,7 @@ class InputSource: ObservableObject, Identifiable {
     }
     func resetAudioDiagnostics() {
         audio.resetDiagnostics()
+        (self as? FFmpegInput)?.resetAudioQueueDiagnostics()
         mixDiagnosticsLock.lock(); _mixPrimeTransitions = 0; _mixUnderflows = 0; mixDiagnosticsLock.unlock()
     }
     var mixLastGains = [Float](repeating: 0, count: 8)

@@ -52,21 +52,21 @@ struct HongMixApp: App {
                 .environmentObject(engine)
                 .preferredColorScheme(.dark)
         }
-        .defaultSize(width: 980, height: 620)
+        .defaultSize(width: 1120, height: 680)
         Window("Replay", id: "replay") {
             ReplayView()
                 .id(language)
                 .environmentObject(engine)
                 .preferredColorScheme(.dark)
         }
-        .defaultSize(width: 1100, height: 760)
+        .defaultSize(width: 1200, height: 860)
         Window("Scopes", id: "scopes") {
             ScopesView()
                 .id(language)
                 .environmentObject(engine)
                 .preferredColorScheme(.dark)
         }
-        .defaultSize(width: 900, height: 560)
+        .defaultSize(width: 960, height: 560)
 
         Settings {
             SettingsView()

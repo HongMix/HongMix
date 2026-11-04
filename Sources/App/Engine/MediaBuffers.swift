@@ -92,7 +92,12 @@ final class VideoSlot {
     private var lastStoredSequence: UInt64 = 0
     private var lastProgramSequence: UInt64 = 0
     private var repeatedProgramTicks: UInt64 = 0
-    private var maxProgramFrameAgeMs: Double = 0
+    // Sample the age of the frame actually consumed by Program. Keep a rolling window so
+    // a single old frame can be diagnosed without carrying a stale lifetime maximum forever.
+    private var programFrameAgeTimes = [CFTimeInterval](repeating: 0, count: 256)
+    private var programFrameAgesMs = [Double](repeating: 0, count: 256)
+    private var programFrameAgeIndex = 0
+    private var programFrameAgeCount = 0
     /// Sources rendered on demand (web pages, titles, images): they only produce a frame when something
     /// changes, and the mixer re-uses the last one every program frame — so, like vMix, their rate is the
     /// program rate rather than the (variable) update rate.
@@ -133,7 +138,14 @@ final class VideoSlot {
         if lastStoredSequence > 0 {
             if lastProgramSequence == lastStoredSequence { repeatedProgramTicks &+= 1 }
             lastProgramSequence = lastStoredSequence
-            maxProgramFrameAgeMs = max(maxProgramFrameAgeMs, max(0, now - lastTime) * 1000)
+            // Static/event-driven inputs (titles, graphics, browser pages) intentionally reuse
+            // frames and have no meaningful frame age. Their update rate is reported separately.
+            if !followsProgramRate {
+                programFrameAgeTimes[programFrameAgeIndex] = now
+                programFrameAgesMs[programFrameAgeIndex] = max(0, now - lastTime) * 1000
+                programFrameAgeIndex = (programFrameAgeIndex + 1) % programFrameAgeTimes.count
+                programFrameAgeCount = min(programFrameAgeCount + 1, programFrameAgeTimes.count)
+            }
         }
         lock.unlock()
     }
@@ -248,7 +260,8 @@ final class VideoSlot {
     var stats: Stats {
         lock.lock()
         defer { lock.unlock() }
-        let live = lastTime > 0 && CACurrentMediaTime() - lastTime < 2
+        let now = CACurrentMediaTime()
+        let live = lastTime > 0 && now - lastTime < 2
         let avg = averageInterval()
         var iv: [Double] = []
         let n = min(arrivalIndex, arrivals.count)
@@ -283,11 +296,19 @@ final class VideoSlot {
                 maxGap = max(maxGap, (newer - older) * 1000)
             }
         }
+        var maxProgramFrameAge = 0.0
+        if !followsProgramRate {
+            for offset in 0..<programFrameAgeCount {
+                let index = (programFrameAgeIndex - 1 - offset + programFrameAgeTimes.count) % programFrameAgeTimes.count
+                if now - programFrameAgeTimes[index] > 2 { break }
+                maxProgramFrameAge = max(maxProgramFrameAge, programFrameAgesMs[index])
+            }
+        }
         if followsProgramRate && frames > 0 {
             return Stats(fps: VideoSlot.programFPS, width: lastWidth, height: lastHeight,
                          intervalsMs: iv, maxGapMs: maxGap, late: 0, updateFPS: measured, jitterMs: jitter,
                          latestPTSUs: latestPTSUs, lastPTSStepMs: Double(lastPTSStepUs) / 1000,
-                         repeatedProgramTicks: repeatedProgramTicks, maxProgramFrameAgeMs: maxProgramFrameAgeMs)
+                         repeatedProgramTicks: repeatedProgramTicks, maxProgramFrameAgeMs: 0)
         }
         // a live stream that declares its rate: label it with that (vMix shows the source format),
         // unless delivery is clearly far off (then the measured rate is the useful truth)
@@ -295,7 +316,7 @@ final class VideoSlot {
         return Stats(fps: shown, width: lastWidth, height: lastHeight,
                      intervalsMs: iv, maxGapMs: maxGap, late: lateFrames, updateFPS: measured, jitterMs: jitter,
                      latestPTSUs: latestPTSUs, lastPTSStepMs: Double(lastPTSStepUs) / 1000,
-                     repeatedProgramTicks: repeatedProgramTicks, maxProgramFrameAgeMs: maxProgramFrameAgeMs)
+                     repeatedProgramTicks: repeatedProgramTicks, maxProgramFrameAgeMs: maxProgramFrameAge)
     }
 
     func resetStats() {
@@ -303,7 +324,14 @@ final class VideoSlot {
         lateFrames = 0
         sourceDrops = 0
         repeatedProgramTicks = 0
-        maxProgramFrameAgeMs = 0
+        arrivals = [CFTimeInterval](repeating: 0, count: arrivals.count)
+        arrivalIndex = 0
+        lastPTSStepUs = 0
+        latestPTSUs = -1
+        programFrameAgeTimes = [CFTimeInterval](repeating: 0, count: programFrameAgeTimes.count)
+        programFrameAgesMs = [Double](repeating: 0, count: programFrameAgesMs.count)
+        programFrameAgeIndex = 0
+        programFrameAgeCount = 0
         lock.unlock()
     }
 
@@ -469,6 +497,7 @@ final class AudioRing {
     private var written: Int64 = 0
     private var readFrames: Int64 = 0
     private var shortReads: Int64 = 0
+    private var minAvailableAtRead: Int?
     private var clearGeneration: UInt64 = 0
 
     init(seconds: Double = 2.0) {
@@ -523,6 +552,7 @@ final class AudioRing {
     @discardableResult
     func read(into dst: UnsafeMutablePointer<Float>, frames: Int) -> Int {
         lock.lock()
+        minAvailableAtRead = min(minAvailableAtRead ?? count, count)
         let n = min(frames, count)
         var r = readPos
         for i in 0..<n {
@@ -555,13 +585,13 @@ final class AudioRing {
         lock.unlock()
     }
 
-    var diagnostics: (available: Int, written: Int64, read: Int64, shortReads: Int64) {
+    var diagnostics: (available: Int, written: Int64, read: Int64, shortReads: Int64, minReadAvailable: Int?) {
         lock.lock(); defer { lock.unlock() }
-        return (count, written, readFrames, shortReads)
+        return (count, written, readFrames, shortReads, minAvailableAtRead)
     }
 
     func resetDiagnostics() {
-        lock.lock(); shortReads = 0; lock.unlock()
+        lock.lock(); shortReads = 0; minAvailableAtRead = nil; lock.unlock()
     }
 }
 

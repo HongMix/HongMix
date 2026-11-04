@@ -50,6 +50,13 @@ typedef struct {
 typedef struct mc_input mc_input;
 
 typedef struct {
+    int64_t queued_frames;       // decoded file audio waiting for its PTS deadline
+    int64_t peak_queued_frames;  // high-water mark since reset (48 kHz stereo frames)
+    uint64_t late_chunks;        // chunks released after their scheduled wall-clock deadline
+    int64_t max_lateness_us;     // worst observed release lateness since reset
+} mc_input_audio_queue_stats;
+
+typedef struct {
     const char *url;      // file path or URL (srt://, rtmp://, udp://, http(s)://)
     int loop;             // loop files at EOF
     int realtime;         // -1 = auto (files paced, live not), 0 = off, 1 = on
@@ -75,6 +82,8 @@ void mc_input_get_position(mc_input *in, int64_t *position_us, int64_t *duration
 int mc_input_srt_stats(mc_input *in, mc_srt_stats *out);
 /* Video decoder selected for delivered frames: 0 = no frame yet, 1 = VideoToolbox, 2 = software. */
 int mc_input_video_decode_mode(mc_input *in);
+int mc_input_get_audio_queue_stats(mc_input *in, mc_input_audio_queue_stats *out);
+void mc_input_reset_audio_queue_stats(mc_input *in);
 
 /* Single-producer/single-consumer float stereo queue for CoreAudio render callbacks.
    Reads are lock-free and never allocate; when full, new frames are dropped. */
@@ -179,6 +188,11 @@ void mc_replay_sink_cb(void *user, const uint8_t *data, int size, int64_t frame,
 /* Decoder for stored (intra) video packets → BGRA. */
 typedef struct mc_replay_dec mc_replay_dec;
 mc_replay_dec *mc_replay_dec_open(void);
+mc_replay_dec *mc_replay_dec_open_codec(int codec_kind);   /* 0 = H.264 intra, 1 = ProRes, 2 = HEVC intra */
+mc_replay_dec *mc_replay_dec_open_hw(int codec_kind);      /* VideoToolbox hardware decode (decode_pb) */
+/* Decodes one intra frame into a +1 retained CVPixelBuffer (*out_pb): the hardware NV12 surface, or a
+   BGRA w×h buffer when decoded in software. Release with CVPixelBufferRelease / takeRetainedValue. */
+int mc_replay_dec_decode_pb(mc_replay_dec *d, const uint8_t *data, int size, int w, int h, void **out_pb);
 /* 0 = ok: frame decoded and scaled into bgra (w × h, stride). */
 int mc_replay_dec_decode(mc_replay_dec *d, const uint8_t *data, int size, uint8_t *bgra, int stride, int w, int h);
 void mc_replay_dec_close(mc_replay_dec *d);

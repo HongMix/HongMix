@@ -27,6 +27,39 @@ struct FlatButton: View {
     }
 }
 
+/// Numbered overlay control. The channel color remains visible while idle and brightens
+/// when the channel is on air, so operators can distinguish simultaneous layers quickly.
+private struct OverlayChannelButton: View {
+    let channel: Int
+    let active: Bool
+    var height: CGFloat = 20
+    var fontSize: CGFloat = 9
+    let action: () -> Void
+
+    private var color: Color { Theme.overlayChannel(channel) }
+
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: .topTrailing) {
+                Text("\(channel)")
+                    .font(.system(size: fontSize, weight: .heavy).monospacedDigit())
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
+                if active {
+                    Circle().fill(Color.white.opacity(0.95))
+                        .frame(width: 4, height: 4)
+                        .padding(2)
+                }
+            }
+            .background(active ? color : color.opacity(0.24))
+            .clipShape(RoundedRectangle(cornerRadius: 3))
+            .overlay(RoundedRectangle(cornerRadius: 3)
+                .stroke(color.opacity(active ? 1 : 0.65), lineWidth: active ? 1.2 : 0.8))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - Transition column (Quick Play, Cut, 4 transition buttons, T-bar, FTB)
 
 struct TransitionColumn: View {
@@ -60,8 +93,7 @@ struct TransitionColumn: View {
                             let channel = row * 4 + col
                             let active = engine.overlayOn[channel - 1]
                             let savedInput = engine.input(withID: engine.overlayIDs[channel - 1])
-                            FlatButton(title: "\(channel)", active: active, activeColor: Theme.overlay,
-                                       height: 20, fontSize: 9, weight: .bold) {
+                            OverlayChannelButton(channel: channel, active: active, height: 20, fontSize: 9) {
                                 engine.toggleOverlayChannel(channel)
                             }
                             .disabled(savedInput == nil)
@@ -243,7 +275,14 @@ struct InputFormatLabel: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             let st = slot.stats
-            if let label = VideoSlot.formatLabel(st, ntsc: engine.format.fpsDen == 1001) {
+            // A paused file (e.g. waiting in Preview) delivers no frames, so the measured rate is 0;
+            // fall back to the file's declared rate so the format is still shown.
+            let shown: VideoSlot.Stats = {
+                var s = st
+                if s.fps <= 0.5, slot.nominalFPS > 0, s.height > 0 { s.fps = slot.nominalFPS }
+                return s
+            }()
+            if let label = VideoSlot.formatLabel(shown, ntsc: engine.format.fpsDen == 1001) {
                 Text(label)
                     .font(.system(size: size, weight: .semibold).monospacedDigit())
                     .foregroundColor(.white.opacity(0.85))
@@ -401,9 +440,11 @@ private struct FoldedInputRow: View {
     private var selectedColor: Color {
         if engine.programID == input.id { return Theme.program }
         if engine.previewID == input.id { return Theme.preview }
-        if !engine.overlayChannels(of: input.id).isEmpty { return Theme.overlay }
+        if let channel = engine.overlayChannels(of: input.id).first { return Theme.overlayChannel(channel) }
         return Theme.button
     }
+
+    private var overlayChannels: [Int] { engine.overlayChannels(of: input.id) }
 
     var body: some View {
         VStack(spacing: 5) {
@@ -416,6 +457,26 @@ private struct FoldedInputRow: View {
                 .lineLimit(3).multilineTextAlignment(.center)
                 .foregroundColor(.white.opacity(0.88))
                 .frame(maxHeight: .infinity)
+            if !overlayChannels.isEmpty {
+                VStack(spacing: 2) {
+                    ForEach(0..<2, id: \.self) { row in
+                        HStack(spacing: 2) {
+                            ForEach(0..<4, id: \.self) { col in
+                                let index = row * 4 + col
+                                if overlayChannels.indices.contains(index) {
+                                    let channel = overlayChannels[index]
+                                    Text("\(channel)")
+                                        .font(.system(size: 7, weight: .heavy).monospacedDigit())
+                                        .foregroundColor(.white)
+                                        .frame(width: 8, height: 9)
+                                        .background(Theme.overlayChannel(channel))
+                                        .clipShape(RoundedRectangle(cornerRadius: 2))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             Button {
                 withAnimation(.easeInOut(duration: 0.15)) { input.folded = false }
             } label: {
@@ -429,7 +490,10 @@ private struct FoldedInputRow: View {
             .help(L("입력 타일 펼치기"))
         }
         .padding(.vertical, 6)
-        .frame(width: 46, height: 76)
+        // minHeight (not a fixed height): number + dot + name + overlay chips + chevron need more
+        // than 76 pt once overlay chips appear; a fixed frame clipped the chevron/number.
+        .frame(width: 46)
+        .frame(minHeight: 76)
         .background(selectedColor.opacity(0.88))
         .clipShape(RoundedRectangle(cornerRadius: 4))
         .contentShape(Rectangle())
@@ -556,7 +620,7 @@ struct InputBox: View {
     private var headerColor: Color {
         if isProgram { return Theme.program }
         if isPreview { return Theme.preview }
-        if !overlayChannels.isEmpty { return Theme.overlay }
+        if let channel = overlayChannels.first { return Theme.overlayChannel(channel) }
         return Theme.panel
     }
 
@@ -598,14 +662,16 @@ struct InputBox: View {
     var body: some View {
         VStack(spacing: 0) {
             // Title bar: number + name, settings / close
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 Text("\(number)")
                     .font(.system(size: 12, weight: .heavy))
                 Text(input.name)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
-                Spacer(minLength: 2)
-                if !input.collapsed { InputFormatLabel(slot: input.video) }
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .help(input.name)
+                if !(input is ReplayInput) { ReplaySlotChip(input: input) }
                 Circle().fill(stateColor).frame(width: 7, height: 7)
                     .help(input.status)
                 Menu {
@@ -620,6 +686,25 @@ struct InputBox: View {
                     Button(L("소스 설정…")) { sheet = SheetRequest(kind: input.kind, editing: input) }
                     Button(L("스냅샷 저장")) { engine.snapshot(input: input) }
                     if input.supportsTransport { Button(L("처음부터 (Restart)")) { input.restart() } }
+                    if let media = input as? FFmpegInput, media.kind == .media, !media.config.url.isEmpty {
+                        Button(media.isSoftwareDecoded ? L("최적화 미디어 만들기 (ProRes) — 권장: CPU 디코딩 중")
+                                                       : L("최적화 미디어 만들기 (ProRes)")) {
+                            let path = media.config.url
+                            let name = (path as NSString).lastPathComponent
+                            engine.lastMessage = Lf("ProRes 변환 시작: %@", name)
+                            OptimizedMedia.makeProRes(from: path, progress: { p in
+                                engine.lastMessage = Lf("ProRes 변환 중 %@%% · %@", "\(Int(p * 100))", name)
+                            }, done: { result in
+                                switch result {
+                                case .success(let out):
+                                    media.replaceFile(with: out)
+                                    engine.lastMessage = Lf("✓ 최적화 미디어로 교체: %@", (out as NSString).lastPathComponent)
+                                case .failure(let err):
+                                    engine.lastMessage = Lf("ProRes 변환 실패: %@", err.localizedDescription)
+                                }
+                            })
+                        }
+                    }
                     Divider()
                     Button(L("앞으로 이동")) { engine.moveInput(from: number - 1, to: number - 2) }
                     Button(L("뒤로 이동")) { engine.moveInput(from: number - 1, to: number) }
@@ -686,172 +771,105 @@ struct InputBox: View {
 
     /// vMix-style compact input tile: retain source identity and useful live controls while
     /// removing the large settings-heavy presentation from the input grid.
-    private var compactBody: some View {
-        VStack(spacing: 3) {
-            ZStack(alignment: .bottomLeading) {
-                MonitorView(fps: 6, onActiveChange: { input.setInputTileVisible($0) }) { input.monitorFrame() }
-                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                    .background(Color.black)
-                Color.clear.contentShape(Rectangle())
-                    .onTapGesture { engine.setPreview(input.id) }
-                if input.signalLost { SignalLostBadge(input: input) }
+    /// Explicitly constrain the monitor viewport to 16:9. LazyVGrid equalizes row heights,
+    /// so an unconstrained monitor can otherwise inherit a taller neighbor's height and
+    /// make the picture look vertically offset or undersized in only some tiles.
+    private var inputMonitor: some View {
+        ZStack(alignment: .center) {
+            MonitorView(fps: 6, onActiveChange: { input.setInputTileVisible($0) }) { input.monitorFrame() }
+                .background(Color.black)
+            Color.clear.contentShape(Rectangle())
+                .onTapGesture { engine.setPreview(input.id) }
+            if input.signalLost {
+                SignalLostBadge(input: input)
+            } else if input.state == Int32(MC_STATE_ERROR) || input.state == Int32(MC_STATE_CONNECTING) {
+                Text(input.status)
+                    .font(.system(size: 9))
+                    .lineLimit(1)
+                    .padding(3)
+                    .background(Color.black.opacity(0.7))
+                    .foregroundColor(input.state == Int32(MC_STATE_ERROR) ? .red : .yellow)
+                    .allowsHitTesting(false)
             }
-            .help(L("클릭: Preview"))
+        }
+        .frame(maxWidth: .infinity)
+        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    // One tile layout for every size and input kind (compact or expanded), so buttons never
+    // appear or disappear depending on tile width. Transport buttons stay in place and dim when
+    // the input has no transport (camera, title, NDI …).
+    private var compactBody: some View { tileBody }
+    private var expandedBody: some View { tileBody }
+
+    private func tileIcon(_ symbol: String, enabled: Bool = true, active: Bool = false,
+                          help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(active ? .white : Theme.buttonText)
+                .frame(width: 24, height: 22)
+                .background(active ? Theme.live : Theme.button)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.35)
+        .help(help)
+    }
+
+    private var tileBody: some View {
+        let transport = input.supportsTransport
+        return VStack(spacing: 3) {
+            inputMonitor.help(L("클릭: Preview"))
 
             listNowPlaying
 
+            // Row 1: Close · Restart · Play/Pause · Cut · Loop  (Quick Play removed)
             HStack(spacing: 3) {
-                FlatButton(title: L("Quick Play"), height: 20, fontSize: 9) { engine.quickPlay(input.id) }
-                FlatButton(title: L("Cut"), height: 20, fontSize: 9) { engine.cutDirect(input.id) }
-                FlatButton(title: L("Loop"), active: input.looping, activeColor: Theme.accent, height: 20, fontSize: 9) {
+                tileIcon("xmark", help: L("입력 닫기")) { engine.requestRemove(input) }
+                tileIcon("backward.end.fill", enabled: transport, help: L("처음부터 (Restart)")) { input.restart() }
+                tileIcon(input.playing ? "pause.fill" : "play.fill", enabled: transport,
+                         help: input.playing ? L("일시정지") : L("재생")) { input.playing.toggle() }
+                FlatButton(title: L("Cut"), height: 22, fontSize: 10) { engine.cutDirect(input.id) }
+                FlatButton(title: L("Loop"), active: input.looping, activeColor: Theme.accent, height: 22, fontSize: 10) {
                     input.looping.toggle()
                 }
-                .disabled(!input.supportsTransport)
-                .opacity(input.supportsTransport ? 1 : 0.4)
+                .disabled(!transport)
+                .opacity(transport ? 1 : 0.35)
             }
             .padding(.horizontal, 3)
 
+            // Row 2: Audio (left) · Overlay 1–8
             HStack(spacing: 3) {
-                VStack(spacing: 2) {
-                    ForEach(0..<2, id: \.self) { row in
-                        HStack(spacing: 2) {
-                            ForEach(1...4, id: \.self) { col in
-                                let channel = row * 4 + col
-                                let active = overlayChannels.contains(channel)
-                                FlatButton(title: "\(channel)", active: active, activeColor: Theme.overlay,
-                                           height: 16, fontSize: 8, weight: .bold) {
-                                    engine.toggleOverlay(channel, input.id)
-                                }
-                                .help(Lf("Overlay %@ 지정/해제", "\(channel)"))
-                            }
-                        }
-                    }
-                }
                 Button { input.muted.toggle() } label: {
                     Image(systemName: input.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(Theme.buttonText)
+                        .foregroundColor(input.muted ? .white : Theme.buttonText)
                         .frame(width: 24, height: 34)
                         .background(input.muted ? Theme.live : Theme.button)
                         .clipShape(RoundedRectangle(cornerRadius: 3))
                 }
                 .buttonStyle(.plain)
                 .help(input.muted ? L("오디오 켜기") : L("오디오 끄기"))
-            }
-            .padding(.horizontal, 3).padding(.bottom, 3)
-        }
-    }
-
-    @ViewBuilder private var expandedBody: some View {
-        VStack(spacing: 0) {
-            // Thumbnail: click = preview, double-click = cut to output
-            ZStack(alignment: .bottomLeading) {
-                MonitorView(fps: 6, onActiveChange: { input.setInputTileVisible($0) }) { input.monitorFrame() }
-                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                    .background(Color.black)
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { engine.setPreview(input.id) }
-                if input.signalLost {
-                    SignalLostBadge(input: input)
-                } else if input.state == Int32(MC_STATE_ERROR) || input.state == Int32(MC_STATE_CONNECTING) {
-                    Text(input.status)
-                        .font(.system(size: 9))
-                        .lineLimit(1)
-                        .padding(3)
-                        .background(Color.black.opacity(0.7))
-                        .foregroundColor(input.state == Int32(MC_STATE_ERROR) ? .red : .yellow)
-                        .allowsHitTesting(false)
-                }
-            }
-
-            listNowPlaying
-
-            // Row 1: Close / Quick Play / Cut / Loop
-            HStack(spacing: 3) {
-                Button {
-                    engine.requestRemove(input)
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(Theme.buttonText)
-                        .frame(width: 22, height: 22)
-                        .background(Theme.button)
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
-                }
-                .buttonStyle(.plain)
-                .help(L("입력 닫기"))
-                FlatButton(title: "Quick Play", height: 22, fontSize: 10) { engine.quickPlay(input.id) }
-                FlatButton(title: "Cut", height: 22, fontSize: 10) { engine.cutDirect(input.id) }
-                FlatButton(title: "Loop", active: input.looping, activeColor: Theme.accent, height: 22, fontSize: 10) {
-                    input.looping.toggle()
-                }
-                .disabled(!input.supportsTransport)
-                .opacity(input.supportsTransport ? 1 : 0.4)
-            }
-            .padding(.horizontal, 4)
-            .padding(.top, 4)
-
-            // vMix input overlay bank: direct 1–8 buttons on each source tile.
-            VStack(spacing: 2) {
-                HStack(spacing: 3) {
-                    Text(L("OVERLAY 1–8"))
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.secondary)
-                    Spacer(minLength: 0)
-                    if !overlayChannels.isEmpty {
-                        Text(overlayChannels.map(String.init).joined(separator: ","))
-                            .font(.system(size: 8, weight: .medium).monospacedDigit())
-                            .foregroundColor(Theme.overlay)
-                    }
-                }
-                ForEach(0..<2, id: \.self) { row in
-                    HStack(spacing: 3) {
-                        ForEach(1...4, id: \.self) { col in
-                            let channel = row * 4 + col
-                            let assigned = overlayChannels.contains(channel)
-                            let onAir = engine.overlayOn[channel - 1] && engine.overlayIDs[channel - 1] == input.id
-                            FlatButton(title: "\(channel)", active: onAir || assigned,
-                                       activeColor: onAir ? Theme.program : Theme.accent,
-                                       height: 18, fontSize: 9, weight: .bold) {
-                                engine.toggleOverlay(channel, input.id)
+                VStack(spacing: 2) {
+                    ForEach(0..<2, id: \.self) { row in
+                        HStack(spacing: 2) {
+                            ForEach(1...4, id: \.self) { col in
+                                let channel = row * 4 + col
+                                let assigned = overlayChannels.contains(channel)
+                                let onAir = engine.overlayOn[channel - 1] && engine.overlayIDs[channel - 1] == input.id
+                                OverlayChannelButton(channel: channel, active: onAir || assigned, height: 16, fontSize: 8) {
+                                    engine.toggleOverlay(channel, input.id)
+                                }
+                                .help(Lf("Overlay %@ · %@", "\(channel)", onAir ? L("출력 중 · 클릭해 종료") : assigned ? L("지정됨 · 클릭해 출력") : L("이 입력을 지정하고 출력")))
                             }
-                            .help(Lf("Overlay %@ · %@", "\(channel)", onAir ? L("출력 중 · 클릭해 종료") : assigned ? L("지정됨 · 클릭해 출력") : L("이 입력을 지정하고 출력")))
                         }
                     }
                 }
             }
-            .padding(.horizontal, 4)
-            HStack(spacing: 3) {
-                if input.supportsTransport {
-                    Button {
-                        input.playing.toggle()
-                    } label: {
-                        Image(systemName: input.playing ? "pause.fill" : "play.fill")
-                            .font(.system(size: 9))
-                            .foregroundColor(Theme.buttonText)
-                            .frame(width: 24, height: 22)
-                            .background(Theme.button)
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
-                    }
-                    .buttonStyle(.plain)
-                }
-                Button {
-                    input.muted.toggle()
-                } label: {
-                    Image(systemName: input.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        .font(.system(size: 9))
-                        .foregroundColor(input.muted ? .white : Theme.buttonText)
-                        .frame(width: 26, height: 22)
-                        .background(input.muted ? Theme.live : Theme.button)
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
-                }
-                .buttonStyle(.plain)
-                .help("Audio On/Off")
-            }
-            .padding(.horizontal, 4)
-            .padding(.top, 2)
-            .padding(.bottom, 4)
+            .padding(.horizontal, 3).padding(.bottom, 3)
         }
     }
 }
@@ -927,7 +945,7 @@ struct AudioMixerPanel: View {
             .overlay(alignment: .bottom) { Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1) }
             .sheet(isPresented: $showAudioOutputs) { AudioOutputsSheet().environmentObject(engine) }
 
-            ScrollView(.horizontal) {
+            ScrollView(.horizontal, showsIndicators: true) {
                 HStack(alignment: .top, spacing: 2) {
                     ChannelStrip(title: "Master", volume: $engine.masterVolume, muted: $engine.masterMuted,
                                  meter: { engine.audioMixer.master }, highlight: Theme.accent) {
@@ -949,6 +967,7 @@ struct AudioMixerPanel: View {
                 .padding(4)
                 .frame(maxHeight: .infinity, alignment: .top)
             }
+            .scrollIndicators(.visible)   // always show: the last strips can be off-screen
             .frame(maxHeight: .infinity)
         }
         .background(Theme.panel)
@@ -1158,8 +1177,12 @@ struct InputChannelStrip: View {
         let mixer = engine.audioMixer
         let id = input.id
         let hl: Color? = engine.programID == id ? Theme.program : (engine.previewID == id ? Theme.preview : nil)
+        let onAir = engine.programID == id || !engine.overlayChannels(of: id).isEmpty
+        let state: InputAudioState = input.muted ? .mute : (!input.audioFollowsVideo ? .on : (onAir ? .onAir : .auto))
         ChannelStrip(title: "\(number) \(input.name)", volume: $input.volume, muted: $input.muted,
-                     meter: { mixer.meter(for: id) }, highlight: hl, meterSupported: input.hasAudio) {
+                     meter: { mixer.meter(for: id) }, highlight: hl, meterSupported: input.hasAudio,
+                     audioState: state, onAudioState: { press(state) },
+                     meterDim: { !mixer.reachesMaster(id) }) {
             VStack(spacing: 2) {
                 HStack(spacing: 2) {
                     busButton("M")
@@ -1206,6 +1229,15 @@ struct InputChannelStrip: View {
         }
     }
 
+    /// vMix-style audio button: AUTO → manual ON (Follow off), ON / ON AIR → MUTE, MUTE → back.
+    private func press(_ state: InputAudioState) {
+        switch state {
+        case .auto: input.audioFollowsVideo = false; input.muted = false
+        case .on, .onAir: input.muted = true
+        case .mute: input.muted = false
+        }
+    }
+
     private func busButton(_ bus: String) -> some View {
         FlatButton(title: bus, active: input.onBus(bus), activeColor: Theme.accent, height: 20, fontSize: 10,
                    weight: .bold) { input.setBus(bus, !input.onBus(bus)) }
@@ -1219,6 +1251,43 @@ struct InputChannelStrip: View {
     }
 }
 
+/// Input channel audio state shown on its strip button (vMix: Audio On / Audio Auto).
+enum InputAudioState: Equatable {
+    case onAir, auto, on, mute
+
+    var label: String {
+        switch self {
+        case .onAir: return "ON AIR"
+        case .auto: return "AUTO"
+        case .on: return "ON"
+        case .mute: return "MUTE"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .mute: return "speaker.slash.fill"
+        case .auto: return "speaker.fill"
+        default: return "speaker.wave.2.fill"
+        }
+    }
+    var color: Color {
+        switch self {
+        case .onAir: return Theme.program
+        case .auto: return Theme.panelDark
+        case .on: return Theme.accent
+        case .mute: return Theme.live
+        }
+    }
+    var help: String {
+        switch self {
+        case .onAir: return L("Follow 로 지금 마스터에 나가는 중 — 누르면 MUTE")
+        case .auto: return L("Follow 대기 — 출력되면 자동으로 켜짐. 누르면 수동 ON (Follow 꺼짐)")
+        case .on: return L("수동 ON — 출력과 관계없이 항상 마스터로. 누르면 MUTE")
+        case .mute: return L("음소거 — 누르면 다시 켜짐 (→ 가 켜져 있으면 AUTO)")
+        }
+    }
+}
+
 struct ChannelStrip<Accessory: View>: View {
     let title: String
     @Binding var volume: Float
@@ -1226,17 +1295,24 @@ struct ChannelStrip<Accessory: View>: View {
     let meter: () -> (Float, Float)
     var highlight: Color?
     var meterSupported = true
+    var audioState: InputAudioState? = nil
+    var onAudioState: (() -> Void)? = nil
+    var meterDim: (() -> Bool)? = nil
     @AppStorage("audioMetersCollapsed") private var metersCollapsed = false
     let accessory: Accessory
 
     init(title: String, volume: Binding<Float>, muted: Binding<Bool>, meter: @escaping () -> (Float, Float),
-         highlight: Color?, meterSupported: Bool = true, @ViewBuilder accessory: () -> Accessory) {
+         highlight: Color?, meterSupported: Bool = true, audioState: InputAudioState? = nil,
+         onAudioState: (() -> Void)? = nil, meterDim: (() -> Bool)? = nil, @ViewBuilder accessory: () -> Accessory) {
         self.title = title
         self._volume = volume
         self._muted = muted
         self.meter = meter
         self.highlight = highlight
         self.meterSupported = meterSupported
+        self.audioState = audioState
+        self.onAudioState = onAudioState
+        self.meterDim = meterDim
         self.accessory = accessory()
     }
 
@@ -1251,7 +1327,7 @@ struct ChannelStrip<Accessory: View>: View {
                 .clipShape(RoundedRectangle(cornerRadius: 2))
             HStack(spacing: 3) {
                 if !metersCollapsed && meterSupported {
-                    LayerMeter(meter: meter).frame(width: 11)
+                    LayerMeter(meter: meter, dim: meterDim).frame(width: 11)
                 } else {
                     Spacer(minLength: 0)
                 }
@@ -1263,18 +1339,34 @@ struct ChannelStrip<Accessory: View>: View {
             Text(volume <= 0.0001 ? "-inf" : String(format: "%.1f", 20 * log10(Double(volume * volume))))
                 .font(.system(size: 9).monospacedDigit())
                 .foregroundColor(.secondary)
-            Button {
-                muted.toggle()
-            } label: {
-                Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .font(.system(size: 10))
+            if let st = audioState, let press = onAudioState {
+                Button(action: press) {
+                    HStack(spacing: 3) {
+                        Image(systemName: st.symbol).font(.system(size: 9))
+                        Text(st.label).font(.system(size: 9, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                    }
                     .frame(width: 58, height: 20)
-                    .foregroundColor(.white)
-                    .background(muted ? Theme.live : Theme.button)
+                    .foregroundColor(st == .auto ? Color(white: 0.75) : .white)
+                    .background(st.color)
+                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(st == .auto ? Color(white: 0.45) : .clear, lineWidth: 1))
                     .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+                .buttonStyle(.plain)
+                .help(st.help)
+            } else {
+                Button {
+                    muted.toggle()
+                } label: {
+                    Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        .font(.system(size: 10))
+                        .frame(width: 58, height: 20)
+                        .foregroundColor(.white)
+                        .background(muted ? Theme.live : Theme.button)
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+                .buttonStyle(.plain)
+                .help("Mute")
             }
-            .buttonStyle(.plain)
-            .help("Mute")
             accessory
                 .frame(width: 58, height: 44, alignment: .top)   // same height on every strip → faders line up
         }

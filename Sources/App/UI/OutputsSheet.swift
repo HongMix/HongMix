@@ -99,6 +99,14 @@ struct BusSourcesBar: View {
     @EnvironmentObject var engine: SwitcherEngine
 
     var body: some View {
+        // Fallback to horizontal scrolling instead of overflowing (and clipping) both sheet edges.
+        ViewThatFits(in: .horizontal) {
+            bar
+            ScrollView(.horizontal, showsIndicators: false) { bar }
+        }
+    }
+
+    private var bar: some View {
         HStack(spacing: 12) {
             Text(L("Output 1 = 프로그램")).font(.caption).foregroundColor(.secondary).fixedSize()
             ForEach(2...4, id: \.self) { b in
@@ -121,13 +129,22 @@ struct BusSourcesBar: View {
                             }
                         }
                     } label: {
-                        Text(sourceName(engine.busSources[b - 2]))
+                        Text(BusSourcesBar.clipped(sourceName(engine.busSources[b - 2])))
                     }
                     .fixedSize()
+                    .help(sourceName(engine.busSources[b - 2]))
                 }
             }
             Spacer()
         }
+    }
+
+    /// Menu labels are sized to their title; cap long names (e.g. "Input: <long name>") so three
+    /// fixed-size menus can't push the bar wider than the sheet.
+    static func clipped(_ s: String, max n: Int = 24) -> String {
+        guard s.count > n else { return s }
+        let head = (n - 1) / 2, tail = n - 1 - head
+        return String(s.prefix(head)) + "…" + String(s.suffix(tail))
     }
 
     private func sourceName(_ s: BusSource) -> String {
@@ -145,7 +162,7 @@ struct OutputRow: View {
             Image(systemName: output.config.kind.symbol)
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 2) {
-                Text(output.config.name).font(.system(size: 13, weight: .semibold))
+                Text(output.config.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
                 Text(output.message.isEmpty ? output.config.kind.label : output.message)
                     .font(.system(size: 11))
                     .foregroundColor(output.state == Int32(MC_STATE_ERROR) ? .orange : .secondary)
@@ -153,6 +170,7 @@ struct OutputRow: View {
                 if !output.statsText.isEmpty {
                     Text(output.statsText)
                         .font(.system(size: 10).monospacedDigit())
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                         .foregroundColor(.secondary)
                 }
             }
@@ -163,6 +181,7 @@ struct OutputRow: View {
                 Text(output.running ? L("중지") : L("시작"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
+                    .lineLimit(1).minimumScaleFactor(0.8)
                     .frame(width: 52, height: 24)
                     .background(output.running ? Theme.live : Theme.program)
                     .clipShape(RoundedRectangle(cornerRadius: 5))
@@ -298,6 +317,7 @@ struct OutputEditor: View {
         Section(L("이중 경로 (백업 송출)")) {
             HStack {
                 Button(L("보조 경로 추가")) { engine.addBackupPath(of: output) }
+                    .fixedSize()
                 Text(L("같은 설정의 출력을 하나 더 만듭니다 — 다른 서버/회선(예: SRT 두 번째 주소, YouTube 백업 URL)을 넣으면 Stream 버튼 한 번으로 두 경로가 동시에 나갑니다."))
                     .font(.caption).foregroundColor(.secondary)
             }
@@ -339,9 +359,12 @@ struct OutputEditor: View {
         }
         Section(L("멀티트랙 오디오")) {
             HStack(spacing: 6) {
-                Text(L("트랙 1:")).foregroundColor(.secondary)
-                Text(output.config.audioBus == "M" ? "Master" : "Bus \(output.config.audioBus)").fontWeight(.semibold)
-                Text(L("· 추가 트랙:")).foregroundColor(.secondary)
+                Group {
+                    Text(L("트랙 1:")).foregroundColor(.secondary)
+                    Text(output.config.audioBus == "M" ? "Master" : "Bus \(output.config.audioBus)").fontWeight(.semibold)
+                    Text(L("· 추가 트랙:")).foregroundColor(.secondary)
+                }
+                .lineLimit(1).minimumScaleFactor(0.75)
                 ForEach(AudioBus.all, id: \.self) { b in
                     Toggle(b, isOn: Binding(get: { output.config.extraAudioBuses.uppercased().contains(b) },
                                             set: { on in

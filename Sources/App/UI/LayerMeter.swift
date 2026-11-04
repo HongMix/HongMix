@@ -6,21 +6,30 @@ import QuartzCore
 /// (A SwiftUI TimelineView per strip re-ran the view graph 20×/s per strip — the main-thread CPU hog.)
 struct LayerMeter: NSViewRepresentable {
     let meter: () -> (Float, Float)
+    /// When it returns true the bars are drawn grey (signal present but not reaching the output).
+    var dim: (() -> Bool)? = nil
 
     func makeNSView(context: Context) -> LayerMeterView {
         let v = LayerMeterView()
         v.source = meter
+        v.dimSource = dim
         MeterClock.shared.add(v)
         return v
     }
 
-    func updateNSView(_ v: LayerMeterView, context: Context) { v.source = meter }
+    func updateNSView(_ v: LayerMeterView, context: Context) { v.source = meter; v.dimSource = dim }
 
     static func dismantleNSView(_ v: LayerMeterView, coordinator: ()) { MeterClock.shared.remove(v) }
 }
 
 final class LayerMeterView: NSView {
     var source: () -> (Float, Float) = { (0, 0) }
+    var dimSource: (() -> Bool)?
+    private var dimmed = false
+    private static let liveColors = [NSColor.systemGreen.cgColor, NSColor.systemYellow.cgColor,
+                                     NSColor.systemOrange.cgColor, NSColor.systemRed.cgColor]
+    private static let dimColors = [NSColor(white: 0.42, alpha: 1).cgColor, NSColor(white: 0.52, alpha: 1).cgColor,
+                                    NSColor(white: 0.6, alpha: 1).cgColor, NSColor(white: 0.68, alpha: 1).cgColor]
     private let bars = [CAGradientLayer(), CAGradientLayer()]
     private let masks = [CALayer(), CALayer()]
     private var last: (CGFloat, CGFloat) = (-1, -1)
@@ -62,6 +71,13 @@ final class LayerMeterView: NSView {
     }
 
     func refresh() {
+        let d = dimSource?() ?? false
+        if d != dimmed {
+            dimmed = d
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            for b in bars { b.colors = d ? Self.dimColors : Self.liveColors }
+            CATransaction.commit()
+        }
         let m = source()
         let f = (Self.frac(m.0), Self.frac(m.1))
         // skip work when nothing moved by more than half a pixel

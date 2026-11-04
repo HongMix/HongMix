@@ -4,8 +4,12 @@ import SwiftUI
 /// intervals ("Video" column), late frames (≈ Source Dropped), audio buffer. Per output: encoder and
 /// bitrate. Plus the renderer: average / peak frame time and dropped render ticks.
 struct StatisticsSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    // Keep a plain reference instead of observing the entire switcher. The sheet has its own
+    // section-level refreshes below; observing every live engine change invalidates this large
+    // diagnostic hierarchy while cameras and media inputs are publishing state.
+    let engine: SwitcherEngine
     @Environment(\.dismiss) private var dismiss
+    @ViewState private var showInputDetails = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,21 +24,32 @@ struct StatisticsSheet: View {
             }
             .padding()
 
-            TimelineView(.periodic(from: .now, by: 1)) { _ in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
+            ScrollView {
+                // A regular VStack measures and constructs every diagnostics section when the
+                // window opens, even when most of the sections are below the fold. The SRT and
+                // output sections can query live objects, while the graphs create several Canvas
+                // views. Keep the initial presentation cheap and build sections as they approach
+                // the visible area.
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
                         rendererSection
-                        HealthGraphsSection(stats: engine.stats, frameMs: 1000 / max(1, engine.format.fps))
-                        inputsSection
-                        audioOutputSection
-                        srtSection
-                        outputsSection
-                        Text(L("Video 간격/최대 간격은 입력 프레임이 HongMix에 도착한 시각입니다. PTS step은 파일의 미디어 시간 간격, Frame age는 프로그램 합성 시 마지막 입력 프레임의 나이, Program reuse는 같은 입력 프레임을 출력 틱에서 다시 사용한 횟수입니다. CoreAudio 출력 언더런과 입력 PCM/Mix 언더런은 아래에서 구분합니다. Reset 후 문제 구간을 재생해 값을 확인하세요."))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
                     }
-                    .padding(.horizontal)
+                    HealthGraphsSection(stats: engine.stats, frameMs: 1000 / max(1, engine.format.fps))
+                    inputsSection
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        audioOutputSection
+                    }
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        srtSection
+                    }
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        outputsSection
+                    }
+                    Text(L("Video 간격/Max gap은 최근 입력 프레임 도착 간격입니다. PTS step은 파일 미디어 시간 간격입니다. Frame age max (2s)는 실제 Program에 사용된 연속 영상 프레임의 최근 2초 최대 나이입니다. 타이틀·브라우저·이미지처럼 내용이 바뀔 때만 새 프레임을 만드는 입력은 이 값이 적용되지 않습니다. Program reuse는 같은 프레임을 출력 틱에서 재사용한 횟수이며 정지 그래픽에서는 정상적으로 증가합니다. 입력 Audio underrun과 최종 CoreAudio 출력 underrun은 별도입니다. Reset 후 문제 구간을 재생해 비교하세요."))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
+                .padding(.horizontal)
             }
 
             HStack {
@@ -54,7 +69,8 @@ struct StatisticsSheet: View {
                 stat(L("최대 (1초)"), String(format: "%.1f ms", engine.renderMsPeak), warn: engine.renderMsPeak > budget)
                 stat(L("프레임 예산"), String(format: "%.1f ms", budget))
                 stat("Renderer Dropped", "\(engine.droppedTicks)", warn: engine.droppedTicks > 0)
-                stat(L("UI 멈춤 (최대)"), String(format: "%.0f ms", engine.uiStallMs), warn: engine.uiStallMs > 30)
+                stat(L("UI 응답 지연 (최대/1초)"), String(format: "%.0f ms", engine.uiStallMs), warn: engine.uiStallMs > 30)
+                    .help(L("메인 UI 이벤트 루프의 20ms 감시 타이머가 늦어진 최대 시간입니다. 이 값만으로 송출 영상/오디오 드롭을 뜻하지 않습니다. Renderer Dropped, Output monitor, 실제 출력 녹화/수신을 함께 확인하세요."))
                 stat(L("Output 모니터"), "\(MonitorRenderer.drawsPerSecond) fps")
                 Spacer()
             }
@@ -63,18 +79,46 @@ struct StatisticsSheet: View {
     }
 
     private var inputsSection: some View {
-        GroupBox(L("입력")) {
+        GroupBox {
+            DisclosureGroup(isExpanded: $showInputDetails) {
+                if showInputDetails {
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        inputRows
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(L("입력 진단 상세"))
+                    Text("\(engine.inputs.count)")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    if !showInputDetails {
+                        Text(L("필요할 때 펼치기"))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .font(.headline)
+                .contentShape(Rectangle())
+            }
+        }
+    }
+
+    private var inputRows: some View {
+        ScrollView(.horizontal) {
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
                 GridRow {
-                    head("#"); head("Input"); head("Format"); head("FPS"); head("Video (ms)"); head("Max gap (2s)"); head("PTS step"); head("Frame age max"); head("Program reuse")
-                    head(L("늦은 프레임")); head("Source Dropped"); head("Audio buffer"); head("PCM short reads"); head("Mix underruns"); head("Status")
+                    head("#"); head("Input"); head("Format"); head("FPS"); head("Video (ms)"); head("Max gap (2s)"); head("PTS step"); head("Frame age max (2s)"); head("Program reuse")
+                    head(L("늦은 프레임")); head("Source Dropped"); head("Audio buffer"); head("Audio underruns")
+                    head("Audio path (min PCM · FF queue now/peak · late/max)"); head("Status")
                 }
                 Divider()
                 ForEach(engine.inputs) { i in
                     let st = i.video.stats
                     let audio = i.audio.diagnostics
-                    let mixAudio = i.mixAudioDiagnostics
-                    let decodeMode = (i as? FFmpegInput)?.videoDecodeModeName() ?? "—"
+                    let ffmpeg = i as? FFmpegInput
+                    let decodeMode = ffmpeg?.videoDecodeModeName() ?? "—"
+                    let decoderAudio = ffmpeg?.audioQueueDiagnostics()
                     GridRow {
                         Text("\(engine.number(of: i))").monospacedDigit()
                         Text(i.name).lineLimit(1).frame(maxWidth: 200, alignment: .leading)
@@ -89,24 +133,35 @@ struct StatisticsSheet: View {
                         Text(st.maxGapMs > 0 ? String(format: "%.1f ms", st.maxGapMs) : "—")
                             .monospacedDigit().foregroundColor(st.maxGapMs > 50 ? .orange : .primary)
                         Text(st.lastPTSStepMs != 0 ? String(format: "%.1f ms", st.lastPTSStepMs) : "—").monospacedDigit()
-                        Text(st.maxProgramFrameAgeMs > 0 ? String(format: "%.1f ms", st.maxProgramFrameAgeMs) : "—")
+                        Text(i.video.followsProgramRate ? "—" : (st.maxProgramFrameAgeMs > 0 ? String(format: "%.1f ms", st.maxProgramFrameAgeMs) : "—"))
                             .monospacedDigit().foregroundColor(st.maxProgramFrameAgeMs > 50 ? .orange : .primary)
                         Text("\(st.repeatedProgramTicks)").monospacedDigit()
                         Text("\(st.late)").monospacedDigit().foregroundColor(st.late > 0 ? .orange : .primary)
                         Text("\(i.video.sourceDropped)").monospacedDigit()
                             .foregroundColor(i.video.sourceDropped > 0 ? .orange : .primary)
                         Text(String(format: "%.0f ms", Double(i.audio.available) / 48.0)).monospacedDigit()
+                        // Both old columns counted the same `got < n` event in AudioMixer.mix.
+                        // Show that one input-ring underrun once; output-ring underruns remain below.
                         Text("\(audio.shortReads)").monospacedDigit()
-                            .foregroundColor(audio.shortReads > 0 ? .orange : .primary)
-                        Text("\(mixAudio.underflows)").monospacedDigit()
-                            .foregroundColor(mixAudio.underflows > 0 ? .red : .primary)
+                            .foregroundColor(audio.shortReads > 0 ? .red : .primary)
+                        let minPCM = audio.minReadAvailable.map { String(format: "%.0f", Double($0) / 48.0) } ?? "—"
+                        let ffQueue = decoderAudio.map {
+                            String(format: "%.0f/%.0f · %llu/%.0f",
+                                   Double($0.queued_frames) / 48.0,
+                                   Double($0.peak_queued_frames) / 48.0,
+                                   $0.late_chunks,
+                                   Double($0.max_lateness_us) / 1000.0)
+                        } ?? "—"
+                        Text("\(minPCM) ms · \(ffQueue)").monospacedDigit()
+                            .help(L("최저 PCM 대기량(ms) · FFmpeg 예약 오디오 큐 현재/최대 대기량(ms) · 기한이 지난 청크 수/최대 지연(ms). 현재값은 순간값이고 나머지는 Reset 이후 누적 또는 최대값입니다."))
                         Text(i.status + (decodeMode == "—" || decodeMode == "Pending" ? "" : " · " + (decodeMode == "VideoToolbox" ? "VT" : "CPU")))
                             .lineLimit(1).foregroundColor(decodeMode == "Software" ? .orange : .secondary)
-                            .frame(maxWidth: 220, alignment: .leading)
+                        .frame(maxWidth: 220, alignment: .leading)
                     }
                     .font(.system(size: 12))
                 }
             }
+            .fixedSize(horizontal: true, vertical: false)
             .padding(4)
         }
     }
@@ -152,6 +207,7 @@ struct StatisticsSheet: View {
             if ins.isEmpty && outs.isEmpty {
                 Text(L("연결된 SRT 입력/출력 없음")).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading)
             } else {
+                ScrollView(.horizontal) {
                 Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 4) {
                     GridRow {
                         head(""); head(L("이름")); head(L("방향/모드")); head(L("상대")); head("RTT"); head(L("전송률")); head(L("대역폭"))
@@ -178,7 +234,9 @@ struct StatisticsSheet: View {
                         .font(.system(size: 12))
                     }
                 }
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(4)
+                }
                 Text(L("지연(latency)은 RTT의 4배 이상을 권장합니다 (노랑 = 부족). 드롭 = 지연 안에 복구 못 하고 버린 패킷 → 화면 깨짐."))
                     .font(.caption).foregroundColor(.secondary)
             }
@@ -207,8 +265,8 @@ struct StatisticsSheet: View {
 
     private func stat(_ label: String, _ value: String, warn: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption).foregroundColor(.secondary)
-            Text(value).font(.system(size: 15, weight: .semibold).monospacedDigit())
+            Text(label).font(.caption).foregroundColor(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+            Text(value).font(.system(size: 15, weight: .semibold).monospacedDigit()).lineLimit(1).minimumScaleFactor(0.8)
                 .foregroundColor(warn ? .orange : .primary)
         }
     }

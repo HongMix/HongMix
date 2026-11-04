@@ -18,15 +18,35 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdatomic.h>
+#ifdef __APPLE__
+#include <CoreVideo/CoreVideo.h>
+#include <dispatch/dispatch.h>
+#endif
 
 typedef struct session session;
 #define FILE_AUDIO_LEAD_US 100000
 typedef struct audio_chunk {
     float *samples;
     int frames;
-    int64_t target_us;
+    int64_t pos_us;            // media position; its deadline comes from the shared media clock
+    int64_t queued_play_us;    // play clock when queued (fallback if the clock never starts)
     struct audio_chunk *next;
 } audio_chunk;
+// Audio more than this behind the shared clock is dropped instead of being played out of sync.
+#define FILE_AUDIO_DROP_LATE_US 80000
+// Compressed video packet (NULL pkt = end-of-stream drain marker).
+typedef struct vpkt {
+    AVPacket *pkt;
+    int64_t dur_us;
+    struct vpkt *next;
+} vpkt;
+// Compressed read-ahead limits (ffplay/mpv-style packet queue). Camera MP4s store video up to
+// ~0.6 s before the matching audio; a decoded-frame cap alone (12 frames ≈ 0.2 s) blocked the
+// demuxer before it reached that audio, so the mixer starved and picture + sound stuttered.
+// Compressed packets are cheap (4K 80 Mb/s ≈ 30 MB for 3 s).
+#define VPQ_MAX_US 3000000
+#define VPQ_MAX_BYTES (256LL * 1024 * 1024)
+#define VPQ_MAX_COUNT 1200
 typedef struct video_chunk {
     AVFrame *frame;
     int64_t pos_us;
@@ -67,27 +87,69 @@ struct mc_input {
     pthread_mutex_t audio_lock;
     pthread_cond_t audio_cond;
     audio_chunk *audio_head, *audio_tail;
+    int64_t audio_queue_frames;       // guarded by audio_lock
+    int64_t audio_queue_peak_frames;  // guarded by audio_lock
+    uint64_t audio_late_chunks;       // guarded by audio_lock
+    int64_t audio_max_lateness_us;    // guarded by audio_lock
+    // "Play clock": monotonic time that stands still while paused. File audio deadlines use it so
+    // queued audio survives a pause and resumes exactly where it stopped (guarded by audio_lock).
+    int64_t pause_offset_us;
+    int64_t paused_since_us;          // 0 = playing
+    // Shared media clock (guarded by audio_lock), in play-clock time. The video presentation
+    // thread sets it when it shows a frame after a start/seek/pause/rate change; audio follows it.
+    // Two independent anchors drifted apart by the keyframe decode time after every seek.
+    int clk_valid;
+    int64_t clk_play_us, clk_pos_us;
+    int clk_rate;
 };
+
+static int64_t play_clock_locked(mc_input *in, int64_t now) {
+    int64_t t = now - in->pause_offset_us;
+    if (in->paused_since_us) t -= now - in->paused_since_us;
+    return t;
+}
+
+/* The clock master (video presentation, or audio pacing for audio-only files) re-anchored:
+   media position pos_us is presented at monotonic time wall_us. */
+static void publish_media_clock(mc_input *in, int64_t pos_us, int64_t wall_us, int rate) {
+    pthread_mutex_lock(&in->audio_lock);
+    in->clk_play_us = play_clock_locked(in, wall_us);
+    in->clk_pos_us = pos_us;
+    in->clk_rate = rate > 0 ? rate : 1000;
+    in->clk_valid = 1;
+    pthread_mutex_unlock(&in->audio_lock);
+}
+
+static void invalidate_media_clock(mc_input *in) {
+    pthread_mutex_lock(&in->audio_lock);
+    in->clk_valid = 0;
+    pthread_mutex_unlock(&in->audio_lock);
+}
 
 static void clear_audio_queue(mc_input *in) {
     pthread_mutex_lock(&in->audio_lock);
     audio_chunk *p = in->audio_head;
     in->audio_head = in->audio_tail = NULL;
+    in->audio_queue_frames = 0;
     pthread_mutex_unlock(&in->audio_lock);
     while (p) { audio_chunk *n = p->next; free(p->samples); free(p); p = n; }
 }
 
-static void queue_file_audio(mc_input *in, const float *samples, int frames, int64_t target_us) {
-    if (frames <= 0 || atomic_load(&in->stop) || atomic_load(&in->paused)) return;
+static void queue_file_audio(mc_input *in, const float *samples, int frames, int64_t pos_us) {
+    if (frames <= 0 || atomic_load(&in->stop)) return;
     audio_chunk *c = (audio_chunk *)calloc(1, sizeof(*c));
     if (!c) return;
     c->samples = (float *)malloc((size_t)frames * 2 * sizeof(float));
     if (!c->samples) { free(c); return; }
     memcpy(c->samples, samples, (size_t)frames * 2 * sizeof(float));
-    c->frames = frames; c->target_us = target_us;
+    c->frames = frames; c->pos_us = pos_us;
     pthread_mutex_lock(&in->audio_lock);
+    c->queued_play_us = play_clock_locked(in, mc_now_us());
     if (in->audio_tail) in->audio_tail->next = c; else in->audio_head = c;
     in->audio_tail = c;
+    in->audio_queue_frames += frames;
+    if (in->audio_queue_frames > in->audio_queue_peak_frames)
+        in->audio_queue_peak_frames = in->audio_queue_frames;
     pthread_cond_signal(&in->audio_cond);
     pthread_mutex_unlock(&in->audio_lock);
 }
@@ -104,12 +166,48 @@ static void *audio_release_thread(void *opaque) {
         while (!in->audio_head && !atomic_load(&in->stop)) pthread_cond_wait(&in->audio_cond, &in->audio_lock);
         audio_chunk *c = in->audio_head;
         if (!c && atomic_load(&in->stop)) { pthread_mutex_unlock(&in->audio_lock); break; }
-        int64_t wait = c ? c->target_us - mc_now_us() : 0;
+        if (in->paused_since_us && !atomic_load(&in->stop)) {
+            // Paused: keep queued audio; the play clock is frozen so its deadlines stay valid.
+            pthread_mutex_unlock(&in->audio_lock);
+            mc_sleep_us(5000);
+            continue;
+        }
+        int64_t released_us = play_clock_locked(in, mc_now_us());
+        int64_t presentation_us = released_us;
+        if (c->pos_us != AV_NOPTS_VALUE) {
+            if (!in->clk_valid) {
+                // Wait for the first presented video frame to start the clock. If video never
+                // presents (broken stream), let audio start the clock itself after 0.5 s.
+                if (released_us - c->queued_play_us < 500000) {
+                    pthread_mutex_unlock(&in->audio_lock);
+                    mc_sleep_us(2000);
+                    continue;
+                }
+                int r = atomic_load(&in->rate_milli);
+                in->clk_play_us = released_us + FILE_AUDIO_LEAD_US;
+                in->clk_pos_us = c->pos_us;
+                in->clk_rate = r > 0 ? r : 1000;
+                in->clk_valid = 1;
+            }
+            presentation_us = in->clk_play_us + (c->pos_us - in->clk_pos_us) * 1000 / in->clk_rate;
+        }
+        int64_t wait = presentation_us - FILE_AUDIO_LEAD_US - released_us;
         if (wait > 0) { pthread_mutex_unlock(&in->audio_lock); mc_sleep_us(wait > 10000 ? 10000 : wait); continue; }
         in->audio_head = c->next;
         if (!in->audio_head) in->audio_tail = NULL;
+        in->audio_queue_frames -= c->frames;
+        if (in->audio_queue_frames < 0) in->audio_queue_frames = 0;
+        // Measure missed media deadlines, not the intentional 100 ms early-release target.
+        int64_t late_us = released_us - presentation_us;
+        if (late_us > 0) {
+            in->audio_late_chunks++;
+            if (late_us > in->audio_max_lateness_us) in->audio_max_lateness_us = late_us;
+        }
         pthread_mutex_unlock(&in->audio_lock);
-        if (!atomic_load(&in->stop) && !atomic_load(&in->paused) && in->cb.on_audio)
+        // Audio decoded before the frame the clock started on (e.g. while cued) is stale: playing
+        // it would put sound behind picture for the rest of the clip.
+        if (late_us <= FILE_AUDIO_DROP_LATE_US &&
+            !atomic_load(&in->stop) && !atomic_load(&in->paused) && in->cb.on_audio)
             in->cb.on_audio(in->cb.user, c->samples, c->frames);
         free(c->samples); free(c);
     }
@@ -161,8 +259,15 @@ struct session {
     int sws_w, sws_h, sws_fmt, sws_cs, sws_range;
     uint8_t *bgra;
     int bgra_size;
+#ifdef __APPLE__
+    // Software-decoded YUV is repacked into NV12 IOSurfaces and converted to RGB on the GPU,
+    // instead of a full-frame CPU sws_scale to BGRA (≈12 ms/frame for 1080p 4:2:2 10-bit).
+    CVPixelBufferPoolRef nv12_pool;
+    int nv12_w, nv12_h, nv12_full;
+#endif
     SwrContext *swr;
     int swr_rate, swr_fmt;
+    int swr_rate_milli;           // playback rate the resampler was built for (rate conform)
     AVChannelLayout swr_layout;
     float *abuf;
     int abuf_frames;
@@ -203,7 +308,46 @@ struct session {
     int video_thread_running;
     int video_stop;
     atomic_uint video_generation;
+    // Files: demux → compressed packet queue → dedicated video decode thread → frame queue.
+    // The demuxer never waits on decoded-frame backpressure, so interleaved audio keeps flowing.
+    pthread_t vdec_thread;
+    int vdec_running;
+    atomic_int vdec_stop;
+    atomic_int vflush;            // seek in progress: decode thread discards its output
+    pthread_mutex_t vdec_lock;    // held by the decode thread while it uses s->vdec
+    pthread_mutex_t vpq_lock;
+    pthread_cond_t vpq_cond;
+    vpkt *vpq_head, *vpq_tail;
+    int vpq_count;
+    int vpq_busy;                 // decode thread is working on a popped packet
+    int64_t vpq_bytes, vpq_dur_us;
+    AVFrame *vframe;              // decode-thread frame (s->frame belongs to the demux thread)
 };
+
+static void vpq_clear_locked(session *s) {
+    vpkt *p = s->vpq_head;
+    s->vpq_head = s->vpq_tail = NULL;
+    s->vpq_count = 0;
+    s->vpq_bytes = s->vpq_dur_us = 0;
+    while (p) { vpkt *n = p->next; av_packet_free(&p->pkt); free(p); p = n; }
+    pthread_cond_broadcast(&s->vpq_cond);
+}
+
+static void session_sync_init(session *s) {
+    pthread_mutex_init(&s->video_lock, NULL);
+    pthread_cond_init(&s->video_cond, NULL);
+    pthread_mutex_init(&s->vdec_lock, NULL);
+    pthread_mutex_init(&s->vpq_lock, NULL);
+    pthread_cond_init(&s->vpq_cond, NULL);
+}
+
+static void session_sync_destroy(session *s) {
+    pthread_mutex_destroy(&s->video_lock);
+    pthread_cond_destroy(&s->video_cond);
+    pthread_mutex_destroy(&s->vdec_lock);
+    pthread_mutex_destroy(&s->vpq_lock);
+    pthread_cond_destroy(&s->vpq_cond);
+}
 
 static void clear_video_queue_locked(session *s) {
     video_chunk *p = s->video_head;
@@ -234,9 +378,13 @@ static void session_close(session *s) {
     }
     if (s->hw_device) av_buffer_unref(&s->hw_device);
     if (s->sws) sws_freeContext(s->sws);
+#ifdef __APPLE__
+    if (s->nv12_pool) { CVPixelBufferPoolRelease(s->nv12_pool); s->nv12_pool = NULL; }
+#endif
     if (s->swr) swr_free(&s->swr);
     av_channel_layout_uninit(&s->swr_layout);
     av_frame_free(&s->frame);
+    av_frame_free(&s->vframe);
     av_frame_free(&s->swframe);
     av_packet_free(&s->pkt);
     for (int i = 0; i < s->pre_count; i++) av_packet_free(&s->pre_pkts[i]);
@@ -244,8 +392,10 @@ static void session_close(session *s) {
     free(s->bgra);
     free(s->abuf);
     clear_video_queue(s);
-    pthread_mutex_destroy(&s->video_lock);
-    pthread_cond_destroy(&s->video_cond);
+    pthread_mutex_lock(&s->vpq_lock);
+    vpq_clear_locked(s);
+    pthread_mutex_unlock(&s->vpq_lock);
+    session_sync_destroy(s);
     memset(s, 0, sizeof(*s));
 }
 
@@ -287,8 +437,7 @@ static AVCodecContext *open_decoder(mc_input *in, session *s, AVStream *st, int 
 
 static int session_open(mc_input *in, session *s, const char *url, int publish) {
     memset(s, 0, sizeof(*s));
-    pthread_mutex_init(&s->video_lock, NULL);
-    pthread_cond_init(&s->video_cond, NULL);
+    session_sync_init(s);
     atomic_init(&s->video_generation, 1);
     s->vidx = s->aidx = -1;
     s->fmt = avformat_alloc_context();
@@ -382,6 +531,7 @@ static int session_open(mc_input *in, session *s, const char *url, int publish) 
         if ((int)i != s->vidx && (int)i != s->aidx) s->fmt->streams[i]->discard = AVDISCARD_ALL;
     }
     s->frame = av_frame_alloc();
+    s->vframe = av_frame_alloc();
     s->swframe = av_frame_alloc();
     s->pkt = av_packet_alloc();
     s->base_wall_us = 0;
@@ -554,6 +704,7 @@ static void pace(mc_input *in, session *s, int64_t pts_us) {
         s->base_pts_us = pts_us;
         s->base_wall_us = mc_now_us();
         s->cur_rate_milli = rate;
+        publish_media_clock(in, pts_us, s->base_wall_us, rate);
     }
     s->last_pts_us = pts_us;
     int64_t target = s->base_wall_us + (pts_us - s->base_pts_us) * 1000 / rate;
@@ -564,6 +715,119 @@ static void pace(mc_input *in, session *s, int64_t pts_us) {
         now = mc_now_us();
     }
 }
+
+#ifdef __APPLE__
+typedef struct {
+    const AVFrame *src;
+    uint8_t *y, *uv;
+    size_t ys, uvs;
+    int w, h, cw, ch;      // luma size, NV12 chroma plane size (in UV pairs / rows)
+    int shift;             // 0 = 8-bit source, 2 = 10-bit source
+    int vsub;              // source chroma is full height (4:2:2) → average 2 rows
+    int planar;            // 1 = separate U/V planes, 0 = already NV12
+} nv12_job;
+
+#define NV12_BANDS 8
+
+static void nv12_band(void *ctx, size_t band) {
+    const nv12_job *j = (const nv12_job *)ctx;
+    const AVFrame *f = j->src;
+    int y0 = (int)(band * (size_t)j->h / NV12_BANDS), y1 = (int)((band + 1) * (size_t)j->h / NV12_BANDS);
+    for (int y = y0; y < y1; y++) {
+        uint8_t *d = j->y + (size_t)y * j->ys;
+        if (j->shift == 0) {
+            memcpy(d, f->data[0] + (size_t)y * f->linesize[0], (size_t)j->w);
+        } else {
+            const uint16_t *sl = (const uint16_t *)(f->data[0] + (size_t)y * f->linesize[0]);
+            for (int x = 0; x < j->w; x++) d[x] = (uint8_t)((sl[x] >> 2) > 255 ? 255 : (sl[x] >> 2));
+        }
+    }
+    int c0 = (int)(band * (size_t)j->ch / NV12_BANDS), c1 = (int)((band + 1) * (size_t)j->ch / NV12_BANDS);
+    for (int cy = c0; cy < c1; cy++) {
+        uint8_t *d = j->uv + (size_t)cy * j->uvs;
+        if (!j->planar) {
+            memcpy(d, f->data[1] + (size_t)cy * f->linesize[1], (size_t)j->cw * 2);
+            continue;
+        }
+        int sy = j->vsub ? cy * 2 : cy;
+        int sy2 = j->vsub ? (sy + 1 < j->h ? sy + 1 : sy) : sy;
+        if (j->shift == 0) {
+            const uint8_t *u = f->data[1] + (size_t)sy * f->linesize[1], *v = f->data[2] + (size_t)sy * f->linesize[2];
+            const uint8_t *u2 = f->data[1] + (size_t)sy2 * f->linesize[1], *v2 = f->data[2] + (size_t)sy2 * f->linesize[2];
+            for (int x = 0; x < j->cw; x++) {
+                d[2 * x] = (uint8_t)((u[x] + u2[x] + 1) >> 1);
+                d[2 * x + 1] = (uint8_t)((v[x] + v2[x] + 1) >> 1);
+            }
+        } else {
+            const uint16_t *u = (const uint16_t *)(f->data[1] + (size_t)sy * f->linesize[1]);
+            const uint16_t *v = (const uint16_t *)(f->data[2] + (size_t)sy * f->linesize[2]);
+            const uint16_t *u2 = (const uint16_t *)(f->data[1] + (size_t)sy2 * f->linesize[1]);
+            const uint16_t *v2 = (const uint16_t *)(f->data[2] + (size_t)sy2 * f->linesize[2]);
+            for (int x = 0; x < j->cw; x++) {
+                int uu = (u[x] + u2[x] + 4) >> 3, vv = (v[x] + v2[x] + 4) >> 3;   // avg of 2, 10 → 8 bit
+                d[2 * x] = (uint8_t)(uu > 255 ? 255 : uu);
+                d[2 * x + 1] = (uint8_t)(vv > 255 ? 255 : vv);
+            }
+        }
+    }
+}
+
+/// Returns 1 when the frame was delivered as an NV12 IOSurface (GPU does YUV→RGB), 0 to fall back.
+static int deliver_nv12(mc_input *in, session *s, AVFrame *f, AVFrame *src, int cs, int range) {
+    if (!in->cb.on_pixelbuffer) return 0;
+    int shift, vsub, planar;
+    switch (src->format) {
+    case AV_PIX_FMT_YUV420P: case AV_PIX_FMT_YUVJ420P: shift = 0; vsub = 0; planar = 1; break;
+    case AV_PIX_FMT_YUV422P: case AV_PIX_FMT_YUVJ422P: shift = 0; vsub = 1; planar = 1; break;
+    case AV_PIX_FMT_YUV420P10LE: shift = 2; vsub = 0; planar = 1; break;
+    case AV_PIX_FMT_YUV422P10LE: shift = 2; vsub = 1; planar = 1; break;
+    case AV_PIX_FMT_NV12: shift = 0; vsub = 0; planar = 0; break;
+    default: return 0;
+    }
+    int w = src->width, h = src->height;
+    if (w < 2 || h < 2) return 0;
+    if (!s->nv12_pool || s->nv12_w != w || s->nv12_h != h || s->nv12_full != range) {
+        if (s->nv12_pool) { CVPixelBufferPoolRelease(s->nv12_pool); s->nv12_pool = NULL; }
+        OSType pf = range ? kCVPixelFormatType_420YpCbCr8BiPlanarFullRange : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;
+        CFNumberRef cfw = CFNumberCreate(NULL, kCFNumberIntType, &w);
+        CFNumberRef cfh = CFNumberCreate(NULL, kCFNumberIntType, &h);
+        CFNumberRef cff = CFNumberCreate(NULL, kCFNumberSInt32Type, &pf);
+        CFDictionaryRef ios = CFDictionaryCreate(NULL, NULL, NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        const void *keys[] = {kCVPixelBufferWidthKey, kCVPixelBufferHeightKey, kCVPixelBufferPixelFormatTypeKey,
+                              kCVPixelBufferIOSurfacePropertiesKey, kCVPixelBufferMetalCompatibilityKey};
+        const void *vals[] = {cfw, cfh, cff, ios, kCFBooleanTrue};
+        CFDictionaryRef attrs = CFDictionaryCreate(NULL, keys, vals, 5, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        CVPixelBufferPoolCreate(NULL, NULL, attrs, &s->nv12_pool);
+        CFRelease(attrs); CFRelease(ios); CFRelease(cff); CFRelease(cfh); CFRelease(cfw);
+        s->nv12_w = w; s->nv12_h = h; s->nv12_full = range;
+        if (!s->nv12_pool) return 0;
+    }
+    CVPixelBufferRef pb = NULL;
+    if (CVPixelBufferPoolCreatePixelBuffer(NULL, s->nv12_pool, &pb) != kCVReturnSuccess || !pb) return 0;
+    CVPixelBufferLockBaseAddress(pb, 0);
+    nv12_job j = {
+        .src = src,
+        .y = (uint8_t *)CVPixelBufferGetBaseAddressOfPlane(pb, 0),
+        .uv = (uint8_t *)CVPixelBufferGetBaseAddressOfPlane(pb, 1),
+        .ys = CVPixelBufferGetBytesPerRowOfPlane(pb, 0),
+        .uvs = CVPixelBufferGetBytesPerRowOfPlane(pb, 1),
+        .w = w, .h = h,
+        .cw = (int)CVPixelBufferGetWidthOfPlane(pb, 1), .ch = (int)CVPixelBufferGetHeightOfPlane(pb, 1),
+        .shift = shift, .vsub = vsub, .planar = planar,
+    };
+    if (!vsub && planar) j.ch = j.ch < (h + 1) / 2 ? j.ch : (h + 1) / 2;
+    dispatch_apply_f(NV12_BANDS, dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), &j, nv12_band);
+    CVPixelBufferUnlockBaseAddress(pb, 0);
+    CVBufferSetAttachment(pb, kCVImageBufferYCbCrMatrixKey,
+                          (cs == AVCOL_SPC_BT709 || cs == AVCOL_SPC_BT2020_NCL || cs == AVCOL_SPC_BT2020_CL)
+                              ? kCVImageBufferYCbCrMatrix_ITU_R_709_2 : kCVImageBufferYCbCrMatrix_ITU_R_601_4,
+                          kCVAttachmentMode_ShouldPropagate);
+    int64_t pts = frame_pts_us(f, s->fmt->streams[s->vidx]->time_base);
+    in->cb.on_pixelbuffer(in->cb.user, (void *)pb, pts);
+    CVPixelBufferRelease(pb);
+    return 1;
+}
+#endif
 
 static void deliver_video(mc_input *in, session *s, AVFrame *f) {
     AVFrame *src = f;
@@ -589,6 +853,9 @@ static void deliver_video(mc_input *in, session *s, AVFrame *f) {
     int range = src->color_range == AVCOL_RANGE_JPEG ? 1 : 0;
     if (src->format == AV_PIX_FMT_YUVJ420P || src->format == AV_PIX_FMT_YUVJ422P ||
         src->format == AV_PIX_FMT_YUVJ444P) range = 1;
+#ifdef __APPLE__
+    if (deliver_nv12(in, s, f, src, cs, range)) return;
+#endif
     if (!s->sws || s->sws_w != w || s->sws_h != h || s->sws_fmt != src->format || s->sws_cs != cs ||
         s->sws_range != range) {
         if (s->sws) sws_freeContext(s->sws);
@@ -634,14 +901,15 @@ static int queue_file_video(mc_input *in, session *s, AVFrame *f, int64_t pos_us
     c->pos_us = pos_us;
     c->generation = atomic_load(&s->video_generation);
     pthread_mutex_lock(&s->video_lock);
-    while (s->video_count >= FILE_VIDEO_QUEUE_MAX && !s->video_stop && !wake_requested(in)) {
+    while (s->video_count >= FILE_VIDEO_QUEUE_MAX && !s->video_stop && !wake_requested(in) &&
+           !atomic_load(&s->vflush) && !atomic_load(&s->vdec_stop)) {
         // Timed polling keeps seek/restart responsive even when the queue is full and no consumer
         // signal is generated for the command itself.
         pthread_mutex_unlock(&s->video_lock);
         mc_sleep_us(2000);
         pthread_mutex_lock(&s->video_lock);
     }
-    if (s->video_stop || wake_requested(in)) {
+    if (s->video_stop || wake_requested(in) || atomic_load(&s->vflush) || atomic_load(&s->vdec_stop)) {
         pthread_mutex_unlock(&s->video_lock);
         av_frame_free(&c->frame); free(c);
         return -1;
@@ -729,7 +997,7 @@ static void *video_release_thread(void *opaque) {
     return NULL;
 }
 
-static int decode_packet(mc_input *in, session *s, AVCodecContext *dec, AVPacket *pkt, int video);
+static int decode_packet(mc_input *in, session *s, AVCodecContext *dec, AVPacket *pkt, int video, AVFrame *fr);
 
 static int start_video_thread(mc_input *in, session *s) {
     if (!in->is_file || s->vidx < 0) return 0;
@@ -761,9 +1029,13 @@ static void stop_video_thread(session *s, int drain) {
     s->video_thread_running = 0;
 }
 
-static void deliver_audio(mc_input *in, session *s, AVFrame *f, int64_t target_us) {
+static void deliver_audio(mc_input *in, session *s, AVFrame *f, int64_t pos_us) {
     if (!in->cb.on_audio) return;
-    if (!s->swr || s->swr_rate != f->sample_rate || s->swr_fmt != f->format ||
+    // Small rate offsets (59.94 ↔ 60 conform, ±1 %) keep audio: the resampler treats the source as
+    // slightly slower/faster (0.1 % = 1.7 cents of pitch — inaudible) so audio stays locked to video.
+    int arate = in->is_file ? atomic_load(&in->rate_milli) : 1000;
+    if (arate < 990 || arate > 1010) arate = 1000;
+    if (!s->swr || s->swr_rate != f->sample_rate || s->swr_fmt != f->format || s->swr_rate_milli != arate ||
         av_channel_layout_compare(&s->swr_layout, &f->ch_layout) != 0) {
         swr_free(&s->swr);
         AVChannelLayout out_layout = AV_CHANNEL_LAYOUT_STEREO;
@@ -774,7 +1046,7 @@ static void deliver_audio(mc_input *in, session *s, AVFrame *f, int64_t target_u
             av_channel_layout_copy(&in_layout, &f->ch_layout);
         }
         if (swr_alloc_set_opts2(&s->swr, &out_layout, AV_SAMPLE_FMT_FLT, MC_AUDIO_RATE, &in_layout,
-                                (enum AVSampleFormat)f->format, f->sample_rate, 0, NULL) < 0 ||
+                                (enum AVSampleFormat)f->format, (int)((int64_t)f->sample_rate * arate / 1000), 0, NULL) < 0 ||
             swr_init(s->swr) < 0) {
             swr_free(&s->swr);
             av_channel_layout_uninit(&in_layout);
@@ -785,6 +1057,7 @@ static void deliver_audio(mc_input *in, session *s, AVFrame *f, int64_t target_u
         av_channel_layout_uninit(&in_layout);
         s->swr_rate = f->sample_rate;
         s->swr_fmt = f->format;
+        s->swr_rate_milli = arate;
     }
     int out_max = swr_get_out_samples(s->swr, f->nb_samples);
     if (out_max <= 0) return;
@@ -797,24 +1070,32 @@ static void deliver_audio(mc_input *in, session *s, AVFrame *f, int64_t target_u
     uint8_t *out[1] = {(uint8_t *)s->abuf};
     int n = swr_convert(s->swr, out, out_max, (const uint8_t **)f->extended_data, f->nb_samples);
     if (n > 0) {
-        if (in->is_file) queue_file_audio(in, s->abuf, n, target_us);
+        if (in->is_file) queue_file_audio(in, s->abuf, n, pos_us);
         else in->cb.on_audio(in->cb.user, s->abuf, n);
     }
 }
 
-static int decode_packet(mc_input *in, session *s, AVCodecContext *dec, AVPacket *pkt, int video) {
+static int decode_packet(mc_input *in, session *s, AVCodecContext *dec, AVPacket *pkt, int video, AVFrame *fr) {
     int ret = avcodec_send_packet(dec, pkt);
     if (ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) return 0;  // skip corrupt packet
     for (;;) {
-        ret = avcodec_receive_frame(dec, s->frame);
+        ret = avcodec_receive_frame(dec, fr);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
         if (ret < 0) break;
         AVRational tb = s->fmt->streams[video ? s->vidx : s->aidx]->time_base;
-        int64_t pts = frame_pts_us(s->frame, tb);
+        int64_t pts = frame_pts_us(fr, tb);
         int64_t pos = pts == AV_NOPTS_VALUE ? AV_NOPTS_VALUE : pts - s->start_us;
         if (pos != AV_NOPTS_VALUE && s->skip_until_us > 0 && pos < s->skip_until_us - 2000) {
-            av_frame_unref(s->frame);  // still before the seek target
+            av_frame_unref(fr);  // still before the seek target
             continue;
+        }
+        if (video && atomic_load(&s->vflush)) {
+            av_frame_unref(fr);   // a seek is replacing this stream position
+            continue;
+        }
+        if (in->is_file && pos != AV_NOPTS_VALUE) {
+            long long mo = atomic_load(&in->mark_out_us);
+            if (mo > 0 && pos >= mo) { av_frame_unref(fr); continue; }   // past Mark Out
         }
         int drives_clock = video || s->vidx < 0;
         // File audio must also be paced by its own PTS. MP4 commonly stores the final audio chunk
@@ -829,41 +1110,182 @@ static int decode_packet(mc_input *in, session *s, AVCodecContext *dec, AVPacket
                 // Keep a still preview while cued, without building a 4K frame queue or starting audio.
                 if (s->need_frame) {
                     if (pos != AV_NOPTS_VALUE) atomic_store(&in->position_us, (long long)pos);
-                    deliver_video(in, s, s->frame);
+                    deliver_video(in, s, fr);
                     s->need_frame = 0;
                 }
             } else if (in->is_file && s->video_thread_running) {
-                queue_file_video(in, s, s->frame, pos);
+                queue_file_video(in, s, fr, pos);
             }
             else {
-                deliver_video(in, s, s->frame);
+                deliver_video(in, s, fr);
                 s->need_frame = 0;
             }
-        } else if (!atomic_load(&in->paused) && atomic_load(&in->rate_milli) == 1000) {
-            int64_t target = mc_now_us();
-            if (in->is_file && pos != AV_NOPTS_VALUE) {
-                int rate = atomic_load(&in->rate_milli); if (rate < 50) rate = 50;
-                if (s->audio_base_pts_us == AV_NOPTS_VALUE || s->audio_cur_rate_milli != rate) {
-                    s->audio_base_pts_us = pos;
-                    s->audio_base_wall_us = target;
-                    s->audio_cur_rate_milli = rate;
-                }
-                target = s->audio_base_wall_us + (pos - s->audio_base_pts_us) * 1000 / rate;
-            }
-            // Feed a short lead so the mixer can absorb ordinary callback jitter without
-            // allowing several hundred milliseconds of file audio to accumulate ahead of video.
-            if (in->is_file) target -= FILE_AUDIO_LEAD_US;
-            deliver_audio(in, s, s->frame, target);
+        } else if ((in->is_file || !atomic_load(&in->paused)) && atomic_load(&in->rate_milli) >= 990 &&
+                   atomic_load(&in->rate_milli) <= 1010) {
+            // Files: decoded audio is held on the play clock while paused (e.g. the packets read to
+            // show the cue frame), so resuming has no audio hole.
+            // The audio thread releases it FILE_AUDIO_LEAD_US ahead of the shared media clock.
+            deliver_audio(in, s, fr, pos);
         }
-        av_frame_unref(s->frame);
+        av_frame_unref(fr);
         if (atomic_load(&in->stop)) return -1;
     }
     return 0;
 }
 
+static void *video_decode_thread(void *opaque) {
+    struct { mc_input *in; session *s; } *ctx = opaque;
+    mc_input *in = ctx->in;
+    session *s = ctx->s;
+    free(ctx);
+#ifdef __APPLE__
+    pthread_set_qos_class_self_np(QOS_CLASS_USER_INITIATED, 0);
+#endif
+    for (;;) {
+        pthread_mutex_lock(&s->vpq_lock);
+        for (;;) {
+            if (atomic_load(&s->vdec_stop)) break;
+            // Paused: decode only the cue/seek still, keep the rest queued for resume.
+            int hold = (atomic_load(&in->paused) && !s->need_frame) || atomic_load(&s->vflush);
+            if (s->vpq_head && !hold) break;
+            struct timespec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            ts.tv_nsec += 10 * 1000000;
+            if (ts.tv_nsec >= 1000000000) { ts.tv_sec++; ts.tv_nsec -= 1000000000; }
+            pthread_cond_timedwait(&s->vpq_cond, &s->vpq_lock, &ts);
+        }
+        pthread_mutex_unlock(&s->vpq_lock);
+        if (atomic_load(&s->vdec_stop)) break;
+        // Lock order: vdec_lock → vpq_lock (do_seek uses the same order).
+        pthread_mutex_lock(&s->vdec_lock);
+        if (atomic_load(&s->vflush)) {
+            // Darwin mutexes are not fair: yield the decoder to a pending seek instead of
+            // re-taking the lock and burning through seconds of stale packets.
+            pthread_mutex_unlock(&s->vdec_lock);
+            mc_sleep_us(1000);
+            continue;
+        }
+        pthread_mutex_lock(&s->vpq_lock);
+        vpkt *p = s->vpq_head;
+        if (p) {
+            s->vpq_head = p->next;
+            if (!s->vpq_head) s->vpq_tail = NULL;
+            s->vpq_count--;
+            s->vpq_bytes -= p->pkt ? p->pkt->size : 0;
+            s->vpq_dur_us -= p->dur_us;
+            s->vpq_busy = 1;
+            pthread_cond_broadcast(&s->vpq_cond);
+        }
+        pthread_mutex_unlock(&s->vpq_lock);
+        if (p) {
+            if (p->pkt) {
+                decode_packet(in, s, s->vdec, p->pkt, 1, s->vframe);
+            } else {
+                decode_packet(in, s, s->vdec, NULL, 1, s->vframe);   // drain at end of file
+                avcodec_flush_buffers(s->vdec);
+            }
+            av_packet_free(&p->pkt);
+            free(p);
+            pthread_mutex_lock(&s->vpq_lock);
+            s->vpq_busy = 0;
+            pthread_cond_broadcast(&s->vpq_cond);
+            pthread_mutex_unlock(&s->vpq_lock);
+        }
+        pthread_mutex_unlock(&s->vdec_lock);
+    }
+    return NULL;
+}
+
+static int start_vdec_thread(mc_input *in, session *s) {
+    if (!in->is_file || s->vidx < 0 || !s->video_thread_running) return 0;
+    struct { mc_input *in; session *s; } *ctx = malloc(sizeof(*ctx));
+    if (!ctx) return -1;
+    ctx->in = in; ctx->s = s;
+    atomic_store(&s->vdec_stop, 0);
+    atomic_store(&s->vflush, 0);
+    if (pthread_create(&s->vdec_thread, NULL, video_decode_thread, ctx) != 0) { free(ctx); return -1; }
+    s->vdec_running = 1;
+    return 0;
+}
+
+static void stop_vdec_thread(session *s) {
+    if (!s->vdec_running) return;
+    atomic_store(&s->vdec_stop, 1);
+    pthread_mutex_lock(&s->vpq_lock);
+    pthread_cond_broadcast(&s->vpq_cond);
+    pthread_mutex_unlock(&s->vpq_lock);
+    pthread_mutex_lock(&s->video_lock);
+    pthread_cond_broadcast(&s->video_cond);
+    pthread_mutex_unlock(&s->video_lock);
+    pthread_join(s->vdec_thread, NULL);
+    s->vdec_running = 0;
+    pthread_mutex_lock(&s->vpq_lock);
+    vpq_clear_locked(s);
+    pthread_mutex_unlock(&s->vpq_lock);
+}
+
+static void vpq_timed_wait(session *s, int ms) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += (long)ms * 1000000;
+    if (ts.tv_nsec >= 1000000000) { ts.tv_sec++; ts.tv_nsec -= 1000000000; }
+    pthread_cond_timedwait(&s->vpq_cond, &s->vpq_lock, &ts);
+}
+
+/* Demux thread: hand a video packet (or NULL = drain marker) to the decode thread.
+   Takes ownership of pkt's data. Returns -1 when a command (seek/stop/restart) interrupted the wait. */
+static int vpq_push(mc_input *in, session *s, AVPacket *pkt) {
+    vpkt *p = (vpkt *)calloc(1, sizeof(*p));
+    if (!p) return -1;
+    if (pkt) {
+        p->pkt = av_packet_alloc();
+        if (!p->pkt) { free(p); return -1; }
+        av_packet_move_ref(p->pkt, pkt);
+        AVRational tb = s->fmt->streams[s->vidx]->time_base;
+        p->dur_us = p->pkt->duration > 0 ? av_rescale_q(p->pkt->duration, tb, (AVRational){1, 1000000})
+                  : (s->nominal_fps_milli > 0 ? 1000000000LL / s->nominal_fps_milli : 16667);
+    }
+    pthread_mutex_lock(&s->vpq_lock);
+    while (s->vpq_count > 0 && !atomic_load(&s->vdec_stop) && !wake_requested(in) &&
+           (s->vpq_dur_us >= VPQ_MAX_US || s->vpq_bytes >= VPQ_MAX_BYTES || s->vpq_count >= VPQ_MAX_COUNT))
+        vpq_timed_wait(s, 10);
+    if (atomic_load(&s->vdec_stop) || wake_requested(in)) {
+        pthread_mutex_unlock(&s->vpq_lock);
+        av_packet_free(&p->pkt);
+        free(p);
+        return -1;
+    }
+    if (s->vpq_tail) s->vpq_tail->next = p; else s->vpq_head = p;
+    s->vpq_tail = p;
+    s->vpq_count++;
+    s->vpq_bytes += p->pkt ? p->pkt->size : 0;
+    s->vpq_dur_us += p->dur_us;
+    pthread_cond_broadcast(&s->vpq_cond);
+    pthread_mutex_unlock(&s->vpq_lock);
+    return 0;
+}
+
+/* Wait until the decode thread consumed every queued packet. 0 if a command interrupted it. */
+static int vpq_wait_drained(mc_input *in, session *s) {
+    pthread_mutex_lock(&s->vpq_lock);
+    while ((s->vpq_count > 0 || s->vpq_busy) && !atomic_load(&s->vdec_stop) && !wake_requested(in))
+        vpq_timed_wait(s, 10);
+    int ok = s->vpq_count == 0 && !s->vpq_busy;
+    pthread_mutex_unlock(&s->vpq_lock);
+    return ok;
+}
+
 static void do_seek(mc_input *in, session *s, int64_t target_us) {
+    // Stop the decode thread's output first, then take the decoder from it.
+    atomic_store(&s->vflush, 1);
+    invalidate_media_clock(in);
     clear_audio_queue(in);
     atomic_fetch_add(&s->video_generation, 1);
+    clear_video_queue(s);
+    if (s->vdec_running) pthread_mutex_lock(&s->vdec_lock);
+    pthread_mutex_lock(&s->vpq_lock);
+    vpq_clear_locked(s);
+    pthread_mutex_unlock(&s->vpq_lock);
     clear_video_queue(s);
     if (target_us < 0) target_us = 0;
     av_seek_frame(s->fmt, -1, target_us + s->start_us, AVSEEK_FLAG_BACKWARD);
@@ -875,6 +1297,8 @@ static void do_seek(mc_input *in, session *s, int64_t target_us) {
     s->need_frame = 1;
     atomic_store(&in->position_us, (long long)target_us);
     atomic_store(&in->finished, 0);
+    atomic_store(&s->vflush, 0);
+    if (s->vdec_running) pthread_mutex_unlock(&s->vdec_lock);
 }
 
 static int64_t start_point(mc_input *in) {
@@ -922,13 +1346,16 @@ static void *input_thread(void *arg) {
             s = *ready;
             // pthread synchronization objects cannot be copied. The preloader never starts the
             // presentation thread, so replace the copied pristine objects with local ones.
-            pthread_mutex_destroy(&ready->video_lock);
-            pthread_cond_destroy(&ready->video_cond);
-            pthread_mutex_init(&s.video_lock, NULL);
-            pthread_cond_init(&s.video_cond, NULL);
+            session_sync_destroy(ready);
+            session_sync_init(&s);
             s.video_head = s.video_tail = NULL;
             s.video_count = s.video_thread_running = s.video_stop = 0;
             atomic_init(&s.video_generation, 1);
+            s.vpq_head = s.vpq_tail = NULL;
+            s.vpq_count = s.vpq_busy = s.vdec_running = 0;
+            s.vpq_bytes = s.vpq_dur_us = 0;
+            atomic_init(&s.vdec_stop, 0);
+            atomic_init(&s.vflush, 0);
             free(ready);
             atomic_store(&in->duration_us, s.fmt && s.fmt->duration > 0 ? (long long)s.fmt->duration : 0);
             atomic_store(&in->nominal_fps_milli, s.nominal_fps_milli);
@@ -956,8 +1383,10 @@ static void *input_thread(void *arg) {
                s.vdec ? s.vdec->codec->name : "",
                (s.vdec && s.adec) ? " + " : "",
                s.adec ? s.adec->codec->name : "");
-        if (start_video_thread(in, &s) != 0) {
+        if (start_video_thread(in, &s) != 0 || start_vdec_thread(in, &s) != 0) {
             status(in, MC_STATE_ERROR, "비디오 출력 스케줄러 시작 실패");
+            stop_vdec_thread(&s);
+            stop_video_thread(&s, 0);
             session_end(in, &s);
             break;
         }
@@ -976,9 +1405,10 @@ static void *input_thread(void *arg) {
                     // Hold the current frame. Re-anchor both media clocks on resume:
                     // otherwise queued file audio has deadlines from before the pause
                     // and is released in a burst when playback starts again.
+                    // Video re-anchors on resume. File audio runs on the play clock, which stood
+                    // still during the pause, so its anchor and queued deadlines remain valid.
                     mc_sleep_us(20000);
                     s.base_pts_us = AV_NOPTS_VALUE;
-                    s.audio_base_pts_us = AV_NOPTS_VALUE;
                     continue;
                 }
                 long long mo = atomic_load(&in->mark_out_us);
@@ -996,12 +1426,46 @@ static void *input_thread(void *arg) {
             } else {
                 ret = av_read_frame(s.fmt, s.pkt);
             }
+            if (ret >= 0 && in->is_file) {
+                // With seconds of read-ahead, Mark Out is reached by the demuxer long before it is
+                // on screen: treat it like end of file (DTS ≤ PTS, so every earlier frame is read).
+                long long mo2 = atomic_load(&in->mark_out_us);
+                int clock_idx = s.vidx >= 0 ? s.vidx : s.aidx;
+                if (mo2 > 0 && s.pkt->stream_index == clock_idx) {
+                    int64_t ts = s.pkt->dts != AV_NOPTS_VALUE ? s.pkt->dts : s.pkt->pts;
+                    if (ts != AV_NOPTS_VALUE &&
+                        av_rescale_q(ts, s.fmt->streams[clock_idx]->time_base, (AVRational){1, 1000000}) - s.start_us >= mo2) {
+                        av_packet_unref(s.pkt);
+                        ret = AVERROR_EOF;
+                    }
+                }
+            }
             if (ret < 0) {
                 if (ret == AVERROR_EOF && in->is_file) {
-                    if (s.vdec) decode_packet(in, &s, s.vdec, NULL, 1);
-                    if (s.adec) decode_packet(in, &s, s.adec, NULL, 0);
-                    if (s.vdec) avcodec_flush_buffers(s.vdec);
+                    if (s.vdec_running) {
+                        // Let the decode thread present the tail, then reuse the normal end logic.
+                        if (vpq_push(in, &s, NULL) < 0 || !vpq_wait_drained(in, &s)) continue;
+                    } else if (s.vdec) {
+                        decode_packet(in, &s, s.vdec, NULL, 1, s.frame);
+                        avcodec_flush_buffers(s.vdec);
+                    }
+                    if (s.adec) decode_packet(in, &s, s.adec, NULL, 0, s.frame);
                     if (s.adec) avcodec_flush_buffers(s.adec);
+                    if (s.video_thread_running && atomic_load(&in->loop) && !has_queued_next(in)) {
+                        // Looping: show the frames already decoded up to the end / Mark Out before
+                        // the seek back discards the presentation queue.
+                        int interrupted = 0;
+                        for (;;) {
+                            pthread_mutex_lock(&s.video_lock);
+                            int left = s.video_count;
+                            pthread_mutex_unlock(&s.video_lock);
+                            if (left == 0) break;
+                            if (wake_requested(in)) { interrupted = 1; break; }
+                            mc_sleep_us(2000);
+                        }
+                        if (interrupted) continue;
+                        mc_sleep_us(s.nominal_fps_milli > 0 ? 1000000000LL / s.nominal_fps_milli : 16667);
+                    }
                     if (!handle_end(in, &s)) break;
                     continue;
                 }
@@ -1012,15 +1476,33 @@ static void *input_thread(void *arg) {
                 reconnect = 1;
                 break;
             }
-            if (s.pkt->stream_index == s.vidx) decode_packet(in, &s, s.vdec, s.pkt, 1);
-            else if (s.pkt->stream_index == s.aidx) decode_packet(in, &s, s.adec, s.pkt, 0);
+            if (s.pkt->stream_index == s.vidx) {
+                if (s.vdec_running) vpq_push(in, &s, s.pkt);   // never blocks on decoded frames
+                else decode_packet(in, &s, s.vdec, s.pkt, 1, s.frame);
+            } else if (s.pkt->stream_index == s.aidx) {
+                decode_packet(in, &s, s.adec, s.pkt, 0, s.frame);
+            }
             av_packet_unref(s.pkt);
         }
         // At a natural file boundary present every queued picture before closing its decoder.
         // Commands and shutdown discard stale queued frames instead.
         int natural_end = !atomic_load(&in->stop) && !atomic_load(&in->restart) &&
                           atomic_load(&in->seek_req_us) < 0;
+        stop_vdec_thread(&s);
         stop_video_thread(&s, natural_end);
+        if (natural_end && in->is_file) {
+            // Release the tail of this file's audio on its own clock before the next file
+            // (playlist) restarts positions at zero.
+            int64_t until = mc_now_us() + 1000000;
+            for (;;) {
+                pthread_mutex_lock(&in->audio_lock);
+                int empty = in->audio_head == NULL;
+                pthread_mutex_unlock(&in->audio_lock);
+                if (empty || wake_requested(in) || mc_now_us() > until) break;
+                mc_sleep_us(2000);
+            }
+        }
+        if (in->is_file) { clear_audio_queue(in); invalidate_media_clock(in); }
         session_end(in, &s);
         char *next = NULL;
         pthread_mutex_lock(&in->next_lock);
@@ -1089,8 +1571,16 @@ mc_input *mc_input_open(const mc_input_config *cfg, mc_callbacks cb) {
 
 void mc_input_set_paused(mc_input *in, int paused) {
     if (!in) return;
+    pthread_mutex_lock(&in->audio_lock);
+    int64_t now = mc_now_us();
+    if (paused && !in->paused_since_us) in->paused_since_us = now;
+    else if (!paused && in->paused_since_us) {
+        in->pause_offset_us += now - in->paused_since_us;
+        in->paused_since_us = 0;
+    }
     atomic_store(&in->paused, paused ? 1 : 0);
-    if (paused && in->is_file) clear_audio_queue(in);
+    pthread_cond_signal(&in->audio_cond);
+    pthread_mutex_unlock(&in->audio_lock);
 }
 
 void mc_input_set_loop(mc_input *in, int loop) {
@@ -1196,6 +1686,28 @@ int mc_input_srt_stats(mc_input *in, mc_srt_stats *out) {
 
 int mc_input_video_decode_mode(mc_input *in) {
     return in ? atomic_load(&in->video_decode_mode) : 0;
+}
+
+int mc_input_get_audio_queue_stats(mc_input *in, mc_input_audio_queue_stats *out) {
+    if (!out) return 0;
+    memset(out, 0, sizeof(*out));
+    if (!in || !in->is_file) return 0;
+    pthread_mutex_lock(&in->audio_lock);
+    out->queued_frames = in->audio_queue_frames;
+    out->peak_queued_frames = in->audio_queue_peak_frames;
+    out->late_chunks = in->audio_late_chunks;
+    out->max_lateness_us = in->audio_max_lateness_us;
+    pthread_mutex_unlock(&in->audio_lock);
+    return 1;
+}
+
+void mc_input_reset_audio_queue_stats(mc_input *in) {
+    if (!in) return;
+    pthread_mutex_lock(&in->audio_lock);
+    in->audio_queue_peak_frames = in->audio_queue_frames;
+    in->audio_late_chunks = 0;
+    in->audio_max_lateness_us = 0;
+    pthread_mutex_unlock(&in->audio_lock);
 }
 
 const char *mc_core_version(void) {

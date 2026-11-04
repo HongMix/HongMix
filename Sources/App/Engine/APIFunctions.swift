@@ -986,6 +986,12 @@ enum APIProcessor {
                         tf(i.signalLost), Double(ad.available) / 48.0, ad.written, ad.read, ad.shortReads,
                         mixAudio.primes, mixAudio.underflows, st.latestPTSUs, st.lastPTSStepMs,
                         st.repeatedProgramTicks, st.maxProgramFrameAgeMs)
+            if let fileInput = i as? FFmpegInput, let q = fileInput.audioQueueDiagnostics() {
+                x += String(format: "<inputAudioQueueStats number=\"%d\" currentMs=\"%.1f\" peakMs=\"%.1f\" lateChunks=\"%llu\" maxLateMs=\"%.1f\" pcmMinBeforeReadMs=\"%@\" />",
+                            e.number(of: i), Double(q.queued_frames) / 48.0, Double(q.peak_queued_frames) / 48.0,
+                            q.late_chunks, Double(q.max_lateness_us) / 1000.0,
+                            ad.minReadAvailable.map { String(format: "%.1f", Double($0) / 48.0) } ?? "")
+            }
         }
         for a in e.audioMixer.outputRingStats {
             x += String(format: "<audioOutputStats name=\"%@\" underflowCallbacks=\"%llu\" underflowFrames=\"%llu\" primingSilenceFrames=\"%llu\" queuedMs=\"%.1f\" />",

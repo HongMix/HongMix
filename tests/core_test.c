@@ -89,6 +89,25 @@ int main(int argc, char **argv) {
     mc_output_get_stats(rec, &st);
     printf("record: encoder=%s frames=%lld dropped=%lld bytes=%lld\n", st.encoder, (long long)st.frames_encoded,
            (long long)st.frames_dropped, (long long)st.bytes_written);
+    mc_input_audio_queue_stats aq;
+    if (!mc_input_get_audio_queue_stats(in, &aq)) {
+        fprintf(stderr, "file audio queue diagnostics unavailable\n");
+        return 3;
+    }
+    printf("file audio queue: current=%.1f ms peak=%.1f ms late_chunks=%llu max_late=%.1f ms\n",
+           (double)aq.queued_frames / 48.0, (double)aq.peak_queued_frames / 48.0,
+           (unsigned long long)aq.late_chunks, (double)aq.max_lateness_us / 1000.0);
+    if (aq.queued_frames < 0 || aq.peak_queued_frames < aq.queued_frames) {
+        fprintf(stderr, "file audio queue diagnostics inconsistent\n");
+        return 4;
+    }
+    mc_input_reset_audio_queue_stats(in);
+    mc_input_audio_queue_stats reset_aq;
+    if (!mc_input_get_audio_queue_stats(in, &reset_aq) || reset_aq.late_chunks != 0 ||
+        reset_aq.max_lateness_us != 0 || reset_aq.peak_queued_frames < reset_aq.queued_frames) {
+        fprintf(stderr, "file audio queue diagnostics reset failed\n");
+        return 5;
+    }
     mc_output_close(rec);
     mc_input_close(in);
     int trackState = atomic_load(&c.audio_track);

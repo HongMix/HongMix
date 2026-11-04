@@ -23,7 +23,7 @@ struct NumberField: View {
                     .multilineTextAlignment(.trailing)
                     .frame(width: 90)
                 if !unit.isEmpty {
-                    Text(unit).foregroundColor(.secondary)
+                    Text(unit).foregroundColor(.secondary).lineLimit(1).fixedSize()
                 }
             }
         }

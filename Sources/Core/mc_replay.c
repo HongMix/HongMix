@@ -10,6 +10,11 @@
 #include <libavcodec/avcodec.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
+#include <libavutil/hwcontext.h>
+#ifdef __APPLE__
+#include <CoreVideo/CoreVideo.h>
+#endif
+#include <libavutil/opt.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -307,17 +312,41 @@ struct mc_replay_dec {
     AVFrame *frm;
     struct SwsContext *sws;
     int sw, sh, sfmt, dw, dh;
+    AVBufferRef *hw;            // VideoToolbox device (hardware decode)
+#ifdef __APPLE__
+    CVPixelBufferPoolRef pool;  // BGRA output when a frame comes back in software
+    int pw, ph;
+#endif
 };
 
-mc_replay_dec *mc_replay_dec_open(void) {
-    const AVCodec *codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+mc_replay_dec *mc_replay_dec_open(void) { return mc_replay_dec_open_codec(0); }
+
+static enum AVPixelFormat replay_hw_format(AVCodecContext *c, const enum AVPixelFormat *fmts) {
+    (void)c;
+    for (const enum AVPixelFormat *p = fmts; *p != AV_PIX_FMT_NONE; p++)
+        if (*p == AV_PIX_FMT_VIDEOTOOLBOX) return *p;
+    for (const enum AVPixelFormat *p = fmts; *p != AV_PIX_FMT_NONE; p++) {
+        const AVPixFmtDescriptor *dsc = av_pix_fmt_desc_get(*p);
+        if (dsc && !(dsc->flags & AV_PIX_FMT_FLAG_HWACCEL)) return *p;
+    }
+    return fmts[0];
+}
+
+static mc_replay_dec *dec_open(int codec_kind, int hardware) {
+    enum AVCodecID id = codec_kind == 1 ? AV_CODEC_ID_PRORES : codec_kind == 2 ? AV_CODEC_ID_HEVC : AV_CODEC_ID_H264;
+    const AVCodec *codec = avcodec_find_decoder(id);
     if (!codec) return NULL;
     mc_replay_dec *d = (mc_replay_dec *)calloc(1, sizeof(*d));
     d->c = avcodec_alloc_context3(codec);
     d->c->flags |= AV_CODEC_FLAG_LOW_DELAY;     // intra-only: one packet in, one picture out
-    d->c->thread_count = 2;
+    d->c->thread_count = codec_kind == 0 ? 2 : 0;   // ProRes/HEVC slices scale across all performance cores
     d->c->thread_type = FF_THREAD_SLICE;
+    if (hardware && av_hwdevice_ctx_create(&d->hw, AV_HWDEVICE_TYPE_VIDEOTOOLBOX, NULL, NULL, 0) == 0) {
+        d->c->hw_device_ctx = av_buffer_ref(d->hw);
+        d->c->get_format = replay_hw_format;
+    }
     if (avcodec_open2(d->c, codec, NULL) < 0) {
+        if (d->hw) av_buffer_unref(&d->hw);
         avcodec_free_context(&d->c);
         free(d);
         return NULL;
@@ -327,8 +356,15 @@ mc_replay_dec *mc_replay_dec_open(void) {
     return d;
 }
 
-int mc_replay_dec_decode(mc_replay_dec *d, const uint8_t *data, int size, uint8_t *bgra, int stride, int w, int h) {
-    if (!d || !data || size <= 0 || !bgra) return -1;
+/* codec: 0 = H.264 intra, 1 = ProRes, 2 = HEVC intra. Software decode into BGRA (mc_replay_dec_decode). */
+mc_replay_dec *mc_replay_dec_open_codec(int codec_kind) { return dec_open(codec_kind, 0); }
+
+/* Same, decoding on the VideoToolbox engine (Apple Silicon: ~0.3 ms per 1080p frame vs 2–4 ms in
+   software) for mc_replay_dec_decode_pb. Falls back to software per frame if the hardware declines. */
+mc_replay_dec *mc_replay_dec_open_hw(int codec_kind) { return dec_open(codec_kind, 1); }
+
+/* One packet in, one picture out (in d->frm). */
+static int dec_frame(mc_replay_dec *d, const uint8_t *data, int size) {
     av_packet_unref(d->pkt);
     d->pkt->data = (uint8_t *)data;
     d->pkt->size = size;
@@ -343,31 +379,107 @@ int mc_replay_dec_decode(mc_replay_dec *d, const uint8_t *data, int size, uint8_
         ret = avcodec_receive_frame(d->c, d->frm);
         avcodec_flush_buffers(d->c);
     }
-    if (ret < 0) return -1;
-    AVFrame *f = d->frm;
+    return ret < 0 ? -1 : 0;
+}
+
+static int to_bgra(mc_replay_dec *d, AVFrame *f, uint8_t *bgra, int stride, int w, int h) {
     if (!d->sws || d->sw != f->width || d->sh != f->height || d->sfmt != f->format || d->dw != w || d->dh != h) {
         if (d->sws) sws_freeContext(d->sws);
-        d->sws = sws_getContext(f->width, f->height, (enum AVPixelFormat)f->format, w, h, AV_PIX_FMT_BGRA,
-                                SWS_BILINEAR, NULL, NULL, NULL);
+        d->sws = sws_alloc_context();
+        if (d->sws) {
+            av_opt_set_int(d->sws, "srcw", f->width, 0);
+            av_opt_set_int(d->sws, "srch", f->height, 0);
+            av_opt_set_int(d->sws, "src_format", f->format, 0);
+            av_opt_set_int(d->sws, "dstw", w, 0);
+            av_opt_set_int(d->sws, "dsth", h, 0);
+            av_opt_set_int(d->sws, "dst_format", AV_PIX_FMT_BGRA, 0);
+            av_opt_set_int(d->sws, "sws_flags", SWS_BILINEAR, 0);
+            av_opt_set_int(d->sws, "threads", 0, 0);
+            if (sws_init_context(d->sws, NULL, NULL) < 0) { sws_freeContext(d->sws); d->sws = NULL; }
+        }
         if (d->sws) {
             const int *c709 = sws_getCoefficients(SWS_CS_ITU709);
             sws_setColorspaceDetails(d->sws, c709, f->color_range == AVCOL_RANGE_JPEG, c709, 1, 0, 1 << 16, 1 << 16);
         }
         d->sw = f->width; d->sh = f->height; d->sfmt = f->format; d->dw = w; d->dh = h;
     }
-    if (!d->sws) { av_frame_unref(f); return -1; }
+    if (!d->sws) return -1;
     uint8_t *dst[4] = {bgra, NULL, NULL, NULL};
     int dstride[4] = {stride, 0, 0, 0};
     sws_scale(d->sws, (const uint8_t *const *)f->data, f->linesize, 0, f->height, dst, dstride);
-    av_frame_unref(f);
     return 0;
+}
+
+int mc_replay_dec_decode_pb(mc_replay_dec *d, const uint8_t *data, int size, int w, int h, void **out_pb) {
+#ifdef __APPLE__
+    if (!d || !data || size <= 0 || !out_pb) return -1;
+    *out_pb = NULL;
+    if (dec_frame(d, data, size) < 0) return -1;
+    AVFrame *f = d->frm;
+    if (f->format == AV_PIX_FMT_VIDEOTOOLBOX && f->data[3]) {
+        CVPixelBufferRef pb = (CVPixelBufferRef)f->data[3];
+        CVPixelBufferRetain(pb);
+        av_frame_unref(f);
+        *out_pb = pb;
+        return 0;
+    }
+    if (!d->pool || d->pw != w || d->ph != h) {
+        if (d->pool) { CVPixelBufferPoolRelease(d->pool); d->pool = NULL; }
+        int fmt = kCVPixelFormatType_32BGRA;
+        CFNumberRef cw = CFNumberCreate(NULL, kCFNumberIntType, &w), ch = CFNumberCreate(NULL, kCFNumberIntType, &h);
+        CFNumberRef cf = CFNumberCreate(NULL, kCFNumberIntType, &fmt);
+        CFDictionaryRef ios = CFDictionaryCreate(NULL, NULL, NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        const void *k[] = {kCVPixelBufferWidthKey, kCVPixelBufferHeightKey, kCVPixelBufferPixelFormatTypeKey,
+                           kCVPixelBufferIOSurfacePropertiesKey, kCVPixelBufferMetalCompatibilityKey};
+        const void *v[] = {cw, ch, cf, ios, kCFBooleanTrue};
+        CFDictionaryRef attrs = CFDictionaryCreate(NULL, k, v, 5, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        CVPixelBufferPoolCreate(NULL, NULL, attrs, &d->pool);
+        CFRelease(attrs); CFRelease(ios); CFRelease(cf); CFRelease(ch); CFRelease(cw);
+        d->pw = w; d->ph = h;
+        if (!d->pool) { av_frame_unref(f); return -1; }
+    }
+    CVPixelBufferRef pb = NULL;
+    if (CVPixelBufferPoolCreatePixelBuffer(NULL, d->pool, &pb) != kCVReturnSuccess || !pb) { av_frame_unref(f); return -1; }
+    CVPixelBufferLockBaseAddress(pb, 0);
+    int r = to_bgra(d, f, (uint8_t *)CVPixelBufferGetBaseAddress(pb), (int)CVPixelBufferGetBytesPerRow(pb), w, h);
+    CVPixelBufferUnlockBaseAddress(pb, 0);
+    av_frame_unref(f);
+    if (r < 0) { CVPixelBufferRelease(pb); return -1; }
+    *out_pb = pb;
+    return 0;
+#else
+    (void)d; (void)data; (void)size; (void)w; (void)h; (void)out_pb;
+    return -1;
+#endif
+}
+
+int mc_replay_dec_decode(mc_replay_dec *d, const uint8_t *data, int size, uint8_t *bgra, int stride, int w, int h) {
+    if (!d || !data || size <= 0 || !bgra) return -1;
+    if (dec_frame(d, data, size) < 0) return -1;
+    AVFrame *f = d->frm;
+    if (f->hw_frames_ctx || f->format == AV_PIX_FMT_VIDEOTOOLBOX) {     // hardware decoder used for BGRA output
+        AVFrame *sw = av_frame_alloc();
+        if (!sw || av_hwframe_transfer_data(sw, f, 0) < 0) { av_frame_free(&sw); av_frame_unref(f); return -1; }
+        sw->color_range = f->color_range;
+        av_frame_unref(f);
+        int r = to_bgra(d, sw, bgra, stride, w, h);
+        av_frame_free(&sw);
+        return r;
+    }
+    int r = to_bgra(d, f, bgra, stride, w, h);
+    av_frame_unref(f);
+    return r;
 }
 
 void mc_replay_dec_close(mc_replay_dec *d) {
     if (!d) return;
     if (d->sws) sws_freeContext(d->sws);
+#ifdef __APPLE__
+    if (d->pool) CVPixelBufferPoolRelease(d->pool);
+#endif
     av_frame_free(&d->frm);
     av_packet_free(&d->pkt);
     avcodec_free_context(&d->c);
+    if (d->hw) av_buffer_unref(&d->hw);
     free(d);
 }

@@ -18,8 +18,8 @@ struct RundownView: View {
                     .onMove { rundown.items.move(fromOffsets: $0, toOffset: $1) }
                 }
                 HStack {
-                    Button { addItem(capture: false) } label: { Label(L("항목 추가"), systemImage: "plus") }
-                    Button { addItem(capture: true) } label: { Label(L("지금 화면으로 추가"), systemImage: "camera.viewfinder") }
+                    Button { addItem(capture: false) } label: { Label(L("항목 추가"), systemImage: "plus").lineLimit(1) }
+                    Button { addItem(capture: true) } label: { Label(L("지금 화면으로 추가"), systemImage: "camera.viewfinder").lineLimit(1) }
                         .help(L("현재 Output 입력과 켜진 오버레이를 그대로 재현하는 항목을 만듭니다"))
                     Spacer()
                     Button(role: .destructive) {
@@ -32,9 +32,9 @@ struct RundownView: View {
             .frame(minWidth: 460)
 
             editor
-                .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 860, minHeight: 520)
+        .frame(minWidth: 920, minHeight: 520)
     }
 
     // MARK: header — big NEXT + timers
@@ -94,10 +94,11 @@ struct RundownView: View {
             Text("\(k + 1)").font(.system(size: 12, weight: .bold).monospacedDigit()).frame(width: 24)
             VStack(alignment: .leading, spacing: 1) {
                 Text(it.title.isEmpty ? L("(제목 없음)") : it.title).font(.system(size: 13, weight: isCur ? .bold : .regular))
+                    .lineLimit(1).truncationMode(.tail)
                 Text(it.actions.map { $0.function }.joined(separator: " · "))
                     .font(.caption).foregroundColor(.secondary).lineLimit(1)
             }
-            Spacer()
+            Spacer(minLength: 4)
             if it.autoNext { Image(systemName: "forward.fill").font(.caption).foregroundColor(.secondary) }
             Text(RundownView.clock(Double(rundown.plannedStart(k)))).font(.caption.monospacedDigit()).foregroundColor(.secondary)
             Text(it.durationSec > 0 ? RundownView.clock(Double(it.durationSec)) : "—")
@@ -115,17 +116,22 @@ struct RundownView: View {
         if let id = selected, let i = rundown.items.firstIndex(where: { $0.id == id }) {
             Form {
                 TextField(L("제목"), text: $rundown.items[i].title)
-                LabeledContent(L("길이 (초, 0 = 정하지 않음)")) {
+                LabeledContent {
                     TextField("", value: $rundown.items[i].durationSec, format: .number.grouping(.never))
                         .frame(width: 80).textFieldStyle(.roundedBorder)
+                } label: {
+                    Text(L("길이 (초, 0 = 정하지 않음)")).fixedSize(horizontal: false, vertical: true)
                 }
-                Toggle(L("시간이 되면 자동으로 다음 항목"), isOn: $rundown.items[i].autoNext)
+                Toggle(isOn: $rundown.items[i].autoNext) {
+                    Text(L("시간이 되면 자동으로 다음 항목")).fixedSize(horizontal: false, vertical: true)
+                }
                 TextField(L("메모 (진행 큐, 멘트 등)"), text: $rundown.items[i].notes, axis: .vertical)
                     .lineLimit(2...5)
                 Section(L("실행할 기능 (위에서부터 차례로)")) {
                     ForEach($rundown.items[i].actions) { $a in
                         HStack {
-                            TextField(L("기능"), text: $a.function).frame(width: 150)
+                            TextField(L("기능"), text: $a.function)
+                                .frame(minWidth: 80, idealWidth: 150, maxWidth: 170)
                             Picker("", selection: $a.input) {
                                 Text(L("입력 없음")).tag("")
                                 ForEach(engine.inputs) { inp in Text("\(engine.number(of: inp)). \(inp.name)").tag(inp.id.uuidString) }
@@ -133,8 +139,9 @@ struct RundownView: View {
                                     Text(a.input).tag(a.input)
                                 }
                             }
-                            .labelsHidden().frame(width: 150)
-                            TextField(L("값"), text: $a.value).frame(width: 80)
+                            .labelsHidden().frame(minWidth: 90, idealWidth: 150, maxWidth: 190)
+                            TextField(L("값"), text: $a.value)
+                                .frame(minWidth: 50, idealWidth: 80, maxWidth: 120)
                             Button(role: .destructive) { rundown.items[i].actions.removeAll { $0.id == a.id } } label: {
                                 Image(systemName: "minus.circle")
                             }.buttonStyle(.borderless)
@@ -148,9 +155,12 @@ struct RundownView: View {
                         }
                         .fixedSize()
                         Button(L("지금 화면을 기능으로")) { rundown.items[i].actions = Rundown.captureActions(engine) }
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
                     }
                     Text(L("예: Fade(Input=카메라1) → OverlayInput1In(Input=이름 자막) → SetText … 모든 vMix 함수 사용 가능"))
                         .font(.caption).foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .formStyle(.grouped)
@@ -160,6 +170,7 @@ struct RundownView: View {
                 Text(L("런다운 (큐시트)")).font(.headline)
                 Text(L("방송 순서를 한 줄씩 만들어 두고 NEXT로 진행합니다. 항목마다 컷·자막·오디오·녹화 같은 기능을 여러 개 넣을 수 있고, 계획한 길이와 실제 진행 시간을 비교해 보여줍니다."))
                     .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Divider()
                 Text(L("실행 기록")).font(.subheadline)
                 ScrollView {

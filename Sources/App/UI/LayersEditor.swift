@@ -35,7 +35,9 @@ struct LayersEditor: View {
                 }
                 Text(L("템플릿을 고르면 간격·테두리가 적용됩니다. 칸을 드래그해 옮기고 노란 모서리로 크기를 바꿉니다."))
                     .font(.caption).foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(width: 400)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(Lf("레이어 (%@/10)", "\(input.layers.count)")).font(.subheadline.bold())
@@ -49,6 +51,7 @@ struct LayersEditor: View {
                     }
                 }
             }
+            .frame(minWidth: 0, maxWidth: .infinity)
         }
         .padding(.vertical, 6)
     }
@@ -66,12 +69,12 @@ struct LayersEditor: View {
                 ForEach(candidates) { i in Text("\(engine.number(of: i)). \(i.name)").tag(UUID?.some(i.id)) }
             }
             .labelsHidden()
-            .frame(width: 170)
+            .frame(minWidth: 90, idealWidth: 170, maxWidth: 170)
             Picker("", selection: $input.layers[k].fill) {
                 Text(L("채우기")).tag(true)
                 Text(L("맞추기")).tag(false)
             }
-            .labelsHidden().frame(width: 76)
+            .labelsHidden().frame(minWidth: 64, idealWidth: 76, maxWidth: 76)
             .help(L("채우기: 칸을 꽉 채우고 넘치는 부분은 잘라냄 · 맞추기: 전체가 보이게 (여백 생김)"))
             Button { selected = l.id } label: { Image(systemName: "scope") }.buttonStyle(.borderless)
             Button {
