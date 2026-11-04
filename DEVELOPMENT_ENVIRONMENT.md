@@ -23,6 +23,7 @@ This workspace is prepared for source analysis, local development, and release b
 | Chromium Embedded Framework | `ThirdParty/cef/` | Browser input engine and compiled CEF wrapper |
 | Built application | `build/cli/HongMix.app` | Local release build produced from this source |
 | Official installers | `installers/` | GitHub release DMG and PKG for version 1.3.39 |
+| DeckLink-enabled local installers | `installers/HongMix-1.3.39-DeckLink-enabled-local.*` | Locally built ad-hoc-signed DMG/PKG with DeckLink SDK 16.0 support compiled in |
 | NDI SDK installer backup | `installers/vendor/Install_NDI_SDK_v6_Apple.pkg` | Official download retained locally; do not install without reviewing and accepting the NDI license |
 
 Generated and third-party binary folders are excluded from Git by `.gitignore`. They remain locally available but are not intended to be committed to the public repository.
@@ -68,6 +69,13 @@ Local archive SHA-256:
 4. Install Blackmagic Desktop Video drivers on the Mac used with the hardware.
 
 The DeckLink-enabled HongMix release build now succeeds. Binary inspection confirms that `mc_decklink_available()` calls `CreateDeckLinkIteratorInstance()` rather than returning the no-SDK stub value. A standalone runtime probe also succeeded and reported `devices=0`, which is expected while no DeckLink or UltraStudio hardware is connected.
+
+The DeckLink-enabled local installer checksums are:
+
+- DMG: `6811a6c53799ad5889a7de81523b26ddc94a9b6b455b7c72c1b3ba308bc62376`
+- PKG: `ecc52b02844877b070d748d308f7de870e7757abae3639b95329be2fc5547c9c`
+
+The DMG checksum and the app's deep ad-hoc signature were verified. These local installers are not Developer ID signed or notarized.
 
 ## How HongMix runs
 
