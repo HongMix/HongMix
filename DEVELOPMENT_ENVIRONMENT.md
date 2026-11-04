@@ -106,6 +106,6 @@ The local build is ad-hoc signed. Public distribution still requires an Apple De
 - XcodeGen project generation: passed; produced `HongMix.xcodeproj` (generated/ignored).
 - Core file recording/playback path: passed with software H.264 fallback, 89 recorded frames, 0 reported drops, H.264/AAC output detected.
 - VideoToolbox test session: unavailable in the command test environment (`-12903`), so hardware encoding still requires an interactive app test.
-- SRT loopback test: the listener socket could not be opened in the command test environment, so SRT round-trip remains unverified here.
+- SRT loopback initially failed in the restricted command sandbox because the listener socket could not open. The same HongMix core test passed with normal local-network permissions: VideoToolbox H.264 output, 149 transmitted frames, 133 received video frames at 640×360, 231,424 received audio frames, and H.264/AAC stream detection.
 - DeckLink compile/runtime: not tested because the proprietary SDK headers are not present.
 
