@@ -7,3 +7,4 @@ ThirdParty/DeckLinkSDK/include/*
 ThirdParty/cef/
 *.dmg
 *.pkg
+installers/vendor/Blackmagic_DeckLink_SDK_*.zip

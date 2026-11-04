@@ -139,7 +139,9 @@ The application has DeckLink input/output source code and conditional build supp
 
 This Mac has Blackmagic Desktop Video 16.2 and `/Library/Frameworks/DeckLinkAPI.framework` installed. No connected Blackmagic/DeckLink/UltraStudio device was visible in the Thunderbolt, PCI, or USB inventory during this review. The local source tree does not contain `DeckLinkAPI.h` or `DeckLinkAPIDispatch.cpp`, so merely having the runtime driver installed cannot enable the compile-time DeckLink implementation.
 
-DeckLink capture is therefore an intended, implemented capability that still needs to be enabled and validated. Completion requires:
+DeckLink capture was an intended, implemented capability that still needed to be enabled and validated. On 2026-11-05 the official Blackmagic DeckLink SDK 16.0 archive was obtained, its Mac headers were installed locally, and the DeckLink-enabled HongMix release build succeeded. Binary inspection confirmed a real call to `CreateDeckLinkIteratorInstance()` instead of the no-SDK stub. A standalone runtime probe successfully loaded the Blackmagic runtime and reported zero connected devices.
+
+Remaining completion work requires:
 
 1. Owner-supplied Blackmagic Desktop Video SDK headers
 2. Desktop Video driver installation

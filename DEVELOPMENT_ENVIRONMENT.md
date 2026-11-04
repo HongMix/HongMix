@@ -56,14 +56,18 @@ macOS `pkgutil --check-signature` reports `invalid signature` for this downloade
 
 ### Blackmagic DeckLink SDK
 
-The DeckLink SDK is currently **not present**. Blackmagic does not allow the SDK to be redistributed in this repository.
+The Blackmagic DeckLink SDK 16.0 is present locally. The original archive is stored at `installers/vendor/Blackmagic_DeckLink_SDK_16.0.zip`, and its Mac headers are extracted to `ThirdParty/DeckLinkSDK/include/`. Both locations are excluded from Git because Blackmagic does not allow the SDK to be redistributed in this repository.
+
+Local archive SHA-256:
+
+`8ca1a5f4ed56a59f1a9731860c901690488705879a3d865204fb7f132bf00cf9`
 
 1. Download the Desktop Video SDK from Blackmagic Design.
 2. Copy every file from its `Mac/include/` directory into `ThirdParty/DeckLinkSDK/include/`.
 3. Confirm that `DeckLinkAPI.h` and `DeckLinkAPIDispatch.cpp` exist.
 4. Install Blackmagic Desktop Video drivers on the Mac used with the hardware.
 
-HongMix builds without these headers, but DeckLink input/output is omitted from that build.
+The DeckLink-enabled HongMix release build now succeeds. Binary inspection confirms that `mc_decklink_available()` calls `CreateDeckLinkIteratorInstance()` rather than returning the no-SDK stub value. A standalone runtime probe also succeeded and reported `devices=0`, which is expected while no DeckLink or UltraStudio hardware is connected.
 
 ## How HongMix runs
 
@@ -107,5 +111,5 @@ The local build is ad-hoc signed. Public distribution still requires an Apple De
 - Core file recording/playback path: passed with software H.264 fallback, 89 recorded frames, 0 reported drops, H.264/AAC output detected.
 - VideoToolbox test session: unavailable in the command test environment (`-12903`), so hardware encoding still requires an interactive app test.
 - SRT loopback initially failed in the restricted command sandbox because the listener socket could not open. The same HongMix core test passed with normal local-network permissions: VideoToolbox H.264 output, 149 transmitted frames, 133 received video frames at 640×360, 231,424 received audio frames, and H.264/AAC stream detection.
-- DeckLink compile/runtime: not tested because the proprietary SDK headers are not present.
+- DeckLink SDK 16.0 compile and runtime loading: passed. Device enumeration currently reports zero connected devices; physical capture/output remains untested until DeckLink or UltraStudio hardware is connected.
 
