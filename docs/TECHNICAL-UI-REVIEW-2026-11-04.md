@@ -135,7 +135,11 @@ Only after P0/P1:
 
 ## DeckLink conclusion
 
-The application has DeckLink input/output source code and conditional build support. That means DeckLink capture is an intended capability, but source presence alone is not proof that every card, format, key/fill mode, and driver version works. Completion requires:
+The application has DeckLink input/output source code and conditional build support, but **DeckLink is not active in either the locally compiled app or the official HongMix 1.3.39 DMG**. Binary inspection of the official app showed `mc_decklink_available()` returning `0`, which is the no-SDK stub implementation.
+
+This Mac has Blackmagic Desktop Video 16.2 and `/Library/Frameworks/DeckLinkAPI.framework` installed. No connected Blackmagic/DeckLink/UltraStudio device was visible in the Thunderbolt, PCI, or USB inventory during this review. The local source tree does not contain `DeckLinkAPI.h` or `DeckLinkAPIDispatch.cpp`, so merely having the runtime driver installed cannot enable the compile-time DeckLink implementation.
+
+DeckLink capture is therefore an intended, implemented capability that still needs to be enabled and validated. Completion requires:
 
 1. Owner-supplied Blackmagic Desktop Video SDK headers
 2. Desktop Video driver installation
@@ -144,6 +148,8 @@ The application has DeckLink input/output source code and conditional build supp
 
 Blackmagic's redistribution restriction applies to its SDK, not to the HongMix code written by the project owner. HongMix source can remain under its own chosen license while respecting the SDK's separate terms.
 
+For portable Mac production, an UltraStudio or other supported Thunderbolt Blackmagic device is the practical test target. A PCIe DeckLink card would require a Mac Pro PCIe slot or a compatible Thunderbolt PCIe expansion chassis.
+
 ## Concept images
 
 These are design studies, not implemented screens:
@@ -151,8 +157,12 @@ These are design studies, not implemented screens:
 - `docs/design-concepts/main-switcher-concept.png`
 - `docs/design-concepts/network-transport-concept.png`
 - `docs/design-concepts/preflight-safety-concept.png`
+- `docs/design-concepts/main-switcher-refined-v2.png`
+- `docs/design-concepts/unified-options-system-v2.png`
 
 They were generated with the built-in image generation tool. The first uses the HongMix 1.3.39 screenshot as its reference; the other two are new HongMix-aligned UI concepts.
+
+The v2 concepts intentionally preserve the existing main layout. They focus on a unified top status bar, a consistent bottom action/status strip, primary-button-plus-chevron actions, one overflow menu per input, and a shared option structure: Connection, Video, Audio, Automation, and Advanced.
 
 ## Recommended next implementation milestone
 
