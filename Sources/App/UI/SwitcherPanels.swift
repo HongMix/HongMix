@@ -671,6 +671,7 @@ struct InputBox: View {
                     .truncationMode(.middle)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .help(input.name)
+                fillKeyBadge
                 if !(input is ReplayInput) { ReplaySlotChip(input: input) }
                 Circle().fill(stateColor).frame(width: 7, height: 7)
                     .help(input.status)
@@ -768,6 +769,23 @@ struct InputBox: View {
     }
 
     @ViewState private var dropTarget = false
+
+    @ViewBuilder private var fillKeyBadge: some View {
+        if input.alphaKey.mode == "key",
+           let key = engine.inputs.first(where: { $0.id.uuidString == input.alphaKey.keyInputID }) {
+            Text("F+K \(engine.number(of: key))")
+                .font(.system(size: 8, weight: .bold)).padding(.horizontal, 4).frame(height: 14)
+                .background(Color.purple.opacity(0.9), in: RoundedRectangle(cornerRadius: 3))
+                .help(Lf("Fill 입력 · Key = 입력 %@", "\(engine.number(of: key))"))
+        } else if let fill = engine.inputs.first(where: {
+            $0.id != input.id && $0.alphaKey.mode == "key" && $0.alphaKey.keyInputID == input.id.uuidString
+        }) {
+            Text("KEY→\(engine.number(of: fill))")
+                .font(.system(size: 8, weight: .bold)).padding(.horizontal, 4).frame(height: 14)
+                .background(Color.blue.opacity(0.9), in: RoundedRectangle(cornerRadius: 3))
+                .help(Lf("입력 %@의 Key 신호", "\(engine.number(of: fill))"))
+        }
+    }
 
     /// vMix-style compact input tile: retain source identity and useful live controls while
     /// removing the large settings-heavy presentation from the input grid.

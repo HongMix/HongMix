@@ -71,6 +71,8 @@ struct OutputConfig: Codable, Identifiable, Equatable {
     var deckLinkIndex: Int = 0
     /// Fill & Key through the card's external keyer (fill SDI A + key SDI B)
     var deckLinkKey = false
+    /// "none", "straight", or "premultiplied".  deckLinkKey is retained for old project files.
+    var deckLinkAlphaMode: String = "none"
 
     // routing
     var bus: Int = 1                     // video: Output 1…4
@@ -159,6 +161,8 @@ extension OutputConfig {
         d.ndiName = try c.decodeIfPresent(String.self, forKey: .ndiName) ?? d.ndiName
         d.deckLinkIndex = try c.decodeIfPresent(Int.self, forKey: .deckLinkIndex) ?? d.deckLinkIndex
         d.deckLinkKey = c.value(.deckLinkKey, d.deckLinkKey)
+        d.deckLinkAlphaMode = c.value(.deckLinkAlphaMode,
+                                      d.deckLinkKey ? "premultiplied" : d.deckLinkAlphaMode)
         d.bus = c.value(.bus, d.bus)
         d.splitMinutes = c.value(.splitMinutes, d.splitMinutes)
         d.audioBus = c.value(.audioBus, d.audioBus)
@@ -424,9 +428,10 @@ final class OutputChannel: ObservableObject, Identifiable {
             state = Int32(MC_STATE_RUNNING)
             message = Lf("NDI 송출 중: %@", "\(c.ndiName)")
         case .decklink:
+            let keyOutput = c.deckLinkAlphaMode != "none" || c.deckLinkKey
             var err = [CChar](repeating: 0, count: 256)
             guard let h = mc_decklink_out_open(Int32(c.deckLinkIndex), Int32(format.width), Int32(format.height),
-                                               Int32(format.fpsNum), Int32(format.fpsDen), c.deckLinkKey ? 1 : 0,
+                                               Int32(format.fpsNum), Int32(format.fpsDen), keyOutput ? 1 : 0,
                                                &err, Int32(err.count)) else {
                 return fail(String(cString: err))
             }
@@ -434,7 +439,12 @@ final class OutputChannel: ObservableObject, Identifiable {
             dlOut = h
             lock.unlock()
             state = Int32(MC_STATE_RUNNING)
-            message = c.deckLinkKey ? L("DeckLink 출력 중 (Fill & Key)") : L("DeckLink 출력 중")
+            if keyOutput {
+                let shape = c.deckLinkAlphaMode == "straight" ? "Straight" : "Premultiplied"
+                message = Lf("DeckLink Fill & Key 출력 중 · %@", shape)
+            } else {
+                message = L("DeckLink 출력 중")
+            }
         }
         running = true
         delayDumped = false

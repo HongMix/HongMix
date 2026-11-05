@@ -312,6 +312,20 @@ struct AlphaKeySection: View {
 
     var body: some View {
         Section(L("알파 / Fill & Key")) {
+            Toggle(L("Fill & Key 입력 사용"), isOn: Binding(
+                get: { input.alphaKey.mode == "key" },
+                set: { enabled in
+                    input.alphaKey.mode = enabled ? "key" : "auto"
+                    if enabled && input.alphaKey.keyInputID.isEmpty,
+                       let candidate = engine.inputs.first(where: { $0.id != input.id && $0.kind == .decklink }) {
+                        input.alphaKey.keyInputID = candidate.id.uuidString
+                    }
+                }
+            ))
+            if input.alphaKey.mode == "key" {
+                Label(L("활성 — 이 입력은 Fill, 아래에서 선택한 입력은 Key입니다."), systemImage: "link.circle.fill")
+                    .font(.caption).foregroundColor(.green)
+            }
             Picker(L("알파 소스"), selection: $input.alphaKey.mode) {
                 Text(L("소스 자체 알파 (기본)")).tag("auto")
                 Text(L("알파 무시 (불투명)")).tag("opaque")
@@ -350,6 +364,18 @@ struct AlphaKeySection: View {
                 }
                 Text(L("Fill = 이 입력, Key = 위에서 고른 입력(흰색 = 보임, 검정 = 투명). 두 신호는 같은 장비에서 같은 타이밍으로 들어와야 가장자리가 맞습니다 (DeckLink SDI 1·2 권장). Key 입력은 화면에 쓰지 않아도 계속 받습니다."))
                     .font(.caption).foregroundColor(.secondary)
+                if let key = engine.inputs.first(where: { $0.id.uuidString == input.alphaKey.keyInputID }) {
+                    HStack {
+                        Label(Lf("Fill: 입력 %@", "\(engine.number(of: input))"), systemImage: "f.square.fill")
+                        Label(Lf("Key: 입력 %@", "\(engine.number(of: key))"), systemImage: "k.square.fill")
+                        Spacer()
+                        Text(key.status).foregroundColor(key.signalLost ? .red : .secondary)
+                    }
+                    .font(.caption)
+                } else {
+                    Label(L("Key 입력을 선택하세요."), systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundColor(.orange)
+                }
             }
         }
     }

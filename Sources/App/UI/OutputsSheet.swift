@@ -228,16 +228,37 @@ struct OutputEditor: View {
                 }
             case .decklink:
                 Section("DeckLink") {
-                    Stepper(Lf("장치 번호: %@", "\(output.config.deckLinkIndex + 1)"), value: $output.config.deckLinkIndex, in: 0...15)
-                    Text(deckLinkList())
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    if deckLinkDevices().isEmpty {
+                        Label(L("감지된 DeckLink 장치 없음"), systemImage: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                    } else {
+                        Picker(L("출력 장치"), selection: $output.config.deckLinkIndex) {
+                            ForEach(Array(deckLinkDevices().enumerated()), id: \.offset) { index, name in
+                                Text("\(index + 1). \(name)").tag(index)
+                            }
+                        }
+                    }
                     Text(L("프로그램 포맷과 같은 해상도/프레임레이트로 출력됩니다 (8-bit YUV, 48kHz 2ch)."))
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Toggle(L("Fill & Key (외부 키어: SDI A = Fill, SDI B = Key)"), isOn: $output.config.deckLinkKey)
-                    if output.config.deckLinkKey {
-                        Text(L("비디오 소스를 'Overlay 알파'로 지정한 Output으로 고르세요. 받는 쪽 키어 설정에 맞춰 Premultiplied(ATEM 기본) 또는 Straight를 고릅니다. 외부 키를 지원하는 카드만 가능하며, Duo 2·Quad 2는 Desktop Video Setup에서 SDI 1·2를 묶어야 합니다."))
+                    Picker(L("출력 방식"), selection: $output.config.deckLinkAlphaMode) {
+                        Text(L("일반 영상 (알파 없음)")).tag("none")
+                        Text("Fill & Key — Straight").tag("straight")
+                        Text("Fill & Key — Premultiplied").tag("premultiplied")
+                    }
+                    .onChange(of: output.config.deckLinkAlphaMode) { _, mode in
+                        output.config.deckLinkKey = mode != "none"
+                        guard mode != "none" else { return }
+                        if output.config.bus == 1 { output.config.bus = 2 }
+                        engine.setBusSource(output.config.bus,
+                                            mode == "straight" ? .overlaysAlphaStraight : .overlaysAlpha)
+                    }
+                    if output.config.deckLinkAlphaMode != "none" {
+                        LabeledContent(L("포트 매핑"), value: "SDI 1/A = Fill · SDI 2/B = Key")
+                        Label(output.running ? L("FILL+KEY LIVE") : L("Fill & Key 준비됨"),
+                              systemImage: output.running ? "dot.radiowaves.left.and.right" : "link.circle")
+                            .foregroundColor(output.running ? .green : .secondary)
+                        Text(L("선택한 Output 버스를 알파 출력으로 자동 설정합니다. 외부 키를 지원하는 카드만 가능하며, Duo 2·Quad 2는 Desktop Video Setup에서 SDI 1·2를 묶어야 합니다."))
                             .font(.caption).foregroundColor(.secondary)
                     }
                 }
@@ -454,10 +475,11 @@ struct OutputEditor: View {
         return Lf("%@분", "\(s / 60)")
     }
 
-    private func deckLinkList() -> String {
+    private func deckLinkDevices() -> [String] {
         var buf = [CChar](repeating: 0, count: 4096)
         let n = mc_decklink_list(&buf, Int32(buf.count))
-        return n == 0 ? L("감지된 DeckLink 장치 없음") : String(cString: buf).trimmingCharacters(in: .newlines)
+        guard n > 0 else { return [] }
+        return String(cString: buf).split(whereSeparator: \.isNewline).map(String.init)
     }
 }
 

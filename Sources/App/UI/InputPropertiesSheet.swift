@@ -98,7 +98,7 @@ struct InputPropertiesSheet: View {
         var tabs: [(Int, String, String)] = [
             (0, "General", "slider.horizontal.3"),
             (1, "Colour Adjust", "sun.max"),
-            (2, "Colour Key", "viewfinder"),
+            (2, L("Key / Fill & Key"), "viewfinder"),
             (3, "Position", "rectangle.dashed"),
             (6, "Layers", "square.3.layers.3d"),
             (4, "Audio Settings", "speaker.wave.2"),
