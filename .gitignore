@@ -8,3 +8,7 @@ ThirdParty/cef/
 *.dmg
 *.pkg
 installers/vendor/Blackmagic_DeckLink_SDK_*.zip
+
+# Keep unredacted release captures local. Only *-redacted.png may be published.
+docs/screenshots/1.4.0/*.png
+!docs/screenshots/1.4.0/*-redacted.png

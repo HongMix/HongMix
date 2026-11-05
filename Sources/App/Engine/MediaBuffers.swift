@@ -81,6 +81,10 @@ final class VideoSlot {
     private var monitorJobPending = false
     private var monitorGeneration: UInt64 = 0
     private var monitorConsumers = 0
+    /// AVFoundation camera/capture NV12 IOSurfaces can turn black when resized by
+    /// VTPixelTransferSession on some macOS/device combinations.  Those sources
+    /// keep their native IOSurface for the operator tile and Metal scales it.
+    var useNativeMonitorFrame = false
 
     // Frame-arrival history for the frame-rate label and the Statistics window (vMix "Video" column).
     private var arrivals = [CFTimeInterval](repeating: 0, count: 128)
@@ -162,7 +166,7 @@ final class VideoSlot {
         // Keep that frame as the thumbnail source and let the monitor's Metal sampler scale it.
         // Decoded NV12 video still uses the inexpensive 480x270 proxy below.
         let format = CVPixelBufferGetPixelFormatType(source)
-        guard format != kCVPixelFormatType_32BGRA, width > 480 || height > 270 else {
+        guard !useNativeMonitorFrame, format != kCVPixelFormatType_32BGRA, width > 480 || height > 270 else {
             monitorLock.lock(); monitorGeneration &+= 1; monitorBuffer = source; monitorLock.unlock()
             return
         }

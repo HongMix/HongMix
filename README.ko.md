@@ -10,34 +10,31 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 1.3.39 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 1.4.0 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
-### 최신 업데이트 · 1.3.39
-- **동영상 파일 버벅임 해결:** 카메라 MP4 는 영상이 오디오보다 최대 0.6초 앞에 저장돼 있습니다. 압축 영상을 미리 읽고 영상을 전용 스레드에서 디코드하며, 영상과 오디오가 하나의 시계를 쓰도록 바꿨습니다. 측정: 60초 재생에서 늦은 오디오 233 → 1, 언더런 7 → 0.
-- **인스턴트 리플레이 소스 4개 (CAM 1–4):**
-  - 리플레이 창이나 입력 타일의 **R1–R4** 칩으로 지정하고, 녹화 중에도 바꿀 수 있습니다
-  - TC 옆에 **녹화 시각** 표시
-  - 앵글마다 **그 소스의 소리**로 재생
-- **슬로모션:** 빠른 맥은 실시간 AI 보간, 그 밖의 맥은 백그라운드 AI 클립을 만들고 그동안은 GPU 블렌딩으로 부드럽게 보여 줍니다.
-- **리플레이 화질:** 기본 HEVC Intra (SSIM 0.968 → 0.986), ProRes Proxy/LT 하드웨어 녹화 옵션, 재생은 하드웨어 디코드.
-- **vMix 방식 오디오 믹서:** ON AIR / AUTO / ON / MUTE 버튼, 출력 안 된 채널도 입력 레벨 미터 표시.
-- **UI 잘림 점검**과 영어 번역 135개 추가. 자세한 내용은 [릴리스 노트](docs/RELEASE-NOTES-1.3.39.md).
+### 최신 업데이트 · 1.4.0
+- **카메라·오디오 매칭:** FaceTime, 연속성 카메라, 외부 캡처 소스와 관련 마이크·오디오 장치를 자동으로 맞춥니다. 수동 선택과 장치 새로고침도 추가했습니다.
+- **아이폰 연속성 카메라:** 아이폰 카메라 검색을 활성화했고 이전 실제 연결을 확인했습니다. 이번 빌드에서는 FaceTime 1080p29.97 영상과 맥 마이크 오디오가 함께 들어오는 것을 확인했습니다.
+- **DeckLink 작업 흐름:** 로컬 DeckLink SDK 16 빌드, 출력 라우팅, Straight/Premultiplied Fill & Key 설정을 구현했습니다. 실제 DeckLink 입출력은 장비 검증 전입니다.
+- **캡처 프리뷰:** NV12 카메라·캡처 프레임을 직접 모니터 경로로 표시하도록 개선했습니다.
+- **운영 상태 표시:** 5초 시작 애니메이션, 안정적인 오디오 미터 움직임, 혼합 프레임레이트·오디오 큐 진단을 추가했습니다.
+- 공개 캡처는 개인정보 보호 모자이크를 적용했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-1.4.0.ko.md) · [English release notes](docs/RELEASE-NOTES-1.4.0.md)
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-replay-4cam.jpg" alt="HongMix 1.3.39 인스턴트 리플레이 CAM 1–4" width="100%"><br><sub>인스턴트 리플레이: CAM 1–4 소스, TC + 녹화 시각</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-audio-mixer.jpg" alt="HongMix 1.3.39 오디오 믹서" width="100%"><br><sub>오디오 믹서: ON AIR / AUTO / ON, 입력 레벨 미터</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-main-switcher-redacted.png" alt="HongMix 1.4.0 메인 스위처" width="100%"><br><sub>메인 스위처 · Preview 전체와 얼굴 모자이크</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-camera-live-audio-redacted.png" alt="HongMix 1.4.0 실제 카메라와 오디오 미터" width="100%"><br><sub>FaceTime 실제 입력 + 오디오 미터</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-main-switcher.jpg" alt="HongMix 1.3.39 메인 스위처와 R 칩" width="100%"><br><sub>메인 스위처와 리플레이 R1–R4 칩</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-replay-settings.jpg" alt="HongMix 1.3.39 리플레이 설정" width="100%"><br><sub>리플레이 설정: HEVC Intra / ProRes 하드웨어 형식</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-camera-audio-match-redacted.png" alt="HongMix 1.4.0 카메라와 오디오 매칭" width="100%"><br><sub>카메라·오디오 자동 매칭과 수동 선택</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-decklink-output-settings-redacted.png" alt="HongMix 1.4.0 DeckLink 출력 설정" width="100%"><br><sub>DeckLink 출력 라우팅 · 이 캡처에는 장비 미연결</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-audio-fix-measured.jpg" alt="파일 오디오 끊김 수정 전후 측정" width="100%"><br><sub>파일 오디오 끊김, 수정 전/후 측정</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-replay-quality-measured.jpg" alt="리플레이 녹화 형식별 화질 측정" width="100%"><br><sub>리플레이 녹화 형식별 화질 (SSIM)</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-decklink-fill-key-options-redacted.png" alt="HongMix 1.4.0 DeckLink Fill and Key 방식" width="100%"><br><sub>일반 / Straight Fill &amp; Key / Premultiplied Fill &amp; Key</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-launch-redacted.png" alt="HongMix 1.4.0 시작 화면" width="100%"><br><sub>5초 시작 애니메이션과 초기화 상태</sub></td>
   </tr>
 </table>
 
@@ -98,8 +95,8 @@ Apple Silicon 맥에서 동작을 확인했습니다.
 - RTMP 입력·송출
 - NDI® 송수신(NDI 6)
 - 맥 내장 FaceTime 카메라, 아이폰 카메라 인식
-- **Blackmagic DeckLink** 인식
 - **USB HDMI 캡처카드(하기비전)** 인식
+- **Blackmagic DeckLink:** SDK 빌드 연동과 입출력 설정 구현, 실제 장비 검증 전
 - 웹 브라우저 입력(소리 포함)
 - 미디어·리스트 재생
 - H.264 녹화와 멀티트랙 오디오
@@ -134,7 +131,7 @@ HongMix가 바로 그겁니다.
 
 **LiveU·SRT 피드, 캡처카드, DeckLink, 아이폰 카메라도 되나요?**
 - SRT 피드(LiveU 등): 콜러·리스너로 연결됩니다.
-- Blackmagic DeckLink: 인식됩니다.
+- Blackmagic DeckLink: SDK 연동과 입출력 설정은 구현됐으며 실제 장비 검증 전입니다.
 - USB HDMI 캡처카드: 표준(UVC) 캡처카드는 카메라처럼 잡힙니다. 하기비전 캡처카드로 확인했고, 엘가토·매그웰 등도 같은 방식이라 될 것으로 보입니다(제보 부탁드립니다).
 - 아이폰: 연속성 카메라로 바로 쓸 수 있습니다.
 
@@ -145,7 +142,7 @@ OBS는 훌륭한 송출 프로그램입니다. HongMix는 vMix 계열의 프로�
 
 ## 설치
 
-1. [Releases](https://github.com/HongMix/HongMix/releases/latest)에서 **HongMix-1.2.pkg**를 받습니다. macOS 14 이상, Apple Silicon 맥이 필요합니다.
+1. [Releases](https://github.com/HongMix/HongMix/releases/latest)에서 최신 **HongMix DMG 또는 PKG**를 받습니다. macOS 14 이상, Apple Silicon 맥이 필요합니다.
 2. 더블클릭해서 설치합니다.
 3. 처음 열 때만 응용 프로그램 폴더에서 HongMix를 우클릭 → **열기** → **열기** 하세요. 아직 Apple 공증을 받지 않은 앱이라 macOS가 한 번 확인합니다.
 

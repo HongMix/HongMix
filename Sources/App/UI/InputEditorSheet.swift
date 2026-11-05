@@ -108,6 +108,7 @@ struct InputEditorSheet: View {
     // camera
     @ViewState private var deckLinkDevices: [String] = []
     @ViewState private var cameraSelection = ""  // "av:<uniqueID>" or "dl:<index>"
+    @ViewState private var cameraDeviceRefresh = 0
     @ViewState private var colorValue = Color.blue
 
     init(kind: InputKind, editing: InputSource?) {
@@ -451,11 +452,13 @@ struct InputEditorSheet: View {
 
     @ViewBuilder private var cameraSection: some View {
         Section("Camera") {
+            let _ = cameraDeviceRefresh
             ForEach(CameraInput.videoDevices(), id: \.uniqueID) { d in
                 sourceRow(d.localizedName, selected: cameraSelection == "av:" + d.uniqueID) {
                     if cfg.cameraID != d.uniqueID { cfg.cameraFormat = "" }
                     cameraSelection = "av:" + d.uniqueID
                     cfg.cameraID = d.uniqueID
+                    cfg.audioDeviceID = CameraInput.matchedAudioDevice(for: d)?.uniqueID ?? ""
                     if !nameEdited { cfg.name = d.localizedName }
                 }
             }
@@ -469,6 +472,12 @@ struct InputEditorSheet: View {
             if CameraInput.videoDevices().isEmpty && deckLinkDevices.isEmpty {
                 Text(L("카메라/캡처 장치를 찾을 수 없습니다.")).foregroundColor(.orange)
             }
+            Button(L("카메라·캡처 장치 목록 새로고침")) {
+                cameraDeviceRefresh += 1
+                var buf = [CChar](repeating: 0, count: 4096)
+                _ = mc_decklink_list(&buf, Int32(buf.count))
+                deckLinkDevices = String(cString: buf).split(separator: "\n").map(String.init)
+            }
         }
         if !cameraSelection.hasPrefix("dl:") {
             Section("Audio") {
@@ -477,6 +486,10 @@ struct InputEditorSheet: View {
                     ForEach(CameraInput.audioDevices(), id: \.uniqueID) { d in
                         Text(d.localizedName).tag(d.uniqueID)
                     }
+                }
+                Button(L("카메라와 오디오 자동 매칭")) {
+                    guard let video = CameraInput.videoDevices().first(where: { $0.uniqueID == cfg.cameraID }) else { return }
+                    cfg.audioDeviceID = CameraInput.matchedAudioDevice(for: video)?.uniqueID ?? ""
                 }
                 Text(L("HDMI/SDI→USB/Thunderbolt 캡처(UltraStudio, Magewell, Elgato 등)도 여기에 나타납니다."))
                     .font(.caption).foregroundColor(.secondary)
@@ -643,6 +656,9 @@ struct InputEditorSheet: View {
             if cameraSelection.isEmpty, let first = CameraInput.videoDevices().first {
                 cameraSelection = "av:" + first.uniqueID
                 cfg.cameraID = first.uniqueID
+                if cfg.audioDeviceID.isEmpty {
+                    cfg.audioDeviceID = CameraInput.matchedAudioDevice(for: first)?.uniqueID ?? ""
+                }
                 if !nameEdited { cfg.name = first.localizedName }
             }
         case .title:

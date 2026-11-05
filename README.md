@@ -10,34 +10,31 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 1.3.39</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 1.4.0</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
-### Latest update · 1.3.39
-- **Video files no longer stutter:** camera MP4s store video up to 0.6 s ahead of their audio. HongMix now reads compressed video ahead on its own decode thread with one shared A/V clock. Measured: 233 → 1 late audio chunks and 7 → 0 mixer underflows in 60 s.
-- **Instant Replay, 4 sources (CAM 1–4):**
-  - assign sources from the replay window or the **R1–R4** chip on any input tile; change them while recording
-  - **recording time** next to TC
-  - each angle replays **its own audio**
-- **Slow motion:** real-time AI interpolation on fast Macs; on others, AI clips render in the background and GPU blending covers the meantime.
-- **Replay quality:** HEVC Intra by default (SSIM 0.968 → 0.986), with ProRes Proxy/LT on the hardware ProRes engine; replay playback decodes in hardware.
-- **vMix-style audio mixer:** ON AIR / AUTO / ON / MUTE buttons, and input-level meters on off-air channels.
-- **UI clipping pass** in English, plus 135 added translations. See the [release notes](docs/RELEASE-NOTES-1.3.39.md).
+### Latest update · 1.4.0
+- **Camera + audio pairing:** automatically matches a FaceTime, Continuity Camera or external capture source with its related microphone/audio device, with manual selection and refresh controls.
+- **Continuity Camera:** iPhone camera discovery is enabled; an iPhone connection has been confirmed previously. FaceTime 1080p29.97 video and Mac microphone audio were verified together in the current build.
+- **DeckLink workflow:** local DeckLink SDK 16 builds, output routing, and Straight/Premultiplied Fill & Key controls are implemented. Physical DeckLink I/O remains hardware-validation pending.
+- **Capture previews:** native NV12 camera/capture frames now use the direct monitor path.
+- **Operator feedback:** five-second animated startup status, smoother audio-meter ballistics, and mixed-frame-rate/audio-queue diagnostics.
+- Public screenshots are privacy-redacted. See the [English release notes](docs/RELEASE-NOTES-1.4.0.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-1.4.0.ko.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-replay-4cam.jpg" alt="HongMix 1.3.39 Instant Replay with CAM 1–4 sources and recording time" width="100%"><br><sub>Instant Replay: CAM 1–4 sources, TC + recording time</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-audio-mixer.jpg" alt="HongMix 1.3.39 audio mixer with ON AIR / AUTO / ON buttons" width="100%"><br><sub>Audio mixer: ON AIR / AUTO / ON, input-level meters</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-main-switcher-redacted.png" alt="HongMix 1.4.0 main switcher" width="100%"><br><sub>Main switcher · privacy-redacted Preview and faces</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-camera-live-audio-redacted.png" alt="HongMix 1.4.0 live camera and audio metering" width="100%"><br><sub>Live FaceTime capture + active audio metering</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-main-switcher.jpg" alt="HongMix 1.3.39 main switcher with replay R chips" width="100%"><br><sub>Main switcher with replay R1–R4 chips</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-replay-settings.jpg" alt="HongMix 1.3.39 replay settings: HEVC / ProRes recording formats" width="100%"><br><sub>Replay settings: HEVC Intra / ProRes hardware formats</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-camera-audio-match-redacted.png" alt="HongMix 1.4.0 camera and audio matching" width="100%"><br><sub>Camera/audio auto-match and manual device selection</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-decklink-output-settings-redacted.png" alt="HongMix 1.4.0 DeckLink output settings" width="100%"><br><sub>DeckLink routing UI · no hardware detected in this capture</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-audio-fix-measured.jpg" alt="Measured file audio dropouts before and after" width="100%"><br><sub>File audio dropouts, measured before/after</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.3.39-replay-quality-measured.jpg" alt="Measured replay recording quality by format" width="100%"><br><sub>Replay recording quality by format (SSIM)</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-decklink-fill-key-options-redacted.png" alt="HongMix 1.4.0 DeckLink Fill and Key modes" width="100%"><br><sub>Normal / Straight Fill &amp; Key / Premultiplied Fill &amp; Key</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-launch-redacted.png" alt="HongMix 1.4.0 animated startup screen" width="100%"><br><sub>Five-second startup and initialization status</sub></td>
   </tr>
 </table>
 
@@ -97,7 +94,8 @@ Confirmed working on Apple Silicon:
 - SRT in/out
 - RTMP in/out
 - NDI® send/receive (NDI 6)
-- Built-in FaceTime camera, iPhone camera, **Blackmagic DeckLink** and a low-cost **USB HDMI capture card** are detected
+- Built-in FaceTime camera, iPhone camera and a low-cost **USB HDMI capture card** are detected
+- **Blackmagic DeckLink:** SDK build integration and input/output configuration are implemented; physical hardware validation is pending
 - Web browser input with audio
 - Media and list playback
 - H.264 recording with multitrack audio
@@ -132,7 +130,7 @@ Yes. HongMix speaks the vMix HTTP (8088) and TCP (8099) API, so the Companion vM
 
 **Can I use LiveU / SRT feeds, capture cards, DeckLink or an iPhone as a camera?**
 - SRT feeds (e.g. LiveU): connect as caller or listener.
-- Blackmagic DeckLink: detected.
+- Blackmagic DeckLink: SDK integration and input/output configuration are implemented; physical hardware validation is pending.
 - USB HDMI capture cards: standard (UVC) cards show up as cameras. A low-cost USB card has been confirmed; Elgato, Magewell and others should work the same way, and reports are welcome.
 - iPhone: works via Continuity Camera.
 
@@ -143,7 +141,7 @@ No. OBS is a great streaming encoder. HongMix is a production switcher in the vM
 
 ## Install
 
-1. Download **HongMix-1.2.pkg** from [Releases](https://github.com/HongMix/HongMix/releases/latest). Requires macOS 14+ and an Apple Silicon Mac.
+1. Download the latest **HongMix DMG or PKG** from [Releases](https://github.com/HongMix/HongMix/releases/latest). Requires macOS 14+ and an Apple Silicon Mac.
 2. Double‑click it and install.
 3. The first time you open HongMix, right‑click it in Applications → **Open** → **Open**. It isn't notarized by Apple yet, so macOS asks once.
 

@@ -3,6 +3,7 @@ import AVFoundation
 import CoreVideo
 import CoreGraphics
 import AppKit
+import CoreAudio
 
 /// Inputs fed from the C core through mc_callbacks.
 class CallbackInput: InputSource {
@@ -499,6 +500,11 @@ private final class CaptureDelegate: NSObject, AVCaptureVideoDataOutputSampleBuf
 }
 
 final class CameraInput: InputSource {
+    override init(config: InputConfig) {
+        super.init(config: config)
+        video.useNativeMonitorFrame = true
+    }
+
     /// Like vMix's capture format selection: pick a ≤1080p format that runs at the program rate
     /// (or the closest lower one, e.g. 30 for 59.94) and lock the frame duration, so the camera
     /// doesn't slow down in low light (that causes periodic repeated frames = judder).
@@ -616,6 +622,49 @@ final class CameraInput: InputSource {
                                          mediaType: .audio, position: .unspecified).devices
     }
 
+    /// Best-effort pairing for cameras which publish video and audio as separate
+    /// AVFoundation devices.  A built-in FaceTime camera belongs with the Mac's
+    /// default microphone; Continuity Camera and USB capture devices are paired
+    /// by model/name.  Returning nil is safer than silently using an unrelated mic.
+    static func matchedAudioDevice(for video: AVCaptureDevice) -> AVCaptureDevice? {
+        let devices = audioDevices()
+        guard !devices.isEmpty else { return nil }
+
+        if video.deviceType == .builtInWideAngleCamera {
+            let builtIn = Int32(bitPattern: kAudioDeviceTransportTypeBuiltIn)
+            return devices.first(where: { $0.transportType == builtIn })
+                ?? devices.first(where: {
+                    let n = $0.localizedName.lowercased()
+                    return n.contains("macbook") || n.contains("built-in") || n.contains("내장")
+                })
+        }
+
+        let normalized: (String) -> String = { name in
+            let folded = name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            let words = folded.components(separatedBy: CharacterSet.alphanumerics.inverted)
+            let generic: Set<String> = ["camera", "video", "audio", "microphone", "mic", "카메라", "마이크", "데스크뷰", "deskview"]
+            return words.filter { !$0.isEmpty && !generic.contains($0) }.joined(separator: " ")
+        }
+
+        let videoName = normalized(video.localizedName)
+        var best: (device: AVCaptureDevice, score: Int)?
+        for audio in devices {
+            let audioName = normalized(audio.localizedName)
+            var score = 0
+            if !video.modelID.isEmpty && video.modelID == audio.modelID { score += 100 }
+            if !videoName.isEmpty && videoName == audioName { score += 80 }
+            if !videoName.isEmpty && !audioName.isEmpty,
+               videoName.contains(audioName) || audioName.contains(videoName) { score += 50 }
+
+            let videoWords = Set(videoName.split(separator: " ").map(String.init))
+            let audioWords = Set(audioName.split(separator: " ").map(String.init))
+            score += videoWords.intersection(audioWords).count * 15
+
+            if best == nil || score > best!.score { best = (audio, score) }
+        }
+        return (best?.score ?? 0) >= 30 ? best?.device : nil
+    }
+
     override func start() {
         guard session == nil else { return }
         AVCaptureDevice.requestAccess(for: .video) { granted in
@@ -656,6 +705,7 @@ final class CameraInput: InputSource {
         out.setSampleBufferDelegate(delegate, queue: queue)
         if s.canAddOutput(out) { s.addOutput(out) }
 
+        var matchedAudioName: String?
         if !config.audioDeviceID.isEmpty,
            let adev = CameraInput.audioDevices().first(where: { $0.uniqueID == config.audioDeviceID }),
            let ain = try? AVCaptureDeviceInput(device: adev), s.canAddInput(ain) {
@@ -671,7 +721,11 @@ final class CameraInput: InputSource {
                 AVLinearPCMIsBigEndianKey: false,
             ]
             aout.setSampleBufferDelegate(delegate, queue: audioQueue)
-            if s.canAddOutput(aout) { s.addOutput(aout) }
+            if s.canAddOutput(aout) {
+                s.addOutput(aout)
+                matchedAudioName = adev.localizedName
+                noteAudioTrack(true)
+            }
         }
         s.commitConfiguration()
         s.startRunning()
@@ -680,8 +734,9 @@ final class CameraInput: InputSource {
         session = s
         let d = CMVideoFormatDescriptionGetDimensions(dev.activeFormat.formatDescription)
         let fps = dev.activeVideoMinFrameDuration.seconds > 0 ? 1 / dev.activeVideoMinFrameDuration.seconds : 0
+        let audioStatus = matchedAudioName.map { Lf(" · 오디오: %@", $0) } ?? L(" · 오디오 없음")
         postStatus(Int32(MC_STATE_RUNNING), String(format: L("%@ · %d×%d %.2f fps 고정"), dev.localizedName, d.width, d.height, fps)
-                   + (config.cameraFormat.isEmpty ? L(" (자동)") : ""))
+                   + (config.cameraFormat.isEmpty ? L(" (자동)") : "") + audioStatus)
     }
 
     override func stop() {
@@ -710,6 +765,7 @@ final class CameraInput: InputSource {
             if CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: bytes, destination: base) == kCMBlockBufferNoErr {
                 let n = min(frames, floats / 2)
                 audio.write(base.assumingMemoryBound(to: Float.self), frames: n)
+                noteAudioFrame()
             }
         }
     }
