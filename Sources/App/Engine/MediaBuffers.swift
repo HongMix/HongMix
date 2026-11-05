@@ -156,7 +156,13 @@ final class VideoSlot {
     /// refreshing tiny thumbnails at a rate that is hard to distinguish visually.
     private func scheduleMonitorProxy(_ source: CVPixelBuffer) {
         let width = CVPixelBufferGetWidth(source), height = CVPixelBufferGetHeight(source)
-        guard width > 480 || height > 270 else {
+        // Browser, title, still and generated graphic sources are BGRA and may carry alpha.
+        // VTPixelTransferSession's BGRA downscale can return a black/empty proxy on some macOS
+        // versions even though the full-resolution frame renders correctly in Preview/Program.
+        // Keep that frame as the thumbnail source and let the monitor's Metal sampler scale it.
+        // Decoded NV12 video still uses the inexpensive 480x270 proxy below.
+        let format = CVPixelBufferGetPixelFormatType(source)
+        guard format != kCVPixelFormatType_32BGRA, width > 480 || height > 270 else {
             monitorLock.lock(); monitorGeneration &+= 1; monitorBuffer = source; monitorLock.unlock()
             return
         }
