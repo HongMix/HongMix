@@ -477,14 +477,14 @@ final class AudioMixer {
         let tm3 = CACurrentMediaTime()
         for (id, peak) in meterScratch {
             let old = meters[id] ?? (0, 0)
-            meters[id] = (max(peak.0, old.0 * 0.85), max(peak.1, old.1 * 0.85))
+            meters[id] = smoothMeter(old, toward: peak, frames: n)
         }
         if meters.count > meterScratch.count {
             for key in Array(meters.keys) where meterScratch[key] == nil { meters.removeValue(forKey: key) }
         }
         audioFlags = flagsScratch
         for b in 0..<AudioMixer.busCount {
-            busMeters[b] = (max(busPeaks[b].0, busMeters[b].0 * 0.85), max(busPeaks[b].1, busMeters[b].1 * 0.85))
+            busMeters[b] = smoothMeter(busMeters[b], toward: busPeaks[b], frames: n)
         }
         lock.unlock()
 
@@ -497,6 +497,22 @@ final class AudioMixer {
         }
         for b in 0..<8 where activeRoutes[b] { routeRings[b].write(busBufs[b], frames: n) }
         return n
+    }
+
+    /// Broadcast-style meter ballistics. The old fixed `peak or old * 0.85` rule decayed by roughly
+    /// 85 dB per second at 60 fps, making speech meters chatter even though the audio itself was fine.
+    /// These coefficients are derived from the actual audio block duration, so the visual response is
+    /// stable at every project frame rate: quick enough to catch consonants, slow enough to read.
+    private func smoothMeter(_ old: (Float, Float), toward target: (Float, Float), frames: Int) -> (Float, Float) {
+        let dt = Float(max(1, frames)) / Float(AudioMixer.rate)
+        let attack = expf(-dt / 0.025)    // ~25 ms rise
+        let release = expf(-dt / 0.450)   // ~450 ms fall
+        func channel(_ previous: Float, _ next: Float) -> Float {
+            let coefficient = next > previous ? attack : release
+            let value = next + (previous - next) * coefficient
+            return value < 0.00001 ? 0 : value
+        }
+        return (channel(old.0, target.0), channel(old.1, target.1))
     }
 
     /// Bus output for the last mix (0 = Master, 1…7 = A…G).
