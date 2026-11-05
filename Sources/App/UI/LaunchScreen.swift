@@ -113,7 +113,13 @@ final class LaunchModel: ObservableObject {
 
 struct LaunchScreen: View {
     @ObservedObject var model = LaunchModel.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ViewState private var glow = false
+    @ViewState private var markVisible = false
+    @ViewState private var fadersLive = false
+    @ViewState private var tallyLive = false
+    @ViewState private var titleVisible = false
+    @ViewState private var subtitleVisible = false
 
     var body: some View {
         ZStack {
@@ -131,9 +137,26 @@ struct LaunchScreen: View {
         .opacity(model.fading ? 0 : 1)
         .scaleEffect(model.fading ? 1.02 : 1)
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { model.dismiss() }      // double-click skips
         .onAppear {
             withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { glow = true }
+            if reduceMotion {
+                markVisible = true; fadersLive = true; tallyLive = true
+                titleVisible = true; subtitleVisible = true
+            } else {
+                withAnimation(.spring(response: 0.65, dampingFraction: 0.78)) { markVisible = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                    withAnimation(.easeInOut(duration: 0.85)) { fadersLive = true }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.35) {
+                    withAnimation(.easeOut(duration: 0.16)) { tallyLive = true }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.55) {
+                    withAnimation(.easeOut(duration: 0.55)) { titleVisible = true }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.9) {
+                    withAnimation(.easeOut(duration: 0.55)) { subtitleVisible = true }
+                }
+            }
         }
     }
 
@@ -162,26 +185,32 @@ struct LaunchScreen: View {
                     .fill(Theme.accent.opacity(glow ? 0.45 : 0.22))
                     .frame(width: 150, height: 150)
                     .blur(radius: 40)
-                Image(nsImage: NSApp.applicationIconImage ?? NSImage())
-                    .resizable()
-                    .interpolation(.high)
+                AnimatedHongMixMark(fadersLive: fadersLive, tallyLive: tallyLive, ready: model.steps[5].state == .done)
                     .frame(width: 128, height: 128)
-                    .shadow(color: .black.opacity(0.6), radius: 18, y: 8)
+                    .scaleEffect(markVisible ? 1 : 0.82)
+                    .opacity(markVisible ? 1 : 0)
+                    .shadow(color: Theme.accent.opacity(glow ? 0.45 : 0.18), radius: glow ? 22 : 12)
+                    .shadow(color: .black.opacity(0.65), radius: 18, y: 8)
             }
             Text("HongMix")
                 .font(.system(size: 46, weight: .heavy, design: .rounded))
                 .foregroundStyle(LinearGradient(colors: [.white, Color(white: 0.78)], startPoint: .top, endPoint: .bottom))
                 .tracking(0.5)
+                .opacity(titleVisible ? 1 : 0)
+                .offset(y: titleVisible ? 0 : 8)
             Text("LIVE PRODUCTION SWITCHER")
                 .font(.system(size: 12, weight: .semibold))
                 .tracking(4)
                 .foregroundColor(Color(white: 0.62))
+                .opacity(subtitleVisible ? 1 : 0)
+                .offset(y: subtitleVisible ? 0 : 5)
             HStack(spacing: 8) {
                 tag("v\(AppInfo.version)")
                 tag("Apple Silicon")
                 tag("Metal")
             }
             .padding(.top, 2)
+            .opacity(subtitleVisible ? 1 : 0)
         }
     }
 
@@ -252,6 +281,67 @@ struct LaunchScreen: View {
                 .font(.system(size: 10))
                 .foregroundColor(Color(white: 0.36))
         }
+    }
+}
+
+/// Vector version of the app mark so the switcher controls can animate during startup.
+private struct AnimatedHongMixMark: View {
+    let fadersLive: Bool
+    let tallyLive: Bool
+    let ready: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            let s = geo.size.width / 128
+            ZStack {
+                RoundedRectangle(cornerRadius: 30 * s, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(red: 0.15, green: 0.15, blue: 0.24),
+                                                   Color(red: 0.075, green: 0.07, blue: 0.14)],
+                                         startPoint: .top, endPoint: .bottom))
+                    .overlay(alignment: .top) {
+                        RoundedRectangle(cornerRadius: 30 * s, style: .continuous)
+                            .fill(LinearGradient(colors: [.white.opacity(0.13), .clear], startPoint: .top, endPoint: .bottom))
+                            .frame(height: 56 * s)
+                    }
+                    .overlay(RoundedRectangle(cornerRadius: 30 * s, style: .continuous)
+                        .stroke(.white.opacity(0.13), lineWidth: s))
+
+                // Level bridge: the gradient grows like a live audio meter.
+                Capsule()
+                    .fill(Color.white.opacity(0.10))
+                    .frame(width: 57 * s, height: 12 * s)
+                Capsule()
+                    .fill(LinearGradient(colors: [Color.orange, Color.yellow.opacity(0.85), Theme.program],
+                                         startPoint: .leading, endPoint: .trailing))
+                    .frame(width: (fadersLive ? 57 : 8) * s, height: 10 * s)
+                    .frame(width: 57 * s, alignment: .leading)
+                    .shadow(color: Theme.program.opacity(fadersLive ? 0.45 : 0), radius: 5 * s)
+
+                fader(x: -27 * s, offset: (fadersLive ? -19 : 14) * s, scale: s)
+                fader(x:  27 * s, offset: (fadersLive ?  19 : -14) * s, scale: s)
+
+                Circle()
+                    .fill(tallyLive ? Theme.program : Color.red.opacity(0.28))
+                    .frame(width: 15 * s, height: 15 * s)
+                    .offset(x: 34 * s, y: -43 * s)
+                    .shadow(color: Theme.program.opacity(tallyLive ? 0.9 : 0), radius: ready ? 11 * s : 5 * s)
+                    .scaleEffect(ready ? 1.13 : 1)
+                    .animation(.easeInOut(duration: 0.65).repeatCount(2, autoreverses: true), value: ready)
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+
+    private func fader(x: CGFloat, offset: CGFloat, scale: CGFloat) -> some View {
+        ZStack {
+            Capsule().fill(Color(white: 0.90)).frame(width: 9 * scale, height: 75 * scale)
+            RoundedRectangle(cornerRadius: 2.5 * scale)
+                .fill(Color(white: 0.96))
+                .frame(width: 25 * scale, height: 9 * scale)
+                .overlay(RoundedRectangle(cornerRadius: 2.5 * scale).stroke(.black.opacity(0.25), lineWidth: scale))
+                .offset(y: offset)
+        }
+        .offset(x: x)
     }
 }
 
