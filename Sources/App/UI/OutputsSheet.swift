@@ -11,13 +11,44 @@ struct OutputsSheet: View {
         self.focusKind = focusKind
     }
 
+    /// Each bar gear opens only its own outputs: Record ⚙ → recordings, External ⚙ → NDI + DeckLink,
+    /// Stream ⚙ → streams (incl. SRT return feeds). nil = every output (Tools › All Outputs).
+    private var scope: [OutputKind] {
+        switch focusKind {
+        case .record?: return [.record]
+        case .ndi?, .decklink?: return [.ndi, .decklink]
+        case .stream?: return [.stream]
+        case nil: return OutputKind.allCases
+        }
+    }
+    private var isExternal: Bool { focusKind == .ndi || focusKind == .decklink }
+    private var scopedOutputs: [OutputChannel] { engine.outputs.filter { scope.contains($0.config.kind) } }
+
+    private var sheetTitle: String {
+        switch focusKind {
+        case .record?: return L("녹화 설정")
+        case .ndi?, .decklink?: return L("외부 출력 설정 (NDI · DeckLink)")
+        case .stream?: return L("스트리밍 설정")
+        case nil: return L("출력")
+        }
+    }
+
+    private var addTitle: String {
+        switch focusKind {
+        case .record?: return L("녹화 추가")
+        case .stream?: return L("스트림 추가")
+        case .ndi?, .decklink?: return L("외부 출력 추가")
+        case nil: return L("출력 추가")
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(L("출력")).font(.headline)
+                Text(sheetTitle).font(.headline)
                 Spacer()
                 Menu {
-                    ForEach(OutputKind.allCases, id: \.self) { k in
+                    ForEach(scope, id: \.self) { k in
                         Button {
                             var c = OutputConfig.defaultConfig(kind: k)
                             let same = engine.outputs.filter { $0.config.kind == k }.count
@@ -28,26 +59,31 @@ struct OutputsSheet: View {
                             Label(k.label, systemImage: k.symbol)
                         }
                     }
-                    Divider()
-                    Button {
-                        selection = engine.addReturnFeed().id
-                    } label: {
-                        Label(L("리턴 피드 (SRT, 현장으로 되돌려 보내기)"), systemImage: "arrow.uturn.backward.circle")
+                    if focusKind == nil || focusKind == .stream {
+                        Divider()
+                        Button {
+                            selection = engine.addReturnFeed().id
+                        } label: {
+                            Label(L("리턴 피드 (SRT, 현장으로 되돌려 보내기)"), systemImage: "arrow.uturn.backward.circle")
+                        }
                     }
                 } label: {
-                    Label(L("출력 추가"), systemImage: "plus")
+                    Label(addTitle, systemImage: "plus")
                 }
                 .fixedSize()
             }
             .padding()
 
-            BusSourcesBar()
-                .padding(.horizontal)
-                .padding(.bottom, 8)
+            // Output 2–4 routing only matters for NDI/DeckLink feeds (and the all-outputs view).
+            if focusKind == nil || isExternal {
+                BusSourcesBar()
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
+            }
 
             HSplitView {
                 List(selection: $selection) {
-                    ForEach(engine.outputs) { o in
+                    ForEach(scopedOutputs) { o in
                         OutputRow(output: o).tag(o.id)
                     }
                 }
@@ -80,7 +116,7 @@ struct OutputsSheet: View {
             guard selection == nil else { return }
             if let k = focusKind {
                 // Open the existing output of this kind, or create one (vMix-style "Record ⚙" etc.)
-                if let o = engine.outputs.first(where: { $0.config.kind == k }) {
+                if let o = scopedOutputs.first(where: { $0.config.kind == k }) ?? scopedOutputs.first {
                     selection = o.id
                 } else {
                     let c = OutputConfig.defaultConfig(kind: k)
@@ -88,7 +124,7 @@ struct OutputsSheet: View {
                     selection = c.id
                 }
             } else {
-                selection = engine.outputs.last?.id
+                selection = scopedOutputs.last?.id
             }
         }
     }

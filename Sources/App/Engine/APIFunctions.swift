@@ -607,6 +607,23 @@ enum APIProcessor {
                   let src = e.dataSources.source(named: parts[0]) else { return "Input, SelectedName, Value=Name,Column" }
             e.dataSources.bindings.append(DataBinding(inputID: t.id, fieldID: f, sourceID: src.id, column: col))
             e.dataSources.apply()
+        // HongMix test extensions (window behaviour checks)
+        case "mainwindowfullscreen":   // Value=on|off|toggle — macOS full screen of the switcher window
+            guard let w = FullscreenOutput.switcherWindow else { return "No main window" }
+            let isFS = w.styleMask.contains(.fullScreen)
+            let want = value.lowercased() == "on" ? true : (value.lowercased() == "off" ? false : !isFS)
+            if want != isFS { w.toggleFullScreen(nil) }
+        case "displayoutputmode":      // Value=window|fullscreen
+            guard let m = DisplayOutputMode(rawValue: value.lowercased()) else { return "Value=window|fullscreen" }
+            FullscreenOutput.shared.setMode(m, engine: e)
+        case "outputwindowfill":       // green button of the output window
+            FullscreenOutput.shared.testFill()
+        case "outputwindowzoombutton": // real click on the output window's green button
+            return FullscreenOutput.shared.testClickZoomButton() ? nil : "No output window"
+        case "outputwindowsystemfullscreen": // ⌃⌘F / Window › Enter Full Screen on the output window
+            FullscreenOutput.shared.testToggleSystemFullScreen()
+        case "outputwindowexit":       // Esc on the output window
+            FullscreenOutput.shared.testExit()
         case "snapshotwindow":   // HongMix extension: PNG of the main window (UI layout check)
             return snapshotWindow(value) ? nil : "Snapshot failed"
         case "resizewindow":     // HongMix extension: Value=width,height

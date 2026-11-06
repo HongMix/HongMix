@@ -4,24 +4,33 @@ import CoreVideo
 // MARK: - Shared controls
 
 struct FlatButton: View {
+    enum Style { case normal, primary, outline }
     let title: String
     var active = false
     var activeColor: Color = Theme.live
     var height: CGFloat = 26
     var fontSize: CGFloat = 11
     var weight: Font.Weight = .semibold
+    /// Monochrome only: primary = white fill (CUT), outline = white border (transition).
+    var style: Style = .normal
     let action: () -> Void
 
     var body: some View {
+        let mono = AppSkin.isMono
+        let primary = mono && style == .primary && !active
+        let outline = mono && style == .outline && !active
         Button(action: action) {
             Text(title)
                 .font(.system(size: fontSize, weight: weight))
+                .tracking(mono && style != .normal ? 0.5 : 0)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                .foregroundColor(Theme.buttonText)
+                .foregroundColor(primary ? .black : Theme.buttonText)
                 .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
-                .background(active ? activeColor : Theme.button)
-                .clipShape(RoundedRectangle(cornerRadius: 3))
+                .background(active ? activeColor : (primary ? Theme.primaryFill : (outline ? Color.clear : Theme.button)))
+                .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+                    .stroke(outline ? Color.white.opacity(0.6) : .clear, lineWidth: 1.5))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -52,8 +61,8 @@ private struct OverlayChannelButton: View {
                 }
             }
             .background(active ? color : color.opacity(0.24))
-            .clipShape(RoundedRectangle(cornerRadius: 3))
-            .overlay(RoundedRectangle(cornerRadius: 3)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
                 .stroke(color.opacity(active ? 1 : 0.65), lineWidth: active ? 1.2 : 0.8))
         }
         .buttonStyle(.plain)
@@ -69,11 +78,11 @@ struct TransitionColumn: View {
         VStack(spacing: 5) {
             Spacer().frame(height: 22)
             FlatButton(title: "Quick Play", active: engine.transitioning, activeColor: Theme.accent, height: 34,
-                       fontSize: 13, weight: .bold) {
+                       fontSize: 13, weight: .bold, style: .outline) {
                 engine.transition(slot: 1)
             }
             .help("Return")
-            FlatButton(title: "Cut", height: 34, fontSize: 13, weight: .bold) { engine.cut() }
+            FlatButton(title: AppSkin.isMono ? "CUT" : "Cut", height: 34, fontSize: 13, weight: .heavy, style: .primary) { engine.cut() }
                 .help("Space")
 
             ForEach(0..<4, id: \.self) { i in
@@ -259,7 +268,7 @@ struct SignalLostBadge: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Theme.live)
-                .clipShape(RoundedRectangle(cornerRadius: 3))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
                 .padding(4)
                 .allowsHitTesting(false)
         }
@@ -551,7 +560,7 @@ struct CategoryBar: View {
                 Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .bold))
                     .frame(width: 26, height: 24)
                     .background(search.isEmpty ? Theme.button : Theme.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
             }
             .buttonStyle(.plain)
             .help(L("입력 이름/번호로 찾기"))
@@ -577,8 +586,8 @@ struct CategoryBar: View {
                 .foregroundColor(.white)
                 .frame(width: 26, height: 24)
                 .background(InputCategory.color(k).opacity(category == k ? 1 : 0.55))
-                .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.white, lineWidth: category == k ? 2 : 0))
-                .clipShape(RoundedRectangle(cornerRadius: 3))
+                .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).stroke(Color.white, lineWidth: category == k ? 2 : 0))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
         }
         .buttonStyle(.plain)
         .help(k == 0 ? L("모든 입력") : Lf("%@ 카테고리 (우클릭: 이름 바꾸기 · 입력 우클릭 메뉴에서 지정)", InputCategory.name(k)))
@@ -737,7 +746,7 @@ struct InputBox: View {
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .frame(height: 20)
-            .background(headerColor)
+            .background(AppSkin.isMono ? Theme.panelDark : headerColor)
             .contentShape(Rectangle())
             .onTapGesture(count: 2) { sheet = SheetRequest(kind: input.kind, editing: input, mode: .properties) }
             .onTapGesture { if input.collapsed || input.folded { engine.setPreview(input.id) } }
@@ -753,9 +762,10 @@ struct InputBox: View {
             }
         }
         .background(Theme.panel)
-        .clipShape(RoundedRectangle(cornerRadius: 3))
-        .overlay(RoundedRectangle(cornerRadius: 3).stroke(dropTarget ? Color.white : Color.clear, lineWidth: 2))
-        .overlay(Rectangle().stroke(headerColor == Theme.panel ? Color.black.opacity(0.5) : headerColor, lineWidth: 2))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).stroke(dropTarget ? Color.white : Color.clear, lineWidth: 2))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+            .stroke(headerColor == Theme.panel ? (AppSkin.isMono ? Theme.hairline : Color.black.opacity(0.5)) : headerColor, lineWidth: 2))
         .draggable(input.id.uuidString) {
             Text("\(number). \(input.name)").padding(6).background(Theme.panel)
         }
@@ -775,14 +785,14 @@ struct InputBox: View {
            let key = engine.inputs.first(where: { $0.id.uuidString == input.alphaKey.keyInputID }) {
             Text("F+K \(engine.number(of: key))")
                 .font(.system(size: 8, weight: .bold)).padding(.horizontal, 4).frame(height: 14)
-                .background(Color.purple.opacity(0.9), in: RoundedRectangle(cornerRadius: 3))
+                .background(Color.purple.opacity(0.9), in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
                 .help(Lf("Fill 입력 · Key = 입력 %@", "\(engine.number(of: key))"))
         } else if let fill = engine.inputs.first(where: {
             $0.id != input.id && $0.alphaKey.mode == "key" && $0.alphaKey.keyInputID == input.id.uuidString
         }) {
             Text("KEY→\(engine.number(of: fill))")
                 .font(.system(size: 8, weight: .bold)).padding(.horizontal, 4).frame(height: 14)
-                .background(Color.blue.opacity(0.9), in: RoundedRectangle(cornerRadius: 3))
+                .background(Color.blue.opacity(0.9), in: RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
                 .help(Lf("입력 %@의 Key 신호", "\(engine.number(of: fill))"))
         }
     }
@@ -829,7 +839,7 @@ struct InputBox: View {
                 .foregroundColor(active ? .white : Theme.buttonText)
                 .frame(width: 24, height: 22)
                 .background(active ? Theme.live : Theme.button)
-                .clipShape(RoundedRectangle(cornerRadius: 3))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
@@ -867,7 +877,7 @@ struct InputBox: View {
                         .foregroundColor(input.muted ? .white : Theme.buttonText)
                         .frame(width: 24, height: 34)
                         .background(input.muted ? Theme.live : Theme.button)
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .help(input.muted ? L("오디오 켜기") : L("오디오 끄기"))
@@ -1177,7 +1187,7 @@ private struct BusManagerRow: View {
                         .foregroundColor(.white)
                         .frame(width: 46, height: 22)
                         .background(on ? Theme.accent : Theme.button)
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
@@ -1218,8 +1228,8 @@ struct InputChannelStrip: View {
                             .font(.system(size: 9, weight: .bold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity, minHeight: 20, maxHeight: 20)
-                            .background(input.audioFollowsVideo ? Theme.program : Theme.button)
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                            .background(input.audioFollowsVideo ? (AppSkin.isMono ? Color(white: 0.36) : Theme.program) : Theme.button)
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
                     }
                     .buttonStyle(.plain)
                     .help(L("Follow: 비디오가 Output에 있을 때만 오디오 On (Audio Auto)"))
@@ -1240,7 +1250,7 @@ struct InputChannelStrip: View {
                     .menuIndicator(.hidden)
                     .frame(maxWidth: .infinity, minHeight: 20, maxHeight: 20)
                     .background(extraBuses.isEmpty ? Theme.button : Theme.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
                     .help(extraBuses.isEmpty ? L("버스 A~G 보내기, Audio Settings") : Lf("버스 %@ · Audio Settings", "\(extraBuses)"))
                 }
             }
@@ -1292,8 +1302,16 @@ enum InputAudioState: Equatable {
         switch self {
         case .onAir: return Theme.program
         case .auto: return Theme.panelDark
-        case .on: return Theme.accent
-        case .mute: return Theme.live
+        case .on: return AppSkin.isMono ? Theme.primaryFill : Theme.accent
+        case .mute: return AppSkin.isMono ? Color(white: 0.2) : Theme.live
+        }
+    }
+    var textColor: Color {
+        switch self {
+        case .auto: return Color(white: 0.75)
+        case .on: return AppSkin.isMono ? .black : .white
+        case .mute: return AppSkin.isMono ? Color(red: 1, green: 0.42, blue: 0.38) : .white
+        case .onAir: return .white
         }
     }
     var help: String {
@@ -1364,10 +1382,10 @@ struct ChannelStrip<Accessory: View>: View {
                         Text(st.label).font(.system(size: 9, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7)
                     }
                     .frame(width: 58, height: 20)
-                    .foregroundColor(st == .auto ? Color(white: 0.75) : .white)
+                    .foregroundColor(st.textColor)
                     .background(st.color)
-                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(st == .auto ? Color(white: 0.45) : .clear, lineWidth: 1))
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).stroke(st == .auto ? Color(white: 0.45) : .clear, lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .help(st.help)
@@ -1380,7 +1398,7 @@ struct ChannelStrip<Accessory: View>: View {
                         .frame(width: 58, height: 20)
                         .foregroundColor(.white)
                         .background(muted ? Theme.live : Theme.button)
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .help("Mute")

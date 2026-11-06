@@ -5,6 +5,7 @@ import AppKit
 struct GeneralSettings: View {
     @AppStorage(AppLanguage.defaultsKey) private var language = AppLanguage.current.rawValue
     @AppStorage(FFmpegInput.rateConformKey) private var rateConform = true
+    @AppStorage(AppSkin.defaultsKey) private var appSkin = AppSkin.current.rawValue
 
     var body: some View {
         Form {
@@ -17,6 +18,15 @@ struct GeneralSettings: View {
             .pickerStyle(.radioGroup)
             Text(L("바꾸면 화면이 바로 새 언어로 바뀝니다. 송출·녹화는 그대로 계속됩니다."))
                 .font(.caption).foregroundColor(.secondary)
+            Section(L("화면 모양")) {
+                Picker(L("스킨"), selection: $appSkin) {
+                    ForEach(AppSkin.allCases) { skin in Text(skin.title).tag(skin.rawValue) }
+                }
+                .pickerStyle(.radioGroup)
+                .onChange(of: appSkin) { _, _ in AppSkin.reload() }
+                Text(L("Monochrome: 흑백 화면에 색은 의미에만 (Program 빨강 · Preview 초록), 상단·하단 바는 유리 재질. 기본: 기존 HongMix 화면 (Output 초록 · Preview 주황)."))
+                    .font(.caption).foregroundColor(.secondary)
+            }
             Section(L("재생")) {
                 Toggle(L("파일 프레임레이트 맞춤 (60 ↔ 59.94)"), isOn: Binding(get: { rateConform }, set: { v in
                     rateConform = v

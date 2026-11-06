@@ -295,6 +295,8 @@ final class OutputChannel: ObservableObject, Identifiable {
     private var dlOut: OpaquePointer?
     private var format = VideoFormat.defaultFormat
     private var startedAt = Date()
+    /// When this output started (nil while stopped) — for the bar's elapsed time.
+    var liveSince: Date? { running ? startedAt : nil }
 
     init(config: OutputConfig) {
         self.id = config.id

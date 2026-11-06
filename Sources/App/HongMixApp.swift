@@ -14,11 +14,14 @@ struct HongMixApp: App {
     @StateObject private var engine = SwitcherEngine()
     /// Changing the language rebuilds the window contents (engine and inputs keep running).
     @AppStorage(AppLanguage.defaultsKey) private var language = AppLanguage.current.rawValue
+    /// Changing the skin rebuilds every window too, so Replay/Scopes/Statistics/Settings repaint.
+    @AppStorage(AppSkin.defaultsKey) private var skin = AppSkin.current.rawValue
 
     var body: some Scene {
+        let _ = AppSkin.sync(skin)
         Window("HongMix", id: "main") {
             ZStack {
-                ContentView().id(language)
+                ContentView().id(language + skin)
                 LaunchOverlay()
             }
                 .environmentObject(engine)
@@ -48,29 +51,35 @@ struct HongMixApp: App {
 
         Window("Rundown", id: "rundown") {
             RundownView(rundown: engine.rundown)
-                .id(language)
+                .id(language + skin)
                 .environmentObject(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1120, height: 680)
         Window("Replay", id: "replay") {
             ReplayView()
-                .id(language)
+                .id(language + skin)
                 .environmentObject(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1200, height: 860)
         Window("Scopes", id: "scopes") {
             ScopesView()
-                .id(language)
+                .id(language + skin)
                 .environmentObject(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 960, height: 560)
+        Window(L("통계 및 모니터링"), id: "statistics") {
+            StatisticsSheet(engine: engine)
+                .id(language + skin)
+                .preferredColorScheme(.dark)
+        }
+        .defaultSize(width: 1440, height: 900)
 
         Settings {
             SettingsView()
-                .id(language)
+                .id(language + skin)
                 .environmentObject(engine)
                 .preferredColorScheme(.dark)
         }
