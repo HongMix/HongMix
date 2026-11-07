@@ -66,9 +66,51 @@ final class ScreenCaptureInput: InputSource {
     private var stream: SCStream?
     private let output = ScreenStreamOutput()
     private let queue = DispatchQueue(label: "screen.capture", qos: .userInteractive)
+    /// The input is supposed to be capturing (cleared by stop()) — drives the permission retry.
+    private var active = false
+    private var retryScheduled = false
+    /// macOS shows its own Screen Recording prompt once per launch at most.
+    private static var askedThisLaunch = false
+
+    /// Without Screen Recording permission: ask macOS once (prompt + adds HongMix to the list),
+    /// then keep retrying, so the input starts by itself as soon as the operator switches it on —
+    /// no need to delete and re-add the input.
+    private func waitForPermission(_ detail: String?) {
+        if !ScreenCaptureInput.askedThisLaunch {
+            ScreenCaptureInput.askedThisLaunch = true
+            DispatchQueue.main.async { _ = CGRequestScreenCaptureAccess() }
+        }
+        var msg = L("화면 기록 권한이 필요합니다 (시스템 설정 → 개인정보 보호 및 보안 → 화면 및 시스템 오디오 녹음 → HongMix 켜기). 켠 뒤 HongMix를 다시 실행하세요.")
+        if let d = detail, !d.isEmpty { msg += " · " + d }
+        postStatus(Int32(MC_STATE_ERROR), msg)
+        scheduleRetry()
+    }
+
+    private func scheduleRetry() {
+        DispatchQueue.main.async {
+            guard self.active, !self.retryScheduled else { return }
+            self.retryScheduled = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+                guard let self = self else { return }
+                self.retryScheduled = false
+                if self.active && self.queue.sync(execute: { self.stream == nil }) { self.begin() }
+            }
+        }
+    }
 
     override func start() {
-        guard stream == nil else { return }
+        active = true
+        begin()
+    }
+
+    private func begin() {
+        guard queue.sync(execute: { stream == nil }) else { return }
+        // Check silently first: every ScreenCaptureKit call without permission makes macOS show
+        // its "would like to record" alert again. Retries only poll this (no alert).
+        guard CGPreflightScreenCaptureAccess() else {
+            waitForPermission(nil)
+            return
+        }
         output.owner = self
         let wantDisplay = config.screenDisplayID
         let wantWindow = config.screenWindowID
@@ -78,8 +120,15 @@ final class ScreenCaptureInput: InputSource {
         SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: false) { [weak self] content, error in
             guard let self = self else { return }
             guard let content = content else {
-                self.postStatus(Int32(MC_STATE_ERROR), L("화면 기록 권한이 필요합니다 (시스템 설정 → 개인정보 보호 및 보안)"))
-                _ = error
+                // Permission missing (or not yet effective): show the real reason and keep retrying.
+                let granted = CGPreflightScreenCaptureAccess()
+                let reason = error.map { "\($0.localizedDescription)" }
+                if granted {
+                    self.postStatus(Int32(MC_STATE_ERROR), Lf("화면 목록을 가져오지 못함: %@ — 다시 시도 중", reason ?? "-"))
+                    self.scheduleRetry()
+                } else {
+                    self.waitForPermission(reason)
+                }
                 return
             }
             let filter: SCContentFilter
@@ -120,18 +169,21 @@ final class ScreenCaptureInput: InputSource {
                 self.postStatus(Int32(MC_STATE_ERROR), Lf("캡처 출력 추가 실패: %@", "\(error.localizedDescription)"))
                 return
             }
+            self.queue.sync { self.stream = s }     // recorded before start so a fast failure can clear it
             s.startCapture { err in
                 if let err = err {
                     self.postStatus(Int32(MC_STATE_ERROR), Lf("캡처 시작 실패: %@", "\(err.localizedDescription)"))
+                    self.queue.async { if self.stream === s { self.stream = nil } }
+                    if !CGPreflightScreenCaptureAccess() { self.waitForPermission(err.localizedDescription) } else { self.scheduleRetry() }
                 } else {
                     self.postStatus(Int32(MC_STATE_RUNNING), label)
                 }
             }
-            self.queue.async { self.stream = s }
         }
     }
 
     override func stop() {
+        active = false
         let s = queue.sync { () -> SCStream? in
             let s = stream
             stream = nil

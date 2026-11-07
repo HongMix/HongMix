@@ -10,13 +10,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 1.4.3</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 1.4.5</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
-### Latest update · 1.4.3
-- **Permissions now survive updates:** releases are signed with a fixed HongMix certificate instead of an ad-hoc signature, so Screen Recording (Desktop Capture), camera and microphone permissions are kept after updating. Coming from an older version? See [macOS permissions](#macos-permissions) once.
+### Latest update · 1.4.5
+- **Desktop Capture permission fixed:** shows the real reason when capture can't start, asks macOS at most once per launch (no repeating "would like to record" alerts) and starts by itself once Screen Recording is allowed. If it still says permission is needed after an update, follow [macOS permissions](#macos-permissions) once.
 
 ### 1.4.2
 - **Display output fixed for macOS Spaces:** Output Window and borderless Display Fullscreen stay on the active desktop. The green button fills the current display without creating a stranded black full-screen Space; Esc, double-click or right-click returns to a window.
@@ -158,15 +158,13 @@ HongMix asks macOS the first time you use each feature (System Settings › Priv
 After switching a permission on, **quit and reopen HongMix**; macOS applies screen recording only when an app starts.
 
 **Desktop Capture says "Screen Recording permission needed" although HongMix is switched on?**
-macOS ties the permission to the app's signature. Releases before 1.4.3 were ad-hoc signed, so each update counted as a
-new app while System Settings still showed the old "HongMix" switched on. Fix it once:
+macOS ties the permission to the app's signature. Releases are ad-hoc signed (not notarised yet), so after an update
+macOS may treat HongMix as a new app while System Settings still shows the old "HongMix" switched on. Fix it once per update:
 
 1. Quit HongMix.
 2. In Terminal: `tccutil reset ScreenCapture com.hongseunghoon.HongMix` (clears HongMix's entry only).
 3. Open HongMix, add **Desktop Capture**, choose **Open System Settings** and switch HongMix on.
 4. Quit and reopen HongMix.
-
-From **1.4.3**, releases are signed with a fixed HongMix certificate, so permissions you grant stay across updates.
 
 ## Build from source
 
@@ -177,8 +175,9 @@ xcode-select --install                 # Command Line Tools (Xcode not required)
 ./scripts/make-dmg.sh                  # → build/dist/HongMix-<version>.dmg / .pkg
 ```
 
-`make-dmg.sh` signs with a keychain identity named **HongMix Code Signing** when present (stable signature, macOS
-permissions persist across builds), otherwise ad-hoc. Override with `SIGN_ID="…"`.
+`make-dmg.sh` signs ad-hoc by default. To keep macOS permissions across your own local builds, create a code-signing
+certificate, set it to *Always Trust for code signing* in Keychain Access and build with `SIGN_ID="<certificate name>"`.
+Don't use a self-signed certificate for public releases: Macs that don't trust it won't apply Screen Recording permission.
 
 Optional SDKs (not included in this repository):
 - [NDI SDK for Apple](https://ndi.video/for-developers/ndi-sdk/): accept its license yourself

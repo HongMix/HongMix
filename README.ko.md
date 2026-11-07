@@ -10,13 +10,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 1.4.3 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 1.4.5 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
-### 최신 업데이트 · 1.4.3
-- **업데이트해도 권한 유지:** 임시(ad-hoc) 서명 대신 고정된 HongMix 인증서로 서명합니다. 화면 녹음(Desktop Capture)·카메라·마이크 권한이 업데이트 후에도 그대로 유지됩니다. 이전 버전에서 올라오셨다면 [macOS 권한](#macos-권한)을 한 번만 따라 해 주세요.
+### 최신 업데이트 · 1.4.5
+- **Desktop Capture 권한 문제 수정:** 캡처가 안 될 때 실제 이유를 보여 주고, macOS 허용 창은 앱을 켤 때 최대 한 번만 띄웁니다("기록하려고 합니다" 창 반복 없음). 화면 녹음을 허용하면 저절로 캡처를 시작합니다. 업데이트 후에도 권한 필요가 나오면 [macOS 권한](#macos-권한)을 한 번 따라 해 주세요.
 
 ### 1.4.2
 - **macOS Space에 맞춘 Display 출력:** Output Window와 디스플레이 채우기가 현재 데스크톱에 그대로 열립니다. 초록 버튼은 검은 전체화면 Space를 남기지 않으며 Esc·더블클릭·우클릭으로 일반 창에 복귀합니다.
@@ -159,15 +159,13 @@ OBS는 훌륭한 송출 프로그램입니다. HongMix는 vMix 계열의 프로�
 권한을 켠 뒤에는 **HongMix를 종료했다가 다시 실행**하세요. 화면 녹음 권한은 앱을 다시 켤 때 적용됩니다.
 
 **HongMix를 켜 두었는데도 Desktop Capture에 "Screen Recording permission needed"가 나오나요?**
-macOS는 권한을 앱의 서명에 기록합니다. 1.4.3 이전 버전은 임시(ad-hoc) 서명이라 업데이트할 때마다 다른 앱으로
-취급되는데, 설정 화면에는 예전 "HongMix"가 켜진 것처럼 보입니다. 한 번만 이렇게 하세요:
+macOS는 권한을 앱의 서명에 기록합니다. 배포판은 아직 공증 없이 임시(ad-hoc) 서명이라, 업데이트 후 macOS가 HongMix를
+새 앱으로 볼 수 있습니다. 설정 화면에는 예전 "HongMix"가 켜진 것처럼 보입니다. 업데이트 후 한 번 이렇게 하세요:
 
 1. HongMix를 종료합니다.
 2. 터미널에서: `tccutil reset ScreenCapture com.hongseunghoon.HongMix` (HongMix 항목만 지웁니다)
 3. HongMix를 열고 **Desktop Capture**를 추가 → **시스템 설정 열기** → HongMix를 켭니다.
 4. HongMix를 종료했다가 다시 실행합니다.
-
-**1.4.3부터**는 고정된 HongMix 인증서로 서명하므로, 한 번 준 권한이 업데이트 후에도 유지됩니다.
 
 ## 소스로 빌드하기
 
@@ -178,8 +176,9 @@ xcode-select --install                 # Command Line Tools (Xcode 없어도 됨
 ./scripts/make-dmg.sh                  # → build/dist/HongMix-<버전>.dmg / .pkg
 ```
 
-`make-dmg.sh`는 키체인에 **HongMix Code Signing** 인증서가 있으면 그것으로 서명합니다(서명이 고정되어 macOS 권한이
-빌드 후에도 유지). 없으면 ad-hoc 서명입니다. `SIGN_ID="…"`로 바꿀 수 있습니다.
+`make-dmg.sh`는 기본으로 ad-hoc 서명합니다. 내 맥에서 빌드할 때마다 권한을 유지하려면 코드 서명 인증서를 만들어
+키체인 접근에서 *코드 서명: 항상 신뢰*로 지정한 뒤 `SIGN_ID="<인증서 이름>"`으로 빌드하세요.
+직접 만든 인증서로 공개 배포하지는 마세요. 그 인증서를 신뢰하지 않는 맥에서는 화면 녹음 권한이 적용되지 않습니다.
 
 선택 SDK (저장소에 포함하지 않음):
 - [NDI SDK for Apple](https://ndi.video/for-developers/ndi-sdk/): 설치할 때 라이선스에 직접 동의해야 합니다.

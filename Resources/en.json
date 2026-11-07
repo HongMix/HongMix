@@ -1201,5 +1201,7 @@
  "디스플레이 끄기": "Turn Display Off",
  "디스플레이 켜기": "Turn Display On",
  "스코프 — 파형 · 벡터스코프 · 히스토그램": "Scopes — waveform · vectorscope · histogram",
- "도구: MultiCorder, 모든 출력, Overlay, 큐시트, 스케줄, 자막, 상황판, 스냅샷": "Tools: MultiCorder, all outputs, Overlay, cue sheet, scheduler, captions, status board, snapshot"
+ "도구: MultiCorder, 모든 출력, Overlay, 큐시트, 스케줄, 자막, 상황판, 스냅샷": "Tools: MultiCorder, all outputs, Overlay, cue sheet, scheduler, captions, status board, snapshot",
+ "화면 목록을 가져오지 못함: %@ — 다시 시도 중": "Couldn't list screens: %@ — retrying",
+ "화면 기록 권한이 필요합니다 (시스템 설정 → 개인정보 보호 및 보안 → 화면 및 시스템 오디오 녹음 → HongMix 켜기). 켠 뒤 HongMix를 다시 실행하세요.": "Screen Recording permission needed (System Settings → Privacy & Security → Screen & System Audio Recording → turn HongMix on), then reopen HongMix."
 }

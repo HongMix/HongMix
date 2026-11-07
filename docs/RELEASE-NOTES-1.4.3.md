@@ -1,3 +1,5 @@
+> **Not released.** Superseded by [1.4.5](RELEASE-NOTES-1.4.5.md): a self-signed certificate does not work for public releases. / 배포하지 않음 — 1.4.5 참고.
+
 # HongMix 1.4.3
 
 ## Permissions survive updates
