@@ -51,3 +51,12 @@
 - 초록 버튼: 출력 창 960×540 → 1728×1117 → Esc → 960×540.
 - scripts/test-core.sh 통과. 릴리스 빌드 경고 없음. DMG 앱 외부 라이브러리 의존 없음.
 - 미확인: 다중 모니터, 유리 바(Liquid Glass)의 실제 화면 모양.
+
+## 공개 캡처
+- `screenshots/1.4.2/1.4.2-main-switcher-test-patterns.png` — Monochrome 스위처, 생성한 59.94p 입력과 실시간 오디오 미터.
+- `screenshots/1.4.2/1.4.2-display-settings-test-patterns.png` — 별도 출력 창·디스플레이 채우기·소스 선택.
+- `screenshots/1.4.2/1.4.2-statistics-monitoring-test-patterns.png` — 독립 모니터링 창.
+- `screenshots/1.4.2/1.4.2-external-output-settings.png` — NDI·DeckLink와 Output 2–4 라우팅.
+- `screenshots/1.4.2/1.4.2-stream-settings.png` — 분리된 RTMP/SRT 설정과 이중 백업 경로.
+
+공개 이미지는 이 Mac에서 생성한 테스트 패턴만 사용했습니다. 사람 얼굴·타사 방송 영상·스트림 키는 포함하지 않았습니다.

@@ -10,39 +10,33 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 1.4.0 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 1.4.2 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
-### 최신 업데이트 · 1.4.0
-- **카메라·오디오 매칭:** FaceTime, 연속성 카메라, 외부 캡처 소스와 관련 마이크·오디오 장치를 자동으로 맞춥니다. 수동 선택과 장치 새로고침도 추가했습니다.
-- **아이폰 연속성 카메라:** 아이폰 카메라 검색을 활성화했고 이전 실제 연결을 확인했습니다. 이번 빌드에서는 FaceTime 1080p29.97 영상과 맥 마이크 오디오가 함께 들어오는 것을 확인했습니다.
-- **DeckLink 작업 흐름:** 로컬 DeckLink SDK 16 빌드, 출력 라우팅, Straight/Premultiplied Fill & Key 설정을 구현했습니다. 실제 DeckLink 입출력은 장비 검증 전입니다.
-- **캡처 프리뷰:** NV12 카메라·캡처 프레임을 직접 모니터 경로로 표시하도록 개선했습니다.
-- **운영 상태 표시:** 5초 시작 애니메이션, 안정적인 오디오 미터 움직임, 혼합 프레임레이트·오디오 큐 진단을 추가했습니다.
-- 공개 캡처는 개인정보 보호 모자이크를 적용했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-1.4.0.ko.md) · [English release notes](docs/RELEASE-NOTES-1.4.0.md)
+### 최신 업데이트 · 1.4.2
+- **macOS Space에 맞춘 Display 출력:** Output Window와 디스플레이 채우기가 현재 데스크톱에 그대로 열립니다. 초록 버튼은 검은 전체화면 Space를 남기지 않으며 Esc·더블클릭·우클릭으로 일반 창에 복귀합니다.
+- **출력 설정 분리:** Record, External(NDI·DeckLink), Stream 설정을 각각 분리했습니다. External은 Output 2–4 라우팅, Stream은 이중 백업 경로를 함께 설정합니다.
+- **Monochrome 운영 스킨:** Preview·Program·ON AIR·경고처럼 의미가 있는 상태에만 색을 사용합니다. 기존 기본 스킨도 설정에서 선택할 수 있습니다.
+- **모니터링 작업 흐름:** Display 설정, Replay, Scopes를 하단 버튼으로 바로 열 수 있습니다. Statistics & Monitoring은 다른 모니터·데스크톱으로 옮길 수 있는 별도 창입니다.
+- **검증:** 일반 창과 macOS 전체화면 스위처 상태에서 Display 회귀 테스트 총 16/16 단계를 통과했습니다. 다중 모니터 실제 장비 검증은 남아 있습니다.
+- 공개 캡처에는 생성한 테스트 패턴만 사용했습니다. 사람 얼굴·타사 방송 영상·스트림 키는 포함하지 않았습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-1.4.2.ko.md) · [English release notes](docs/RELEASE-NOTES-1.4.2.md)
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-main-switcher-redacted.png" alt="HongMix 1.4.0 메인 스위처" width="100%"><br><sub>메인 스위처 · Preview 전체와 얼굴 모자이크</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-camera-live-audio-redacted.png" alt="HongMix 1.4.0 실제 카메라와 오디오 미터" width="100%"><br><sub>FaceTime 실제 입력 + 오디오 미터</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.2/1.4.2-main-switcher-test-patterns.png" alt="테스트 패턴을 사용한 HongMix 1.4.2 Monochrome 메인 스위처" width="100%"><br><sub>Monochrome 스위처 · 생성한 59.94p 테스트 패턴</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.2/1.4.2-display-settings-test-patterns.png" alt="HongMix 1.4.2 Display 출력 설정" width="100%"><br><sub>별도 출력 창·디스플레이 채우기·소스 선택</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-camera-audio-match-redacted.png" alt="HongMix 1.4.0 카메라와 오디오 매칭" width="100%"><br><sub>카메라·오디오 자동 매칭과 수동 선택</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-decklink-output-settings-redacted.png" alt="HongMix 1.4.0 DeckLink 출력 설정" width="100%"><br><sub>DeckLink 출력 라우팅 · 이 캡처에는 장비 미연결</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.2/1.4.2-statistics-monitoring-test-patterns.png" alt="HongMix 1.4.2 통계 및 모니터링 창" width="100%"><br><sub>독립된 Statistics &amp; Monitoring 창</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.2/1.4.2-external-output-settings.png" alt="HongMix 1.4.2 External 출력 설정" width="100%"><br><sub>NDI·DeckLink와 Output 2–4 라우팅</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-decklink-fill-key-options-redacted.png" alt="HongMix 1.4.0 DeckLink Fill and Key 방식" width="100%"><br><sub>일반 / Straight Fill &amp; Key / Premultiplied Fill &amp; Key</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-launch-redacted.png" alt="HongMix 1.4.0 시작 화면" width="100%"><br><sub>5초 시작 애니메이션과 초기화 상태</sub></td>
+    <td colspan="2" align="center"><img src="docs/screenshots/1.4.2/1.4.2-stream-settings.png" alt="HongMix 1.4.2 Stream 설정" width="75%"><br><sub>분리된 RTMP/SRT 설정과 이중 백업 경로</sub></td>
   </tr>
 </table>
 
-
-<p align="center">
-  <img src="docs/screenshots/hongmix-main.jpg" alt="HongMix 메인 화면: 4분할 멀티캠 + 하단 자막·LIVE 표시·티커 온에어" width="100%">
-</p>
-<p align="center"><sub>HongMix 메인 화면: 4분할 멀티캠 + 하단 자막·LIVE 표시·티커 온에어</sub></p>
 
 ---
 

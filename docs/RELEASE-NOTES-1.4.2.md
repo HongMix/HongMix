@@ -46,3 +46,12 @@
   (no Space switch, no HongMix full-screen Space added, window sizes and visibility checked).
 - Green button: 960×540 → 1728×1117 → Esc → 960×540. scripts/test-core.sh passes. No new build warnings; DMG app has no external library paths.
 - Not verified: multiple displays; on-screen look of the Liquid Glass bars.
+
+## Release screenshots
+- `screenshots/1.4.2/1.4.2-main-switcher-test-patterns.png` — Monochrome switcher, generated 59.94p inputs and live audio meters.
+- `screenshots/1.4.2/1.4.2-display-settings-test-patterns.png` — Output Window / Display Fullscreen and source selection.
+- `screenshots/1.4.2/1.4.2-statistics-monitoring-test-patterns.png` — independent monitoring window.
+- `screenshots/1.4.2/1.4.2-external-output-settings.png` — NDI, DeckLink and Output 2–4 routing.
+- `screenshots/1.4.2/1.4.2-stream-settings.png` — dedicated RTMP/SRT settings and dual-path backup.
+
+The public images use locally generated test patterns only. They contain no people, third-party programme footage or stream keys.

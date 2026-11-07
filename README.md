@@ -10,39 +10,33 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 1.4.0</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 1.4.2</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
-### Latest update · 1.4.0
-- **Camera + audio pairing:** automatically matches a FaceTime, Continuity Camera or external capture source with its related microphone/audio device, with manual selection and refresh controls.
-- **Continuity Camera:** iPhone camera discovery is enabled; an iPhone connection has been confirmed previously. FaceTime 1080p29.97 video and Mac microphone audio were verified together in the current build.
-- **DeckLink workflow:** local DeckLink SDK 16 builds, output routing, and Straight/Premultiplied Fill & Key controls are implemented. Physical DeckLink I/O remains hardware-validation pending.
-- **Capture previews:** native NV12 camera/capture frames now use the direct monitor path.
-- **Operator feedback:** five-second animated startup status, smoother audio-meter ballistics, and mixed-frame-rate/audio-queue diagnostics.
-- Public screenshots are privacy-redacted. See the [English release notes](docs/RELEASE-NOTES-1.4.0.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-1.4.0.ko.md).
+### Latest update · 1.4.2
+- **Display output fixed for macOS Spaces:** Output Window and borderless Display Fullscreen stay on the active desktop. The green button fills the current display without creating a stranded black full-screen Space; Esc, double-click or right-click returns to a window.
+- **Focused output settings:** Record, External (NDI / DeckLink) and Stream each have their own settings window. External also routes Output 2–4; Stream includes dual-path backup controls.
+- **Monochrome operator skin:** a restrained black-and-white skin uses colour only for Preview, Program, ON AIR and warnings. The original skin remains available in Settings.
+- **Monitoring workflow:** Display settings, Replay and Scopes are now direct bottom-bar controls. Statistics & Monitoring runs in an independent movable window.
+- **Validated:** the display regression suite passed 16/16 steps in both normal and macOS full-screen switcher states. Multi-display hardware testing is still pending.
+- Public screenshots use generated test patterns only—no people, third-party programme footage or stream keys. See the [English release notes](docs/RELEASE-NOTES-1.4.2.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-1.4.2.ko.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-main-switcher-redacted.png" alt="HongMix 1.4.0 main switcher" width="100%"><br><sub>Main switcher · privacy-redacted Preview and faces</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-camera-live-audio-redacted.png" alt="HongMix 1.4.0 live camera and audio metering" width="100%"><br><sub>Live FaceTime capture + active audio metering</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.2/1.4.2-main-switcher-test-patterns.png" alt="HongMix 1.4.2 Monochrome main switcher with generated test patterns" width="100%"><br><sub>Monochrome switcher · generated 59.94p test patterns</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.2/1.4.2-display-settings-test-patterns.png" alt="HongMix 1.4.2 Display Output settings" width="100%"><br><sub>Output Window / Display Fullscreen and source selection</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-camera-audio-match-redacted.png" alt="HongMix 1.4.0 camera and audio matching" width="100%"><br><sub>Camera/audio auto-match and manual device selection</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-decklink-output-settings-redacted.png" alt="HongMix 1.4.0 DeckLink output settings" width="100%"><br><sub>DeckLink routing UI · no hardware detected in this capture</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.2/1.4.2-statistics-monitoring-test-patterns.png" alt="HongMix 1.4.2 Statistics and Monitoring window" width="100%"><br><sub>Independent Statistics &amp; Monitoring window</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/1.4.2/1.4.2-external-output-settings.png" alt="HongMix 1.4.2 External output settings" width="100%"><br><sub>NDI / DeckLink and Output 2–4 routing</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-decklink-fill-key-options-redacted.png" alt="HongMix 1.4.0 DeckLink Fill and Key modes" width="100%"><br><sub>Normal / Straight Fill &amp; Key / Premultiplied Fill &amp; Key</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/1.4.0/1.4.0-launch-redacted.png" alt="HongMix 1.4.0 animated startup screen" width="100%"><br><sub>Five-second startup and initialization status</sub></td>
+    <td colspan="2" align="center"><img src="docs/screenshots/1.4.2/1.4.2-stream-settings.png" alt="HongMix 1.4.2 Stream settings" width="75%"><br><sub>Dedicated RTMP/SRT settings and dual-path backup stream</sub></td>
   </tr>
 </table>
 
-
-<p align="center">
-  <img src="docs/screenshots/hongmix-main.jpg" alt="HongMix main window: multi-camera split with lower third, LIVE bug and ticker on air" width="100%">
-</p>
-<p align="center"><sub>HongMix main window: multi-camera split with lower third, LIVE bug and ticker on air</sub></p>
 
 ---
 
