@@ -10,12 +10,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 1.4.2</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 1.4.3</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
-### Latest update · 1.4.2
+### Latest update · 1.4.3
+- **Permissions now survive updates:** releases are signed with a fixed HongMix certificate instead of an ad-hoc signature, so Screen Recording (Desktop Capture), camera and microphone permissions are kept after updating. Coming from an older version? See [macOS permissions](#macos-permissions) once.
+
+### 1.4.2
 - **Display output fixed for macOS Spaces:** Output Window and borderless Display Fullscreen stay on the active desktop. The green button fills the current display without creating a stranded black full-screen Space; Esc, double-click or right-click returns to a window.
 - **Focused output settings:** Record, External (NDI / DeckLink) and Stream each have their own settings window. External also routes Output 2–4; Stream includes dual-path backup controls.
 - **Monochrome operator skin:** a restrained black-and-white skin uses colour only for Preview, Program, ON AIR and warnings. The original skin remains available in Settings.
@@ -141,6 +144,30 @@ No. OBS is a great streaming encoder. HongMix is a production switcher in the vM
 
 Manuals: `docs/HongMix-Manual-EN.txt` (English) · `docs/HongMix-설명서.txt` (Korean)
 
+## macOS permissions
+
+HongMix asks macOS the first time you use each feature (System Settings › Privacy & Security):
+
+| Feature | Permission |
+|---|---|
+| Desktop Capture input, system audio | **Screen & System Audio Recording** |
+| Camera / capture-card input | Camera |
+| Audio Input (microphone, interface) | Microphone |
+| NDI discovery, remote control | Local Network |
+
+After switching a permission on, **quit and reopen HongMix**; macOS applies screen recording only when an app starts.
+
+**Desktop Capture says "Screen Recording permission needed" although HongMix is switched on?**
+macOS ties the permission to the app's signature. Releases before 1.4.3 were ad-hoc signed, so each update counted as a
+new app while System Settings still showed the old "HongMix" switched on. Fix it once:
+
+1. Quit HongMix.
+2. In Terminal: `tccutil reset ScreenCapture com.hongseunghoon.HongMix` (clears HongMix's entry only).
+3. Open HongMix, add **Desktop Capture**, choose **Open System Settings** and switch HongMix on.
+4. Quit and reopen HongMix.
+
+From **1.4.3**, releases are signed with a fixed HongMix certificate, so permissions you grant stay across updates.
+
 ## Build from source
 
 ```bash
@@ -149,6 +176,9 @@ xcode-select --install                 # Command Line Tools (Xcode not required)
 ./scripts/build-cli.sh                 # → build/cli/HongMix.app
 ./scripts/make-dmg.sh                  # → build/dist/HongMix-<version>.dmg / .pkg
 ```
+
+`make-dmg.sh` signs with a keychain identity named **HongMix Code Signing** when present (stable signature, macOS
+permissions persist across builds), otherwise ad-hoc. Override with `SIGN_ID="…"`.
 
 Optional SDKs (not included in this repository):
 - [NDI SDK for Apple](https://ndi.video/for-developers/ndi-sdk/): accept its license yourself

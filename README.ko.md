@@ -10,12 +10,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 1.4.2 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 1.4.3 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
-### 최신 업데이트 · 1.4.2
+### 최신 업데이트 · 1.4.3
+- **업데이트해도 권한 유지:** 임시(ad-hoc) 서명 대신 고정된 HongMix 인증서로 서명합니다. 화면 녹음(Desktop Capture)·카메라·마이크 권한이 업데이트 후에도 그대로 유지됩니다. 이전 버전에서 올라오셨다면 [macOS 권한](#macos-권한)을 한 번만 따라 해 주세요.
+
+### 1.4.2
 - **macOS Space에 맞춘 Display 출력:** Output Window와 디스플레이 채우기가 현재 데스크톱에 그대로 열립니다. 초록 버튼은 검은 전체화면 Space를 남기지 않으며 Esc·더블클릭·우클릭으로 일반 창에 복귀합니다.
 - **출력 설정 분리:** Record, External(NDI·DeckLink), Stream 설정을 각각 분리했습니다. External은 Output 2–4 라우팅, Stream은 이중 백업 경로를 함께 설정합니다.
 - **Monochrome 운영 스킨:** Preview·Program·ON AIR·경고처럼 의미가 있는 상태에만 색을 사용합니다. 기존 기본 스킨도 설정에서 선택할 수 있습니다.
@@ -142,6 +145,30 @@ OBS는 훌륭한 송출 프로그램입니다. HongMix는 vMix 계열의 프로�
 
 설명서: `docs/HongMix-설명서.txt` (한국어) · `docs/HongMix-Manual-EN.txt` (English)
 
+## macOS 권한
+
+각 기능을 처음 쓸 때 macOS가 허용을 묻습니다 (시스템 설정 › 개인정보 보호 및 보안):
+
+| 기능 | 권한 |
+|---|---|
+| Desktop Capture 입력, 시스템 오디오 | **화면 및 시스템 오디오 녹음** |
+| 카메라 / 캡처 카드 입력 | 카메라 |
+| Audio Input (마이크, 오디오 인터페이스) | 마이크 |
+| NDI 검색, 원격 제어 | 로컬 네트워크 |
+
+권한을 켠 뒤에는 **HongMix를 종료했다가 다시 실행**하세요. 화면 녹음 권한은 앱을 다시 켤 때 적용됩니다.
+
+**HongMix를 켜 두었는데도 Desktop Capture에 "Screen Recording permission needed"가 나오나요?**
+macOS는 권한을 앱의 서명에 기록합니다. 1.4.3 이전 버전은 임시(ad-hoc) 서명이라 업데이트할 때마다 다른 앱으로
+취급되는데, 설정 화면에는 예전 "HongMix"가 켜진 것처럼 보입니다. 한 번만 이렇게 하세요:
+
+1. HongMix를 종료합니다.
+2. 터미널에서: `tccutil reset ScreenCapture com.hongseunghoon.HongMix` (HongMix 항목만 지웁니다)
+3. HongMix를 열고 **Desktop Capture**를 추가 → **시스템 설정 열기** → HongMix를 켭니다.
+4. HongMix를 종료했다가 다시 실행합니다.
+
+**1.4.3부터**는 고정된 HongMix 인증서로 서명하므로, 한 번 준 권한이 업데이트 후에도 유지됩니다.
+
 ## 소스로 빌드하기
 
 ```bash
@@ -150,6 +177,9 @@ xcode-select --install                 # Command Line Tools (Xcode 없어도 됨
 ./scripts/build-cli.sh                 # → build/cli/HongMix.app
 ./scripts/make-dmg.sh                  # → build/dist/HongMix-<버전>.dmg / .pkg
 ```
+
+`make-dmg.sh`는 키체인에 **HongMix Code Signing** 인증서가 있으면 그것으로 서명합니다(서명이 고정되어 macOS 권한이
+빌드 후에도 유지). 없으면 ad-hoc 서명입니다. `SIGN_ID="…"`로 바꿀 수 있습니다.
 
 선택 SDK (저장소에 포함하지 않음):
 - [NDI SDK for Apple](https://ndi.video/for-developers/ndi-sdk/): 설치할 때 라이선스에 직접 동의해야 합니다.

@@ -15,7 +15,18 @@ VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Resourc
 BUILD_DIR="build"
 APP="$BUILD_DIR/Build/Products/Release/$APP_NAME.app"
 DMG="$BUILD_DIR/${APP_NAME}-${VERSION}.dmg"
-SIGN_ID="${SIGN_ID:--}"   # 기본 ad-hoc. Developer ID가 있으면: SIGN_ID="Developer ID Application: ..." ./scripts/make-dmg.sh
+# 서명: SIGN_ID 지정 > 키체인의 "HongMix Code Signing"(고정 인증서) > ad-hoc.
+# 고정 인증서로 서명하면 macOS 권한(화면 녹화·카메라·마이크 등)이 업데이트 후에도 유지됩니다.
+# ad-hoc 서명은 빌드마다 서명 값이 바뀌어 권한을 매번 다시 줘야 합니다.
+# Developer ID가 있으면: SIGN_ID="Developer ID Application: ..." ./scripts/make-dmg.sh
+if [ -z "${SIGN_ID:-}" ]; then
+  if security find-identity -p codesigning 2>/dev/null | grep -q '"HongMix Code Signing"'; then
+    SIGN_ID="HongMix Code Signing"
+  else
+    SIGN_ID="-"
+    echo "  ⚠︎ 'HongMix Code Signing' 인증서가 없어 ad-hoc 서명합니다 (업데이트마다 화면 녹화 권한을 다시 줘야 함)."
+  fi
+fi
 
 command -v brew >/dev/null || { echo "Homebrew가 필요합니다: https://brew.sh"; exit 1; }
 # LGPL FFmpeg (GPL 부품 없음) — 없으면 먼저 빌드
