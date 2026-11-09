@@ -394,6 +394,8 @@ struct InputConfig: Codable, Identifiable, Equatable {
     var lutStrength: Float = 1
     /// Alpha / Fill & Key mapping
     var alphaKey = AlphaKeySettings()
+    /// AI background removal (person segmentation, no green screen)
+    var bgRemoval = BGRemovalSettings()
     /// Instant Replay input: 0 = channel A, 1 = channel B
     var replayChannel: Int = 0
     /// Photos (folder slideshow) / PDF Slides settings (SlideInputs.swift)
@@ -473,6 +475,7 @@ struct InputConfig: Codable, Identifiable, Equatable {
         lutPath = c.value(.lutPath, d.lutPath)
         lutStrength = c.value(.lutStrength, d.lutStrength)
         alphaKey = c.value(.alphaKey, d.alphaKey)
+        bgRemoval = c.value(.bgRemoval, d.bgRemoval)
         replayChannel = c.value(.replayChannel, d.replayChannel)
         slides = c.value(.slides, d.slides)
         virtualSet = c.value(.virtualSet, d.virtualSet)
@@ -597,6 +600,15 @@ class InputSource: ObservableObject, Identifiable {
         paramsLock.lock(); defer { paramsLock.unlock() }
         return alphaKeyStore
     }
+    /// AI background removal — snapshot read by the render thread
+    @Published var bgRemoval = BGRemovalSettings() { didSet { paramsLock.lock(); bgRemovalStore = bgRemoval; paramsLock.unlock() } }
+    private var bgRemovalStore = BGRemovalSettings()
+    var bgRemovalSnapshot: BGRemovalSettings {
+        paramsLock.lock(); defer { paramsLock.unlock() }
+        return bgRemovalStore
+    }
+    /// Render thread: Vision worker for this input (nil while background removal is off).
+    var bgRemover: BackgroundRemover?
     /// Render thread: last alpha/key result, reused while fill and key frames don't change.
     var keyCacheFill: CVPixelBuffer?
     var keyCacheKey: CVPixelBuffer?
@@ -771,10 +783,12 @@ class InputSource: ObservableObject, Identifiable {
         self.lutPath = config.lutPath
         self.lutStrength = config.lutStrength
         self.alphaKey = config.alphaKey
+        self.bgRemoval = config.bgRemoval
         self.config = config
         layersStore = config.layers          // didSet doesn't run in init
         lutStore = (config.lutPath, config.lutStrength)
         alphaKeyStore = config.alphaKey
+        bgRemovalStore = config.bgRemoval
         if !config.lutPath.isEmpty { LUTCache.shared.preload(config.lutPath) }
         syncAudioParams()
         syncVideoParams()
@@ -863,6 +877,7 @@ class InputSource: ObservableObject, Identifiable {
         c.lutPath = lutPath
         c.lutStrength = lutStrength
         c.alphaKey = alphaKey
+        c.bgRemoval = bgRemoval
         return c
     }
 

@@ -142,8 +142,40 @@ final class TitleInput: InputSource {
     private var tickerOrigin: CFTimeInterval = CACurrentMediaTime()
     private var imageCache: [String: CGImage] = [:]
     private var docSnapshot: TitleDocument          // render-thread copy (stateLock)
+    // live captions (stateLock): rows + line scroll animation
+    private var capFrame: CaptionFrame?
+    private var capFromY: [Int: CGFloat] = [:]      // row id → y when the change started
+    private var capLastY: [Int: CGFloat] = [:]      // row id → y last drawn
+    private var capExiting: [(CaptionRenderer.Placed, CGFloat)] = []
+    private var capStart: CFTimeInterval = 0
 
     override var alphaPremultiplied: Bool { true }
+
+    /// Live captions: new rows; existing lines slide to their new place, old lines fade upward.
+    func setCaptionFrame(_ f: CaptionFrame) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        guard f != capFrame else { return }
+        let old = capFrame
+        capFrame = f
+        let animate = f.style.animationMs >= 1 && old != nil && old?.style == f.style
+        if animate, let old {
+            capFromY = capLastY
+            let keep = Set(f.rows.map(\.id))
+            let gone = old.rows.filter { !keep.contains($0.id) && !$0.text.isEmpty }
+            if !gone.isEmpty {
+                let placed = CaptionRenderer.layout(old, W: CGFloat(width), H: CGFloat(height))
+                capExiting = placed.filter { p in gone.contains { $0.id == p.row.id } }
+                    .map { ($0, capLastY[$0.row.id] ?? $0.rect.minY) }
+            } else {
+                capExiting = []
+            }
+            capStart = CACurrentMediaTime()
+        } else {
+            capFromY = [:]; capExiting = []; capStart = 0
+        }
+        dirty = true
+    }
 
     override init(config: InputConfig) {
         let doc = config.title ?? TitleDocument(template: .lowerThird)
@@ -152,6 +184,7 @@ final class TitleInput: InputSource {
         super.init(config: config)
         cdRemaining = doc.countdownSeconds
         audioFollowsVideo = false
+        if doc.template == .liveCaptions { capFrame = CaptionEngine.latestFrame }
     }
 
     override func currentConfig() -> InputConfig {
@@ -188,7 +221,8 @@ final class TitleInput: InputSource {
         stateLock.lock()
         let doc = docSnapshot
         let animating = animStart > 0 && now - animStart < max(0.05, doc.animateSeconds) + 0.05
-        let needs = dirty || animating
+        let capAnimating = capStart > 0 && now - capStart < (capFrame?.style.animationMs ?? 0) / 1000 + 0.05
+        let needs = dirty || animating || capAnimating
         dirty = false
         stateLock.unlock()
         if renderPaused { return }
@@ -440,12 +474,62 @@ final class TitleInput: InputSource {
         guard let cg = CGContext(data: base, width: width, height: height, bitsPerComponent: 8,
                                  bytesPerRow: CVPixelBufferGetBytesPerRow(pb),
                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: info) else { return }
-        TitleRenderer.draw(doc, in: cg, width: CGFloat(width), height: CGFloat(height), anim: anim,
-                           countdown: cdText, tickerTime: now - tickerOrigin, images: images)
+        if doc.template == .liveCaptions {
+            drawCaptions(in: cg, now: now)
+        } else {
+            TitleRenderer.draw(doc, in: cg, width: CGFloat(width), height: CGFloat(height), anim: anim,
+                               countdown: cdText, tickerTime: now - tickerOrigin, images: images)
+        }
         video.store(pb)
     }
 
     private let images = TitleImageCache()
+
+    /// Render thread.
+    private func drawCaptions(in cg: CGContext, now: CFTimeInterval) {
+        stateLock.lock()
+        let f = capFrame
+        let from = capFromY, exiting = capExiting, start = capStart
+        stateLock.unlock()
+        guard let f else { return }
+        let W = CGFloat(width), H = CGFloat(height)
+        let placed = CaptionRenderer.layout(f, W: W, H: H)
+        let ms = max(1, f.style.animationMs) / 1000
+        let raw = start > 0 ? min(1, (now - start) / ms) : 1
+        let e = CGFloat(1 - pow(1 - raw, 3))            // ease-out
+        let k = H / 1080
+        cg.saveGState()
+        cg.translateBy(x: 0, y: H)
+        cg.scaleBy(x: 1, y: -1)
+        CaptionRenderer.drawChrome(f.style, rowsVisible: !placed.isEmpty, firstRow: placed.first?.rect, in: cg, W: W, H: H)
+        var drawnY: [Int: CGFloat] = [:]
+        for p in placed {
+            var r = p.rect
+            var a: CGFloat = 1
+            if raw < 1 {
+                if let y0 = from[p.row.id] {
+                    r.origin.y = y0 + (p.rect.minY - y0) * e
+                } else {
+                    r.origin.y = p.rect.minY + 17 * k * (1 - e)
+                    a = e
+                }
+            }
+            drawnY[p.row.id] = r.minY
+            CaptionRenderer.drawRow(p, st: f.style, rect: r, alpha: a, in: cg, H: H)
+        }
+        if raw < 1 {
+            for (p, y0) in exiting {
+                var r = p.rect
+                r.origin.y = y0 - 26 * k * e
+                CaptionRenderer.drawRow(p, st: f.style, rect: r, alpha: 1 - e, in: cg, H: H)
+            }
+        }
+        cg.restoreGState()
+        stateLock.lock()
+        capLastY = drawnY
+        if raw >= 1 { capStart = 0; capExiting = [] }
+        stateLock.unlock()
+    }
 }
 
 /// Loads (and caches) title images from files or URLs.

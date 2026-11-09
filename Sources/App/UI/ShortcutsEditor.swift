@@ -12,6 +12,11 @@ struct ShortcutsEditor: View {
             Text(L("키(조합)에 vMix 함수를 지정합니다. 입력란·웹페이지에 타이핑 중일 때는 동작하지 않습니다. 기본 단축키(Space=Cut, Return=Quick Play, 1~9=Preview, ⌘1~9=Cut)보다 우선합니다."))
                 .font(.caption).foregroundColor(.secondary)
             List {
+                if manager.items.isEmpty {
+                    Text(L("아직 단축키가 없습니다. 아래 ‘단축키 추가’를 누른 뒤 키를 누르세요."))
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 80)
+                }
                 ForEach($manager.items) { $sc in
                     HStack(spacing: 8) {
                         Button(recordingID == sc.id ? L("키를 누르세요…") : sc.label) { record(sc.id) }
@@ -49,7 +54,7 @@ struct ShortcutsEditor: View {
                 Spacer()
             }
         }
-        .padding()
+        .padding(.horizontal, 20).padding(.vertical, 14)
         .onDisappear { manager.capture = nil }
     }
 

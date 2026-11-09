@@ -10,18 +10,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.0.5</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.0.9</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
-### Latest update · 2.0.5
-- **PTZ production control:** a dedicated multi-camera PTZ window, VISCA over IP/TCP/UDP and NDI PTZ, presets and safe Preview-triggered moves.
-- **Faster source setup:** drag video, images, photo folders and PDFs from Finder; new Photos, PDF Slides and Virtual Set inputs.
-- **MIDI control:** learn mode, controller templates and LED tally.
-- **Safer recording and streaming:** crash-resilient fragmented files, backup/rollover disks, remaining-time warnings and a per-destination stream monitor.
-- **Long-show stability:** live clock-drift compensation, device reconnection, preserved broadcast delay, gapless loops and frame-safe file splitting.
-- Verified on an M1 Max with 60-minute recording and SRT soaks. Real PTZ, DeckLink and MIDI hardware validation is still pending. See the [English release notes](docs/RELEASE-NOTES-2.0.5.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.0.5.ko.md).
+### Latest update · 2.0.9
+- **AI background removal:** keeps people without a green screen; transparent, blurred or image backgrounds with three quality levels.
+- **Replay clip export:** horizontal, vertical or square highlights; single/all angles, handles, H.264/HEVC/ProRes and normal/slow-motion output.
+- **Long-form captions on macOS 26+:** one continuous on-device session, word-by-word updates, spoken-time SRT, reading pace and Korean glossary/corrections. Older macOS uses the classic engine.
+- **Caption design:** right column, cinema, band and custom layouts with typography, background and “AI captions” label controls.
+- **UI and monitoring reliability:** consistent number fields, clearer empty states and preview monitors that follow the window’s display.
+- Verified with generated media and synthetic Korean speech on an M1 Max. Real meetings, live-camera background removal, physical PTZ/DeckLink/MIDI hardware and a second physical monitor remain unverified. See the [English release notes](docs/RELEASE-NOTES-2.0.9.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.0.9.ko.md).
 
 <table>
   <tr>

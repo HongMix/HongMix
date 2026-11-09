@@ -174,6 +174,7 @@ struct InputPropertiesSheet: View {
     private var keyTab: some View {
         Form {
             AlphaKeySection(input: input)
+            BGRemovalSection(input: input)
             Section("Colour Key / Chroma Key") {
                 Toggle(L("Colour Key 사용"), isOn: $input.adjust.keyOn)
                 HStack {
@@ -283,7 +284,7 @@ struct InputPropertiesSheet: View {
                     Text("Mono (Right)").tag(2)
                     Text("Swap L/R").tag(3)
                 }
-                Stepper("Delay: \(input.audioFX.delayMs) ms", value: $input.audioFX.delayMs, in: 0...1000, step: 10)
+                NumberField("Delay", value: $input.audioFX.delayMs, in: 0...1000, unit: "ms", step: 10)
                 Toggle("Visible in Mixer", isOn: $input.audioFX.visibleInMixer)
             }
             Section("EQ") {
@@ -576,15 +577,15 @@ struct TitleEditorSheet: View {
                     Text(L("선택됨")).font(.caption.bold()).foregroundColor(.yellow)
                     if f.kind == .shape {
                         Text(L("그라데이션 끝 색")).font(.caption)
-                        TextField(L("#RRGGBB(AA) — 비우면 단색"), text: $title.document.fields[i].color2).frame(width: 170)
+                        TextField("", text: $title.document.fields[i].color2, prompt: Text(L("#RRGGBB(AA) — 비우면 단색"))).labelsHidden().frame(width: 170)
                         ColorSwatch(hex: f.color2.isEmpty ? f.color : f.color2)
                         Text(L("둥글게")).font(.caption)
                         Slider(value: $title.document.fields[i].cornerRadius, in: 0...0.08).frame(width: 90)
                     }
                     if f.kind == .text {
-                        Toggle(L("그림자"), isOn: $title.document.fields[i].shadow)
+                        Toggle(L("그림자"), isOn: $title.document.fields[i].shadow).toggleStyle(.checkbox)
                         Text(L("외곽선")).font(.caption)
-                        TextField("#000000", text: $title.document.fields[i].strokeColor).frame(width: 80)
+                        TextField("", text: $title.document.fields[i].strokeColor, prompt: Text("#000000")).labelsHidden().frame(width: 80)
                         Slider(value: $title.document.fields[i].strokeWidth, in: 0...8).frame(width: 80)
                     }
                     Text(String(format: "X %.3f Y %.3f W %.3f H %.3f", f.x, f.y, f.w, f.h))
@@ -604,14 +605,14 @@ struct TitleEditorSheet: View {
                 switch f.kind {
                 case .text:
                     if f.mode == .plain || f.mode == .ticker {
-                        TextField(L("텍스트"), text: $title.document.fields[i].text)
+                        TextField("", text: $title.document.fields[i].text, prompt: Text(L("텍스트"))).labelsHidden()
                     } else {
                         Text(f.mode == .countdown ? L("카운트다운 표시") : L("현재 시각 표시"))
                             .foregroundColor(.secondary)
                         Spacer()
                     }
                 case .image:
-                    TextField(L("이미지 경로 또는 URL"), text: $title.document.fields[i].imagePath)
+                    TextField("", text: $title.document.fields[i].imagePath, prompt: Text(L("이미지 경로 또는 URL"))).labelsHidden()
                     Button(L("찾기…")) {
                         let p = NSOpenPanel()
                         p.allowedContentTypes = [.image]
@@ -621,7 +622,8 @@ struct TitleEditorSheet: View {
                     Text(L("도형 (SetColor)")).foregroundColor(.secondary)
                     Spacer()
                 }
-                TextField("#RRGGBB(AA)", text: $title.document.fields[i].color)
+                TextField("", text: $title.document.fields[i].color, prompt: Text("#RRGGBB(AA)"))
+                    .labelsHidden()
                     .frame(width: 100)
                     .font(.system(size: 11).monospaced())
                 ColorSwatch(hex: f.color)
@@ -639,8 +641,12 @@ struct TitleEditorSheet: View {
                     .labelsHidden()
                     .frame(width: 110)
                     Toggle(L("굵게"), isOn: $title.document.fields[i].bold)
-                    TextField(L("폰트"), text: $title.document.fields[i].fontName)
+                        .toggleStyle(.checkbox)
+                    Text(L("폰트")).font(.caption)
+                    TextField("", text: $title.document.fields[i].fontName, prompt: Text("Helvetica Neue"))
+                        .labelsHidden()
                         .frame(width: 140)
+                    Spacer()
                 }
                 .controlSize(.small)
             }

@@ -68,12 +68,10 @@ struct OverlaySettingsSheet: View {
             Picker("Transition Effect", selection: $engine.overlaySettings[i].effect) {
                 ForEach(OverlayEffect.allCases) { Text($0.label).tag($0) }
             }
-            Stepper("Effect Duration: \(engine.overlaySettings[i].durationMs) ms",
-                    value: $engine.overlaySettings[i].durationMs, in: 0...5000, step: 100)
-            Stepper(engine.overlaySettings[i].autoCloseSeconds == 0
-                    ? L("Duration: 0 (자동으로 닫지 않음)")
-                    : Lf("Duration: %@초 후 자동으로 닫힘", "\(Int(engine.overlaySettings[i].autoCloseSeconds))"),
-                    value: $engine.overlaySettings[i].autoCloseSeconds, in: 0...600, step: 1)
+            NumberField("Effect Duration", value: $engine.overlaySettings[i].durationMs, in: 0...5000, unit: "ms", step: 100)
+            DecimalField("Duration", value: $engine.overlaySettings[i].autoCloseSeconds, in: 0...600,
+                         unit: engine.overlaySettings[i].autoCloseSeconds == 0 ? L("초 · 0 = 자동으로 닫지 않음") : L("초 후 자동으로 닫힘"),
+                         step: 1)
         }
         if engine.overlaySettings[i].pip {
             Section(L("Picture In Picture 위치")) {
@@ -115,8 +113,7 @@ struct OverlaySettingsSheet: View {
                     Text("\(engine.number(of: input)). \(input.name)").tag(UUID?.some(input.id))
                 }
             }
-            Stepper("Cut Point: \(engine.stingers[i].cutPointMs) ms", value: $engine.stingers[i].cutPointMs,
-                    in: 0...10000, step: 50)
+            NumberField("Cut Point", value: $engine.stingers[i].cutPointMs, in: 0...10000, unit: "ms", step: 50)
             Text(L("투명 배경 애니메이션(ProRes 4444 MOV 등)을 미디어 입력으로 추가한 뒤 지정하세요. Stinger 1 버튼을 누르면 설정한 컷 지점에서 Preview가 Output으로 전환됩니다."))
                 .font(.caption).foregroundColor(.secondary)
         }

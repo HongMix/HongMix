@@ -1,4 +1,4 @@
-HongMix 2.0.5 — User Manual (English)
+HongMix 2.0.9 — User Manual (English)
 ================================================================
 A live production switcher for Apple Silicon Macs, with a vMix-style layout, shortcuts and API.
 Made by Hong Seunghoon (홍승훈) · 2026-10-28 · Korea
@@ -9,14 +9,14 @@ Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)
 Requirements: an Apple Silicon Mac (M1 and later), macOS 14 or later.
 Everything (FFmpeg, SRT, NDI runtime, Chromium web engine) is bundled inside the app — nothing else to install.
 
-[Option A — recommended] Double-click HongMix-2.0.5.pkg
+[Option A — recommended] Double-click HongMix-2.0.9.pkg
   1) If macOS says "unidentified developer": right-click the file → Open → Open
      (or System Settings → Privacy & Security → "Open Anyway").
   2) Continue → Install. HongMix is installed in Applications.
   3) First launch: if macOS warns, right-click HongMix in Applications → Open → Open (once).
      (HongMix is not notarized by Apple yet, so macOS asks once.)
 
-[Option B] Open HongMix-2.0.5.dmg → drag HongMix into Applications
+[Option B] Open HongMix-2.0.9.dmg → drag HongMix into Applications
   - If warned on first launch, right-click the app → Open (once).
 
 On first use macOS asks for permissions:
@@ -249,5 +249,17 @@ disk when the first is full. Stream Monitor next to Stream shows bitrate, drops,
 
 [New inputs] Photos, PDF Slides and Virtual Set are available under Add Input. Export PowerPoint, Keynote or Google
 Slides to PDF before adding them as PDF Slides.
+
+16. New in 2.0.9
+----------------------------------------------------------------
+[AI background removal] Input ⚙ › Key keeps people without a green screen. Choose transparent, blur or image and
+Fast, Balanced or Accurate quality. Fast is recommended for 59.94p. Test the actual camera and lighting before air.
+
+[Replay export] Press ⬇ on a replay clip; Command-click selects several. Export 16:9, 9:16 or 1:1, one/all angles,
+normal, 50% or AI slow motion, with 0–2 s handles and H.264, HEVC or ProRes. Exports run in the background.
+
+[Captions] Tools › Captions provides right-column, cinema, band and custom looks. On macOS 26 or later the new
+on-device engine runs one continuous session and writes SRT from spoken audio times; older macOS uses the classic
+engine. Set minimum line time for reading pace and replace the Korean glossary/correction files when required.
 
 Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)

@@ -105,7 +105,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleQuitEvent(_:withReplyEvent:)),
+                                                     forEventClass: AEEventClass(kCoreEventClass),
+                                                     andEventID: AEEventID(kAEQuitApplication))
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    /// Quit Apple Event (Dock › Quit, scripts, logout): close open sheets first, then quit normally
+    /// (still asks when outputs are running).
+    @objc func handleQuitEvent(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+        ProjectIO.closeSheets()
+        DispatchQueue.main.async { NSApp.terminate(nil) }
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let engine = engine, !ProjectIO.terminatingFromSignal else { return .terminateNow }
@@ -161,10 +174,18 @@ enum ProjectIO {
         let src = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
         src.setEventHandler {
             terminatingFromSignal = true
+            closeSheets()
             NSApp.terminate(nil)
         }
         src.resume()
         termSource = src
+    }
+
+    /// An open sheet (settings, captions …) blocks NSApp.terminate — close them first so Quit always works.
+    static func closeSheets() {
+        for w in NSApp.windows {
+            while let sheet = w.attachedSheet { w.endSheet(sheet); sheet.orderOut(nil) }
+        }
     }
 
     static func restoreLastSession(into engine: SwitcherEngine) {

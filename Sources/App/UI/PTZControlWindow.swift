@@ -59,7 +59,9 @@ struct PTZControlWindow: View {
             }
         }
         .padding(16)
-        .frame(minWidth: 680, minHeight: ptzCameras.isEmpty ? 470 : 640)
+        // content sits at the top (no empty band above the title when the window is taller than the content)
+        .frame(minWidth: 680, maxWidth: .infinity, minHeight: ptzCameras.isEmpty ? 420 : 560, maxHeight: .infinity,
+               alignment: .topLeading)
         .onAppear { PTZManager.shared.attach(engine: engine) }
         .onChange(of: engine.previewID) { _, id in
             guard followPreview, let id, let i = engine.input(withID: id), i.isLiveSource else { return }

@@ -84,6 +84,11 @@ enum APIProcessor {
         func needInput() -> String { "Input not found" }
 
         // --- Instant Replay (vMix-style Replay… functions)
+        if fn == "replaysetsource" {     // HongMix: Input=… (empty/0 = none), Value=CAM 1–4
+            guard let k = Int(value), (1...ReplaySettings.maxCameras).contains(k) else { return "Value=1…\(ReplaySettings.maxCameras)" }
+            ReplayEngine.shared.setSource(k - 1, input?.id)
+            return nil
+        }
         if fn.hasPrefix("replay") { return ReplayEngine.shared.api(fn, value, q) }
 
         // --- Transitions by effect name: Fade, Merge, Wipe, Slide, Fly, CrossZoom, Zoom
@@ -568,6 +573,39 @@ enum APIProcessor {
         case "setlutstrength":    // Value=0…1
             guard let i = input, let v = Float(value) else { return "Input + Value=0…1" }
             i.lutStrength = max(0, min(1, v))
+        // Live captions (HongMix)
+        case "startcaptions": e.captions.start()
+        case "stopcaptions": e.captions.stop()
+        case "startstopcaptions": if e.captions.running { e.captions.stop() } else { e.captions.start() }
+        case "captionstest": e.captions.sendTest()
+        case "clearcaptions": e.captions.clearCaptions()
+        case "setcaptionlayout":     // Value=right|bottom|band
+            let v = value.lowercased()
+            guard ["right", "bottom", "band"].contains(v) else { return "Value=right|bottom|band" }
+            e.captions.settings.style = e.captions.settings.style.applying(preset: v)
+        case "captionlabelon", "captionlabeloff", "captionlabelonoff":
+            e.captions.settings.style.labelShow = fn == "captionlabelon" ? true : (fn == "captionlabeloff" ? false : !e.captions.settings.style.labelShow)
+        case "setcaptionlines", "setcaptionsize", "setcaptionletterspacing", "setcaptionlinespacing", "setcaptionchars":
+            guard let v = Double(value) else { return "Value=number" }
+            var st = e.captions.settings.style
+            switch fn {
+            case "setcaptionlines": st.lines = max(1, min(6, Int(v))); st.preset = "custom"
+            case "setcaptionsize": st.fontSize = max(16, min(96, v)); st.preset = "custom"
+            case "setcaptionletterspacing": st.letterSpacing = max(-4, min(16, v))
+            case "setcaptionlinespacing": st.lineHeight = max(90, min(200, v)); st.preset = "custom"
+            default: st.lineChars = max(6, min(40, Int(v))); st.preset = "custom"
+            }
+            e.captions.settings.style = st
+        // AI background removal (HongMix)
+        case "backgroundremovalon", "backgroundremovaloff", "backgroundremovalonoff":
+            guard let i = input else { return needInput() }
+            i.bgRemoval.enabled = fn == "backgroundremovalon" ? true : (fn == "backgroundremovaloff" ? false : !i.bgRemoval.enabled)
+        case "setbackgroundremoval":   // Input=…, Value=transparent|blur|image[,fast|balanced|accurate]
+            guard let i = input else { return needInput() }
+            let parts = value.lowercased().split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            if let b = parts.first, ["transparent", "blur", "image"].contains(b) { i.bgRemoval.background = b }
+            if parts.count > 1 { i.bgRemoval.quality = ["fast": 0, "balanced": 1, "accurate": 2][parts[1]] ?? i.bgRemoval.quality }
+            i.bgRemoval.enabled = true
         case "rundownnext":       // HongMix rundown: NEXT / PREVIOUS / GO Value=n (1-based) / RESET
             e.rundown.next(e)
         case "rundownprevious":
@@ -1130,6 +1168,10 @@ enum APIProcessor {
         x += "<streaming>\(tf(e.anyRunning(kind: .stream)))</streaming>"
         x += "<playList>False</playList><multiCorder>\(tf(e.multiCorderOn))</multiCorder>"
         if let err = e.multiCorderError { x += "<hmMultiCorderError>\(esc(err))</hmMultiCorderError>" }
+        let cf = e.captions.currentFrame
+        x += "<hmCaptions running=\"\(tf(e.captions.running))\" rows=\"\(cf.rows.count)\" layout=\"\(cf.style.preset)\" status=\"\(esc(e.captions.status))\">\(esc(cf.rows.map(\.text).joined(separator: " / ")))</hmCaptions>"
+        let rp = ReplayEngine.shared
+        x += "<hmReplay events=\"\(rp.events.count)\" recording=\"\(tf(rp.recording))\" exporting=\"\(rp.exports.count)\">\(esc(rp.exportMessage))</hmReplay>"
         x += "<fullscreen>\(tf(FullscreenOutput.shared.isShowing))</fullscreen>"
         x += "<audio>"
         for b in 0..<AudioMixer.busCount {

@@ -47,6 +47,11 @@ struct LayersEditor: View {
                 }
                 ScrollView {
                     VStack(spacing: 4) {
+                        if input.layers.isEmpty {
+                            Text(L("레이어가 없습니다. ＋를 눌러 입력을 올리거나, 왼쪽에서 템플릿을 고르세요."))
+                                .font(.caption).foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
+                        }
                         ForEach(Array(input.layers.enumerated()), id: \.element.id) { k, _ in row(k) }
                     }
                 }

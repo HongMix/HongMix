@@ -411,8 +411,8 @@ struct OutputEditor: View {
                 Text(L("MPEG-TS (중단에 강함)")).tag("ts")
             }
             .disabled(output.config.videoCodec == "prores")
-            Stepper(output.config.splitMinutes == 0 ? L("새 파일 분할: 끔") : Lf("새 파일 분할: %@분마다", "\(output.config.splitMinutes)"),
-                    value: $output.config.splitMinutes, in: 0...240, step: 5)
+            NumberField(L("새 파일 분할"), value: $output.config.splitMinutes, in: 0...240,
+                        unit: output.config.splitMinutes == 0 ? L("분 · 0 = 끔") : L("분마다"), step: 5)
         }
         RecordingSafetySection(output: output, safety: engine.recordingSafety)
         Section(L("멀티트랙 오디오")) {
@@ -454,8 +454,7 @@ struct OutputEditor: View {
             }
             if output.config.videoCodec != "prores" {
                 NumberField(L("비디오 비트레이트"), value: $output.config.videoKbps, in: 500...100000, unit: "kbps")
-                Stepper(Lf("키프레임 간격: %@ 초", "\(String(format: "%.0f", output.config.keyintSeconds))"),
-                        value: $output.config.keyintSeconds, in: 1...10, step: 1)
+                DecimalField(L("키프레임 간격"), value: $output.config.keyintSeconds, in: 1...10, unit: L("초"), step: 1)
             }
             Picker(L("오디오 비트레이트 (AAC)"), selection: $output.config.audioKbps) {
                 ForEach([96, 128, 160, 192, 256, 320], id: \.self) { Text("\($0) kbps").tag($0) }

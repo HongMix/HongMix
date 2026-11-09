@@ -1,6 +1,10 @@
 import Foundation
 import CoreVideo
 import AppKit
+import AVFoundation
+import CoreImage
+import CoreMedia
+import Metal
 
 // MARK: - Instant Replay
 //
@@ -100,7 +104,6 @@ struct ReplaySettings: Codable, Equatable {
         preRoll = c.value(.preRoll, d.preRoll)
     }
 }
-
 struct ReplayEvent: Identifiable, Equatable {
     let id = UUID()
     var number: Int
@@ -177,6 +180,11 @@ final class ReplayEngine: ObservableObject {
     @Published private(set) var status = ReplayStatus()
     @Published private(set) var pendingIn: Int64?
     @Published private(set) var aiClips: [UUID: ReplayAIClipState] = [:]
+    /// Clip export (Replay › ⬇): progress 0…1 per event being exported, last result message.
+    @Published private(set) var exports: [UUID: Double] = [:]
+    @Published private(set) var exportMessage = ""
+    let exportQueue = DispatchQueue(label: "replay.export", qos: .utility)
+    var lastExportError = ""          // export queue only
     /// How slow motion is smoothed on this Mac (shown in the settings).
     @Published private(set) var aiInfo = ""
     /// Channels the transport buttons act on (A, B or both).
@@ -506,6 +514,7 @@ final class ReplayEngine: ObservableObject {
         lock.unlock()
         aiClips = [:]
         aiQueue.sync {}      // a running clip render sees the new epoch within one frame and stops
+        exportQueue.sync {}  // a running clip export too (same epoch check)
         queue.sync {
             for c in 0..<2 {
                 if let d = decoders[c] { mc_replay_dec_close(d) }
@@ -1284,6 +1293,23 @@ final class ReplayEngine: ObservableObject {
         case "replayplayevent", "replayplayselectedeventtooutput":
             if let n = Int(value), let e = events.first(where: { $0.number == n }) { playEvent(e) } else { playLastEvent() }
         case "replaydeletelastevent": deleteLastEvent()
+        case "replayexportlastevent", "replayexportevent":
+            // HongMix: Value=horizontal|vertical|square (default: last used); ReplayExportEvent uses Value2/Selection=event number
+            var o = ReplayExportOptions.saved
+            switch value.lowercased() {
+            case "vertical", "9:16": o.aspect = 1
+            case "square", "1:1": o.aspect = 2
+            case "horizontal", "16:9": o.aspect = 0
+            default: break
+            }
+            let e: ReplayEvent?
+            if fn == "replayexportevent", let n = Int(q["value2"] ?? q["selection"] ?? "") {
+                e = events.first { $0.number == n }
+            } else {
+                e = events.last
+            }
+            guard let ev = e else { return "No replay clip" }
+            export([ev], options: o)
         case "replaysetspeed": if let v = v { setSpeed(v > 4 ? v / 100 : v) }
         case "replaychangespeed": if let v = v { changeSpeed(by: v) }
         case "replayjumpframes": jump(frames: Int(v ?? 0))
@@ -1298,5 +1324,341 @@ final class ReplayEngine: ObservableObject {
         default: return "Not supported in HongMix: \(fn)"
         }
         return nil
+    }
+}
+
+// MARK: - Clip export (Replay › ⬇ — highlight clips for social media / the edit)
+
+struct ReplayExportOptions: Codable, Equatable {
+    /// 0 = 16:9 (programme size) · 1 = 9:16 (1080×1920) · 2 = 1:1 (1080×1080)
+    var aspect = 0
+    /// horizontal crop centre for 9:16 / 1:1 (0 = left edge, 0.5 = centre, 1 = right edge)
+    var cropX = 0.5
+    /// false = the clip's angle · true = one file per recorded angle
+    var allAngles = false
+    /// 0 = normal · 1 = 50 % slow · 2 = AI slow (25 %, uses the clip's AI frames when ready)
+    var speed = 0
+    /// seconds added before IN and after OUT
+    var pad = 1
+    /// "h264" · "hevc" · "prores"
+    var codec = "h264"
+    var folder = (NSHomeDirectory() as NSString).appendingPathComponent("Movies/HongMix Highlights")
+
+    private static let key = "replayExportOptions"
+    static var saved: ReplayExportOptions {
+        get {
+            guard let d = UserDefaults.standard.data(forKey: key),
+                  let o = try? JSONDecoder().decode(ReplayExportOptions.self, from: d) else { return ReplayExportOptions() }
+            return o
+        }
+        set { if let d = try? JSONEncoder().encode(newValue) { UserDefaults.standard.set(d, forKey: key) } }
+    }
+
+    func outputSize(programWidth w: Int, programHeight h: Int) -> (Int, Int) {
+        switch aspect {
+        case 1: return (1080, 1920)
+        case 2: let s = min(1080, h); return (s - s % 2, s - s % 2)
+        default: return (w, h)
+        }
+    }
+}
+
+extension ReplayEngine {
+    private static let exportCI: CIContext = {
+        let opts: [CIContextOption: Any] = [.workingColorSpace: NSNull(), .outputColorSpace: NSNull(), .cacheIntermediates: false]
+        if let dev = MTLCreateSystemDefaultDevice() { return CIContext(mtlDevice: dev, options: opts) }
+        return CIContext(options: opts)
+    }()
+
+    /// Exports clips in the background (never touches the live programme or the player).
+    func export(_ evs: [ReplayEvent], options o: ReplayExportOptions) {
+        lock.lock()
+        let st = store, kind = ReplaySettings.codecKind(recCodec), fmt = format, rate = fps
+        let recorded = (0..<Self.cams).map { recCameras[$0] != nil }
+        let epoch = aiEpoch
+        lock.unlock()
+        let follow = settings.audioFollowsCamera
+        guard let st else { exportMessage = L("녹화된 리플레이가 없습니다"); return }
+        try? FileManager.default.createDirectory(atPath: o.folder, withIntermediateDirectories: true)
+        for e in evs { exports[e.id] = 0 }
+        exportQueue.async { [weak self] in
+            guard let self else { return }
+            var written: [String] = []
+            var failed = 0
+            self.lastExportError = ""
+            for e in evs {
+                let cams = o.allAngles ? (0..<Self.cams).filter { recorded[$0] || $0 == e.camera } : [e.camera]
+                for (ci, cam) in cams.enumerated() {
+                    let r = self.exportOne(e, cam: cam, options: o, store: st, kind: kind, fmt: fmt, fps: rate, follow: follow, epoch: epoch) { p in
+                        let total = (Double(ci) + p) / Double(max(1, cams.count))
+                        DispatchQueue.main.async { if self.exports[e.id] != nil { self.exports[e.id] = total } }
+                    }
+                    if let r { written.append(r) } else if !o.allAngles || cam == e.camera { failed += 1 }
+                }
+                DispatchQueue.main.async { self.exports[e.id] = nil }
+            }
+            DispatchQueue.main.async {
+                if written.isEmpty {
+                    self.exportMessage = L("내보내기 실패 — 이 구간에 녹화된 프레임이 없습니다")
+                        + (self.lastExportError.isEmpty ? "" : " (\(self.lastExportError))")
+                } else {
+                    self.exportMessage = Lf("클립 %@개 저장: %@", "\(written.count)", (o.folder as NSString).abbreviatingWithTildeInPath)
+                        + (failed > 0 ? Lf(" · 실패 %@", "\(failed)") : "")
+                }
+            }
+        }
+    }
+
+    /// One file. Returns its path, or nil when nothing could be written.
+    private func exportOne(_ e: ReplayEvent, cam: Int, options o: ReplayExportOptions, store st: OpaquePointer,
+                           kind: Int, fmt: VideoFormat, fps: Double, follow: Bool, epoch: Int, progress: @escaping (Double) -> Void) -> String? {
+        let padFrames = Int64((Double(o.pad) * fps).rounded())
+        let first = max(mc_replay_store_first(st, Int32(cam)), e.inFrame - padFrames)
+        let last = min(mc_replay_store_last(st, Int32(cam)), e.outFrame + padFrames)
+        guard last > first else { lastExportError = "range \(first)…\(last)"; return nil }
+        let (ow, oh) = o.outputSize(programWidth: fmt.width, programHeight: fmt.height)
+
+        // file name: "Clip 0007 CAM2 9x16 2026-11-09 13.55.12.mp4"
+        let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd HH.mm.ss"
+        let tag = ["16x9", "9x16", "1x1"][max(0, min(2, o.aspect))]
+        let slow = ["", " 50%", " AI-slow"][max(0, min(2, o.speed))]
+        let ext = o.codec == "prores" ? "mov" : "mp4"
+        let name = String(format: "Clip %04d CAM%d %@%@ %@.%@", e.number, cam + 1, tag, slow, df.string(from: Date()), ext)
+        let url = URL(fileURLWithPath: o.folder).appendingPathComponent(name)
+        try? FileManager.default.removeItem(at: url)
+
+        let writer: AVAssetWriter
+        do { writer = try AVAssetWriter(outputURL: url, fileType: o.codec == "prores" ? .mov : .mp4) }
+        catch { lastExportError = "file: \(error.localizedDescription)"; return nil }
+        var vset: [String: Any] = [AVVideoWidthKey: ow, AVVideoHeightKey: oh]
+        switch o.codec {
+        case "prores": vset[AVVideoCodecKey] = AVVideoCodecType.proRes422
+        case "hevc":
+            vset[AVVideoCodecKey] = AVVideoCodecType.hevc
+            vset[AVVideoCompressionPropertiesKey] = [AVVideoAverageBitRateKey: ow * oh * 6]
+        default:
+            vset[AVVideoCodecKey] = AVVideoCodecType.h264
+            vset[AVVideoCompressionPropertiesKey] = [AVVideoAverageBitRateKey: ow * oh * 10,
+                                                     AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel]
+        }
+        let vin = AVAssetWriterInput(mediaType: .video, outputSettings: vset)
+        vin.expectsMediaDataInRealTime = false
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: vin, sourcePixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: ow, kCVPixelBufferHeightKey as String: oh,
+            kCVPixelBufferIOSurfacePropertiesKey as String: [:]])
+        guard writer.canAdd(vin) else { lastExportError = "video settings \(ow)x\(oh) \(o.codec)"; return nil }
+        writer.add(vin)
+        // audio only at normal speed (the player doesn't time-stretch either)
+        let withAudio = o.speed == 0
+        var ain: AVAssetWriterInput?
+        if withAudio {
+            let aset: [String: Any] = o.codec == "prores"
+                ? [AVFormatIDKey: kAudioFormatLinearPCM, AVSampleRateKey: AudioMixer.rate, AVNumberOfChannelsKey: 2,
+                   AVLinearPCMBitDepthKey: 24, AVLinearPCMIsFloatKey: false, AVLinearPCMIsBigEndianKey: false,
+                   AVLinearPCMIsNonInterleaved: false]
+                : [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: AudioMixer.rate, AVNumberOfChannelsKey: 2,
+                   AVEncoderBitRateKey: 192_000]
+            let a = AVAssetWriterInput(mediaType: .audio, outputSettings: aset)
+            a.expectsMediaDataInRealTime = false
+            if writer.canAdd(a) { writer.add(a); ain = a }
+        }
+        guard writer.startWriting() else { lastExportError = writer.error?.localizedDescription ?? "writer"; return nil }
+        writer.startSession(atSourceTime: .zero)
+
+        // same hardware decode path as the replay player (NV12 IOSurface frames Core Image reads directly)
+        guard let dec = mc_replay_dec_open_hw(Int32(kind)) else {
+            writer.cancelWriting(); lastExportError = "decoder"; return nil
+        }
+        defer { mc_replay_dec_close(dec) }
+        var aiDec: OpaquePointer?
+        defer { if let aiDec { mc_replay_dec_close(aiDec) } }
+        lock.lock()
+        let aiClip = o.speed == 2 ? aiIndex.first { $0.id == e.id && $0.camera == cam } : nil
+        lock.unlock()
+
+        func decode(_ f: Int64) -> CVPixelBuffer? {
+            var data: UnsafeMutablePointer<UInt8>?
+            var got: Int64 = 0
+            let n = mc_replay_store_read(st, Int32(cam), f, &data, &got)
+            guard n > 0, let d = data else { return nil }
+            defer { free(d) }
+            return Self.decodeHW(dec, d, n, fmt.width, fmt.height)
+        }
+        func decodeAI(_ clip: AIClipRef, _ f: Int64, _ k: Int) -> CVPixelBuffer? {
+            let idx = (f - clip.inFrame) * 4 + Int64(k)
+            var data: UnsafeMutablePointer<UInt8>?
+            var got: Int64 = 0
+            let n = mc_replay_store_read(clip.store, 0, idx, &data, &got)
+            guard n > 0, let d = data, got == idx else { if let d = data { free(d) }; return nil }
+            defer { free(d) }
+            if aiDec == nil { aiDec = mc_replay_dec_open_hw(2) }
+            return aiDec.flatMap { Self.decodeHW($0, d, n, fmt.width, fmt.height) }
+        }
+        // crop + scale with Core Image
+        let srcRect: CGRect = {
+            let W = CGFloat(fmt.width), H = CGFloat(fmt.height)
+            switch o.aspect {
+            case 1, 2:
+                let cw = o.aspect == 1 ? H * 9 / 16 : H
+                let x = max(0, min(W - cw, (W - cw) * CGFloat(o.cropX)))
+                return CGRect(x: x, y: 0, width: cw, height: H)
+            default: return CGRect(x: 0, y: 0, width: W, height: H)
+            }
+        }()
+        let sx = CGFloat(ow) / srcRect.width, sy = CGFloat(oh) / srcRect.height
+        func convert(_ pb: CVPixelBuffer) -> CVPixelBuffer? {
+            guard let pool = adaptor.pixelBufferPool else { return nil }
+            var out: CVPixelBuffer?
+            CVPixelBufferPoolCreatePixelBuffer(nil, pool, &out)
+            guard let out else { return nil }
+            let img = CIImage(cvPixelBuffer: pb).cropped(to: srcRect)
+                .transformed(by: CGAffineTransform(translationX: -srcRect.minX, y: -srcRect.minY))
+                .transformed(by: CGAffineTransform(scaleX: sx, y: sy))
+            Self.exportCI.render(img, to: out, bounds: CGRect(x: 0, y: 0, width: ow, height: oh), colorSpace: nil)
+            return out
+        }
+        let timescale = CMTimeScale(fmt.fpsNum)
+        let frameDur = CMTimeValue(fmt.fpsDen)
+        let total = Double(last - first + 1)
+
+        // first decodable frame: video and audio both start there (keeps them in sync)
+        var startF = first
+        while startF < last, decode(startF) == nil { startF += 1 }
+
+        // audio for the whole range (small: ~400 KB per second)
+        var audioQueue: [CMSampleBuffer] = []
+        if ain != nil {
+            var audioSamples: Int64 = 0
+            for f in startF...last {
+                var data: UnsafeMutablePointer<UInt8>?
+                var got: Int64 = 0
+                var n = follow ? mc_replay_store_read(st, Self.camAudioStream(cam), f, &data, &got) : -1
+                if n <= 0 || got != f {
+                    if let d = data { free(d); data = nil }
+                    n = mc_replay_store_read(st, Self.audioStream, f, &data, &got)
+                }
+                let frames = Int(fmt.frameDuration * Double(AudioMixer.rate) + 0.5)
+                let floats: [Float]
+                if n > 0, got == f, let d = data {
+                    floats = Array(UnsafeBufferPointer(start: UnsafeRawPointer(d).assumingMemoryBound(to: Float.self), count: Int(n) / 4))
+                } else {
+                    floats = [Float](repeating: 0, count: frames * 2)
+                }
+                if let d = data { free(d) }
+                if let sb = Self.audioSample(floats, at: audioSamples) { audioQueue.append(sb) }
+                audioSamples += Int64(floats.count / 2)
+            }
+        }
+
+        // The writer pulls from both tracks when it is ready (Apple's pattern — tracks can't deadlock each other).
+        let group = DispatchGroup()
+        let vq = DispatchQueue(label: "replay.export.video"), aq = DispatchQueue(label: "replay.export.audio")
+        var nextF = startF
+        var pending: [CVPixelBuffer] = []
+        var lastGood: CVPixelBuffer?
+        var outIndex: Int64 = 0
+        var wroteAny = false
+        var aborted = false
+        var videoDone = false
+        /// video queue: output frames for the next source frame (1, 2 for 50 %, 4 for AI slow)
+        func produce() -> Bool {
+            while pending.isEmpty {
+                lock.lock(); let stale = aiEpoch != epoch; lock.unlock()
+                if stale { aborted = true; return false }    // replay store is closing (cleared / new setup)
+                guard nextF <= last else { return false }
+                let f = nextF
+                nextF += 1
+                if let src = decode(f), let c = convert(src) { lastGood = c; wroteAny = true }
+                guard let cur = lastGood else { continue }
+                switch o.speed {
+                case 1: pending = [cur, cur]
+                case 2:
+                    pending = [cur]
+                    for k in 1...3 {
+                        // AI in-betweens inside the clip; outside (padding) or not rendered yet → hold the frame
+                        let mid = aiClip.flatMap { c in (f >= c.inFrame && f < c.outFrame) ? decodeAI(c, f, k).flatMap(convert) : nil }
+                        pending.append(mid ?? cur)
+                    }
+                default: pending = [cur]
+                }
+                if (f - first) % 10 == 0 { progress(Double(f - first) / total) }
+            }
+            return true
+        }
+        group.enter()
+        vin.requestMediaDataWhenReady(on: vq) {
+            guard !videoDone else { return }
+            while vin.isReadyForMoreMediaData {
+                if pending.isEmpty && !produce() {
+                    videoDone = true; vin.markAsFinished(); group.leave(); return
+                }
+                let pb = pending.removeFirst()
+                if !adaptor.append(pb, withPresentationTime: CMTime(value: outIndex * frameDur, timescale: timescale)) {
+                    aborted = true; videoDone = true; vin.markAsFinished(); group.leave(); return
+                }
+                outIndex += 1
+            }
+        }
+        if let ain {
+            var audioDone = false
+            group.enter()
+            ain.requestMediaDataWhenReady(on: aq) {
+                guard !audioDone else { return }
+                while ain.isReadyForMoreMediaData {
+                    if audioQueue.isEmpty || !ain.append(audioQueue.removeFirst()) {
+                        audioDone = true; ain.markAsFinished(); group.leave(); return
+                    }
+                }
+            }
+        }
+        // generous limit (≈ 30 s per output second); a stalled writer must never hang the export queue
+        let limit = DispatchTime.now() + .seconds(max(60, Int(total / max(1, fps) * 30)))
+        let finished = group.wait(timeout: limit) == .success
+        let stuck = !finished
+        if stuck || aborted { wroteAny = false }
+        let done = DispatchSemaphore(value: 0)
+        if wroteAny {
+            writer.finishWriting { done.signal() }
+            done.wait()
+        } else {
+            writer.cancelWriting()
+        }
+        progress(1)
+        guard wroteAny, writer.status == .completed else {
+            let werr = (writer.error as NSError?).map { "\($0.domain) \($0.code) \($0.localizedDescription) \(($0.userInfo[NSUnderlyingErrorKey] as? NSError)?.code ?? 0)" }
+            lastExportError = (werr ?? (stuck ? "writer timeout" : "decode \(kind)")) + " frames \(outIndex)"
+            try? FileManager.default.removeItem(at: url)
+            return nil
+        }
+        return url.path
+    }
+
+    /// Interleaved stereo Float32 → CMSampleBuffer at sample position `pos` (48 kHz).
+    private static func audioSample(_ floats: [Float], at pos: Int64) -> CMSampleBuffer? {
+        let frames = floats.count / 2
+        guard frames > 0 else { return nil }
+        var asbd = AudioStreamBasicDescription(mSampleRate: Double(AudioMixer.rate), mFormatID: kAudioFormatLinearPCM,
+                                               mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
+                                               mBytesPerPacket: 8, mFramesPerPacket: 1, mBytesPerFrame: 8,
+                                               mChannelsPerFrame: 2, mBitsPerChannel: 32, mReserved: 0)
+        var fmtDesc: CMAudioFormatDescription?
+        guard CMAudioFormatDescriptionCreate(allocator: nil, asbd: &asbd, layoutSize: 0, layout: nil, magicCookieSize: 0,
+                                             magicCookie: nil, extensions: nil, formatDescriptionOut: &fmtDesc) == noErr,
+              let fd = fmtDesc else { return nil }
+        let bytes = frames * 8
+        var block: CMBlockBuffer?
+        guard CMBlockBufferCreateWithMemoryBlock(allocator: nil, memoryBlock: nil, blockLength: bytes, blockAllocator: nil,
+                                                 customBlockSource: nil, offsetToData: 0, dataLength: bytes,
+                                                 flags: kCMBlockBufferAssureMemoryNowFlag,
+                                                 blockBufferOut: &block) == noErr, let bb = block else { return nil }
+        let ok = floats.withUnsafeBytes { CMBlockBufferReplaceDataBytes(with: $0.baseAddress!, blockBuffer: bb, offsetIntoDestination: 0, dataLength: bytes) }
+        guard ok == noErr else { return nil }
+        var sb: CMSampleBuffer?
+        guard CMAudioSampleBufferCreateReadyWithPacketDescriptions(allocator: nil, dataBuffer: bb, formatDescription: fd,
+                                                                   sampleCount: frames,
+                                                                   presentationTimeStamp: CMTime(value: pos, timescale: CMTimeScale(AudioMixer.rate)),
+                                                                   packetDescriptions: nil, sampleBufferOut: &sb) == noErr else { return nil }
+        return sb
     }
 }

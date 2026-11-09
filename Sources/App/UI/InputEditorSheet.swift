@@ -416,7 +416,7 @@ struct InputEditorSheet: View {
                     }
                 }
                 Toggle(L("커서 표시"), isOn: $cfg.showCursor)
-                Stepper(Lf("프레임레이트: %@ fps", "\(cfg.captureFPS)"), value: $cfg.captureFPS, in: 5...60, step: 5)
+                NumberField(L("프레임레이트"), value: $cfg.captureFPS, in: 5...60, unit: "fps", step: 5)
                 if let b = selectedBrowser {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
@@ -612,11 +612,9 @@ struct InputEditorSheet: View {
     @ViewBuilder private var browserSection: some View {
         Section("Web Browser") {
             TextField("URL", text: $cfg.browserURL)
-            HStack {
-                Stepper("Width: \(cfg.browserWidth)", value: $cfg.browserWidth, in: 320...3840, step: 10)
-                Stepper("Height: \(cfg.browserHeight)", value: $cfg.browserHeight, in: 180...2160, step: 10)
-            }
-            Stepper(Lf("프레임레이트: %@ fps", "\(cfg.captureFPS)"), value: $cfg.captureFPS, in: 5...60, step: 5)
+            NumberField(L("가로"), value: $cfg.browserWidth, in: 320...3840, unit: "px", step: 10)
+            NumberField(L("세로"), value: $cfg.browserHeight, in: 180...2160, unit: "px", step: 10)
+            NumberField(L("프레임레이트"), value: $cfg.captureFPS, in: 5...60, unit: "fps", step: 5)
             Toggle(L("투명 배경 (body 배경색을 지정하지 않은 페이지)"), isOn: $cfg.browserTransparent)
             Picker(L("엔진"), selection: $cfg.browserUseWebKit) {
                 Text(L("Chromium (내장, 권장)")).tag(false)
@@ -855,7 +853,7 @@ struct InputEditorSheet: View {
                     }
                 }
             }
-            Stepper(Lf("사진마다 %@초", String(format: "%g", cfg.slides.seconds)), value: $cfg.slides.seconds, in: 1...120, step: 1)
+            DecimalField(L("사진 한 장 표시 시간"), value: $cfg.slides.seconds, in: 1...120, unit: L("초"), step: 1, digits: 1)
             slideCommonRows
             Toggle(L("무작위 순서"), isOn: $cfg.slides.shuffle)
             Text(L("JPG·PNG·HEIC·TIFF·WebP를 이름 순서로 보여 주고, 폴더에 사진을 넣거나 빼면 바로 반영합니다. 재생/일시정지와 반복은 입력의 재생 버튼으로, 넘기기는 NextPicture/PreviousPicture API나 MIDI로 합니다."))
@@ -918,7 +916,7 @@ struct InputEditorSheet: View {
                 Slider(value: $cfg.virtualSet.presenterScale, in: 0.2...1.2).frame(width: 220)
             }
             HStack {
-                TextField(L("앞쪽 이미지 (책상, 투명 PNG)"), text: $cfg.virtualSet.foregroundPath)
+                TextField(L("앞쪽 이미지"), text: $cfg.virtualSet.foregroundPath, prompt: Text(L("책상 등 투명 PNG")))
                 Button("Browse…") {
                     if let p = pickFile(types: [.png, .tiff, .image]) { cfg.virtualSet.foregroundPath = p }
                 }

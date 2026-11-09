@@ -987,8 +987,7 @@ struct MultiCorderSheet: View {
                         Text("MPEG-TS").tag("ts")
                     }
                     .disabled(engine.multiCorderSettings.videoCodec == "prores")
-                    Stepper(Lf("비트레이트: %@ kbps", "\(engine.multiCorderSettings.videoKbps)"),
-                            value: $engine.multiCorderSettings.videoKbps, in: 2000...150000, step: 2000)
+                    NumberField(L("비트레이트"), value: $engine.multiCorderSettings.videoKbps, in: 2000...150000, unit: "kbps", step: 2000)
                 }
                 Section(L("녹화할 입력")) {
                     ForEach(engine.inputs) { i in

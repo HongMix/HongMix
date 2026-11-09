@@ -10,18 +10,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.0.5 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.0.9 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
-### 최신 업데이트 · 2.0.5
-- **PTZ 방송 제어:** 여러 카메라를 한 창에서 제어하고 VISCA over IP·TCP·UDP와 NDI PTZ, 프리셋, 안전한 Preview 연동 이동을 지원합니다.
-- **빠른 소스 추가:** Finder에서 영상·이미지·사진 폴더·PDF를 끌어 놓을 수 있고 Photos·PDF 슬라이드·Virtual Set 입력이 추가됐습니다.
-- **MIDI 제어:** 학습 모드, 컨트롤러 템플릿, LED 탤리를 지원합니다.
-- **안전한 녹화·송출:** 강제 종료에도 남는 조각 저장 파일, 백업·이어쓰기 디스크, 남은 시간 경고, 목적지별 송출 모니터를 추가했습니다.
-- **장시간 방송 안정성:** 실시간 소스 시계 차이 보정, 장치 재연결, 방송 딜레이 유지, 끊김 없는 반복 재생과 프레임 손실 없는 파일 분할을 적용했습니다.
-- M1 Max에서 녹화·SRT 송출을 각각 60분 검증했습니다. 실제 PTZ·DeckLink·MIDI 장비 검증은 아직 남아 있습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.0.5.ko.md) · [English release notes](docs/RELEASE-NOTES-2.0.5.md)
+### 최신 업데이트 · 2.0.9
+- **AI 배경 제거:** 크로마키 없이 사람만 남기며 투명·블러·이미지 배경과 세 가지 품질을 지원합니다.
+- **리플레이 클립 내보내기:** 가로·세로·정사각 하이라이트, 한 각도/모든 각도, 핸들, H.264·HEVC·ProRes 및 일반·슬로모션 출력을 지원합니다.
+- **macOS 26+ 장시간 자막:** 끊지 않는 온디바이스 세션, 단어 단위 갱신, 실제 발화 시각 SRT, 읽기 속도와 한국어 용어집·교정을 제공합니다. 이전 macOS는 기존 엔진으로 동작합니다.
+- **자막 디자인:** 오른쪽 열·시네마·밴드·사용자 설정과 글꼴·배경·“AI 자막” 라벨을 조정할 수 있습니다.
+- **UI·모니터 안정성:** 숫자 입력 형식을 통일하고 빈 화면 안내를 개선했으며, 프리뷰 모니터가 창이 있는 디스플레이를 따라갑니다.
+- M1 Max에서 생성 미디어와 합성 한국어 음성으로 검증했습니다. 실제 회의, 라이브 카메라 배경 제거, 실제 PTZ·DeckLink·MIDI 장비와 두 번째 물리 모니터는 아직 미검증입니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.0.9.ko.md) · [English release notes](docs/RELEASE-NOTES-2.0.9.md)
 
 <table>
   <tr>

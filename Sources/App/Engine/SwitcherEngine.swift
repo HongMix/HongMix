@@ -1389,6 +1389,17 @@ final class SwitcherEngine: ObservableObject {
                 lutOut[i.id] = o
             }
         }
+        // 1c. AI background removal (Vision runs on its own queue; uses the newest finished frame)
+        for i in ins {
+            let bg = i.bgRemovalSnapshot
+            guard bg.enabled, let src = lutOut[i.id] ?? i.video.latest() else {
+                if i.bgRemover != nil { i.bgRemover = nil }
+                continue
+            }
+            let r: BackgroundRemover
+            if let existing = i.bgRemover { r = existing } else { r = BackgroundRemover(); i.bgRemover = r }
+            if let o = r.frame(for: src, settings: bg) { lutOut[i.id] = o }
+        }
         // 2. layers
         for i in ins {
             let ls = i.layersSnapshot.filter { $0.visible && $0.inputID != nil }

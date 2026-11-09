@@ -59,6 +59,10 @@ struct PTZPanel: View {
             }
 
             Section(L("프리셋")) {
+                if ptz.config.presets.isEmpty {
+                    Text(L("저장된 프리셋이 없습니다. 카메라를 원하는 위치로 옮긴 뒤 이름을 넣고 ‘현재 위치 저장’을 누르세요."))
+                        .font(.caption).foregroundColor(.secondary)
+                } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
                         ForEach(ptz.config.presets) { p in
@@ -71,6 +75,7 @@ struct PTZPanel: View {
                                 }
                         }
                     }
+                }
                 }
                 HStack {
                     TextField("", text: $newName, prompt: Text(L("새 프리셋 이름"))).labelsHidden()

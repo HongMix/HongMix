@@ -20,6 +20,8 @@ struct ReplayView: View {
     @ObservedObject var replay = ReplayEngine.shared
     @ViewState private var showSettings = false
     @ViewState private var message: String? = nil
+    @ViewState private var exportSelection: Set<UUID> = []
+    @ViewState private var exportEvents: [ReplayEvent] = []
 
     private func sourceName(_ k: Int) -> String {
         guard let id = replay.settings.slots[k], let i = engine.input(withID: id) else { return "—" }
@@ -43,6 +45,9 @@ struct ReplayView: View {
         .background(Color(white: 0.08))
         .frame(minWidth: 1200, minHeight: 820)
         .sheet(isPresented: $showSettings) { ReplaySettingsSheet().environmentObject(engine) }
+        .sheet(isPresented: Binding(get: { !exportEvents.isEmpty }, set: { if !$0 { exportEvents = [] } })) {
+            ReplayExportSheet(events: exportEvents, fps: replay.frameRate)
+        }
         .onAppear { replay.engine = engine; replay.refreshStatus(); replay.setWindowVisible(true) }
         .onDisappear { replay.setWindowVisible(false) }
         .background(cameraKeys)
@@ -263,6 +268,17 @@ struct ReplayView: View {
         }
     }
 
+    @ViewBuilder private func sourceMenu(_ k: Int) -> some View {
+        Button(L("없음 (녹화 안 함)")) { replay.setSource(k, nil) }
+        Divider()
+        ForEach(engine.inputs.filter { !($0 is ReplayInput) }) { i in
+            let other = replay.slot(of: i.id)
+            Button("\(engine.number(of: i)). \(i.name)" + (other != nil && other != k ? "  (CAM \(other! + 1))" : "")) {
+                replay.setSource(k, i.id)
+            }
+        }
+    }
+
     private func sourceBox(_ k: Int) -> some View {
         let id = replay.settings.slots[k]
         let input = id.flatMap { engine.input(withID: $0) }
@@ -283,9 +299,9 @@ struct ReplayView: View {
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.8)
-            ZStack(alignment: .bottomLeading) {
-                Color.black
-                if let i = input {
+            if let i = input {
+                ZStack(alignment: .bottomLeading) {
+                    Color.black
                     MonitorView(fps: 15) { i.currentFrame() }
                     TimelineView(.periodic(from: .now, by: 0.2)) { ctx in
                         Text("\(replay.recordTimecode()) · \(replay.systemTimecode(ctx.date).prefix(8))")
@@ -294,31 +310,29 @@ struct ReplayView: View {
                             .padding(.horizontal, 4).padding(.vertical, 1)
                             .background(Color.black.opacity(0.65)).padding(4)
                     }
-                } else {
-                    Text(L("소스 없음 — ▾ 에서 선택")).font(.caption).foregroundColor(.secondary)
-                        .multilineTextAlignment(.center).minimumScaleFactor(0.8).padding(.horizontal, 4)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-            }
-            .aspectRatio(16 / 9, contentMode: .fit)
-            .clipped()
-            .contentShape(Rectangle())
-            .onTapGesture { replay.setCamera(k) }
-            Menu {
-                Button(L("없음 (녹화 안 함)")) { replay.setSource(k, nil) }
-                Divider()
-                ForEach(engine.inputs.filter { !($0 is ReplayInput) }) { i in
-                    let other = replay.slot(of: i.id)
-                    Button("\(engine.number(of: i)). \(i.name)" + (other != nil && other != k ? "  (CAM \(other! + 1))" : "")) {
-                        replay.setSource(k, i.id)
-                    }
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .clipped()
+                .contentShape(Rectangle())
+                .onTapGesture { replay.setCamera(k) }
+                Menu { sourceMenu(k) } label: {
+                    Text(sourceName(k)).lineLimit(1).truncationMode(.middle)
                 }
-            } label: {
-                Text(sourceName(k)).lineLimit(1).truncationMode(.middle)
+                .menuStyle(.borderlessButton)
+                .padding(.horizontal, 6).frame(height: 22)
+                .background(RoundedRectangle(cornerRadius: 4).fill(Theme.button))
+            } else {
+                // Empty slot: one full-width "choose source" button (no tiny black box with wrapped text).
+                Menu { sourceMenu(k) } label: {
+                    Label(L("소스 선택"), systemImage: "plus.circle").lineLimit(1)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .frame(maxWidth: .infinity, minHeight: 44, maxHeight: .infinity)
+                .background(RoundedRectangle(cornerRadius: 4).strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    .foregroundColor(Color(white: 0.35)))
+                .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
-            .padding(.horizontal, 6).frame(height: 22)
-            .background(RoundedRectangle(cornerRadius: 4).fill(Theme.button))
             HStack {
                 if let i = input, let sz = i.video.size {
                     Text("\(sz.0)×\(sz.1)")
@@ -436,6 +450,17 @@ struct ReplayView: View {
             HStack {
                 Text(L("CLIP BIN")).font(.system(size: 12, weight: .bold))
                 Text("\(replay.events.count)").font(.caption).foregroundColor(.secondary)
+                if !exportSelection.isEmpty {
+                    Button {
+                        exportEvents = replay.events.filter { exportSelection.contains($0.id) }
+                    } label: {
+                        Label(Lf("선택한 클립 %@개 내보내기", "\(exportSelection.count)"), systemImage: "square.and.arrow.down")
+                    }
+                    .controlSize(.small)
+                }
+                if !replay.exportMessage.isEmpty {
+                    Text(replay.exportMessage).font(.caption).foregroundColor(.secondary).lineLimit(1).truncationMode(.middle)
+                }
                 Spacer()
                 Text(L("더블클릭 = Deck A 로드 · I / O = IN / OUT · Space = 재생 · 1–4 = 앵글")).font(.caption).foregroundColor(.secondary)
                     .lineLimit(1).truncationMode(.tail).minimumScaleFactor(0.8)
@@ -452,7 +477,7 @@ struct ReplayView: View {
             }
             .font(.system(size: 9, weight: .bold)).foregroundColor(.secondary).padding(.horizontal, 8)
             .lineLimit(1).minimumScaleFactor(0.8)
-            List {
+            List(selection: $exportSelection) {
                 ForEach(replay.events.reversed()) { e in
                     HStack(spacing: 10) {
                         Text(String(format: "%04d", e.number)).font(.system(size: 12, weight: .bold).monospacedDigit()).frame(width: 40, alignment: .leading)
@@ -478,6 +503,10 @@ struct ReplayView: View {
                         .frame(width: 112, alignment: .leading)
                         Text(e.name.isEmpty ? sourceName(e.camera) : e.name)
                             .font(.system(size: 11)).foregroundColor(.secondary).lineLimit(1)
+                        if let p = replay.exports[e.id] {
+                            Text(Lf("내보내는 중 %@%%", "\(Int(p * 100))")).font(.system(size: 9, weight: .bold).monospacedDigit())
+                                .foregroundColor(.accentColor).fixedSize()
+                        }
                         if let (t, c) = aiStatus(e) {
                             Text(t).font(.system(size: 9, weight: .bold).monospacedDigit()).foregroundColor(c).fixedSize()
                                 .help(L("AI 슬로모션 클립: 백그라운드 렌더 진행률 — 완료되면 슬로 재생이 AI 프레임으로 부드러워집니다"))
@@ -485,6 +514,10 @@ struct ReplayView: View {
                         Spacer()
                         Button("A") { replay.playEvent(e, channels: [0]) }.fixedSize()
                         Button("B") { replay.playEvent(e, channels: [1]) }.fixedSize()
+                        Button { exportEvents = [e] } label: { Image(systemName: "square.and.arrow.down") }
+                            .buttonStyle(.borderless)
+                            .help(L("이 클립 내보내기 (MP4 · 가로/세로)"))
+                            .disabled(replay.exports[e.id] != nil)
                         Button(role: .destructive) { replay.deleteEvent(e.id) } label: { Image(systemName: "trash") }
                             .buttonStyle(.borderless)
                     }
@@ -559,7 +592,7 @@ struct ReplaySettingsSheet: View {
                 Section(L("리플레이 소스 (CAM 1–4) — 빈 칸은 녹화하지 않음")) {
                     ForEach(0..<ReplaySettings.maxCameras, id: \.self) { k in
                         Picker("CAM \(k + 1)", selection: Binding(
-                            get: { replay.settings.slots[k]?.uuidString ?? "" },
+                            get: { replay.settings.slots[k].flatMap { engine.input(withID: $0) }?.id.uuidString ?? "" },
                             set: { replay.setSource(k, UUID(uuidString: $0)) })) {
                             Text(L("없음")).tag("")
                             ForEach(engine.inputs.filter { !($0 is ReplayInput) }) { i in

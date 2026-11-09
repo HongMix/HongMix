@@ -89,6 +89,21 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `SetCCSaturation / SetCCHue` | Input, Value | 채도(0~3, 1=원본)와 색상(-180~180°)을 바꿉니다. |
 | `ColourCorrectionReset / ResetInput` | Input | 색보정 또는 모든 영상 설정을 초기화합니다. |
 | `NDISelectSourceByName / NDISelectSourceByIndex` | Input, Value | NDI 입력의 소스를 바꿉니다. |
+| `BackgroundRemovalOn / BackgroundRemovalOff / BackgroundRemovalOnOff` | Input | AI 배경 제거를 켜고 끕니다. |
+| `SetBackgroundRemoval` | Input, Value=transparent\|blur\|image[,fast\|balanced\|accurate] | 배경과 처리 품질을 설정합니다. |
+
+## 리플레이·자막
+
+| 함수 | 파라미터 | 동작 |
+|---|---|---|
+| `ReplayExportLastEvent` | Value=horizontal\|vertical\|square | 마지막 리플레이 이벤트를 지정 비율로 내보냅니다. |
+| `ReplayExportEvent` | Value2 또는 Selection=클립 번호 | 지정한 리플레이 클립을 내보냅니다. |
+| `ReplaySetSource` | Input, Value=CAM 1~4 | 입력을 리플레이 카메라 슬롯에 지정합니다. |
+| `StartCaptions / StopCaptions / StartStopCaptions` |  | 실시간 자막을 시작·중지합니다. |
+| `CaptionsTest / ClearCaptions` |  | 시험 문장을 보내거나 현재 자막을 지웁니다. |
+| `SetCaptionLayout` | Value=right\|bottom\|band | 자막 레이아웃 프리셋을 정합니다. |
+| `SetCaptionLines / SetCaptionSize / SetCaptionLetterSpacing / SetCaptionLineSpacing / SetCaptionChars` | Value=숫자 | 자막 줄 수·크기·간격·줄당 글자 수를 설정합니다. |
+| `CaptionLabelOn / CaptionLabelOff / CaptionLabelOnOff` |  | AI 자막 라벨을 제어합니다. |
 
 ## 타이틀 (GT)
 

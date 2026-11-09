@@ -106,6 +106,12 @@ final class MonitorDisplayLoop {
     private let queue: MTLCommandQueue
     private let cache: CVMetalTextureCache
     private var displayLink: CVDisplayLink?
+    /// Last time the display link drew (CACurrentMediaTime; lock). A link whose display went to sleep,
+    /// was unplugged or is on another Space stops calling back — the watchdog then draws instead.
+    private var lastTick: CFTimeInterval = 0
+    private var watchdog: DispatchSourceTimer?
+    private var currentDisplay: CGDirectDisplayID = 0
+    private var screenObservers: [NSObjectProtocol] = []
 
     private init() {
         let dev = MetalContext.shared.device
@@ -141,12 +147,52 @@ final class MonitorDisplayLoop {
         }, context)
         displayLink = link
         CVDisplayLinkStart(link)
+        followMainWindowScreen()
+        // Re-target when a window changes screen or displays are added/removed/woken.
+        let nc = NotificationCenter.default
+        for name in [NSWindow.didChangeScreenNotification, NSWindow.didBecomeMainNotification,
+                     NSApplication.didChangeScreenParametersNotification, NSWorkspace.screensDidWakeNotification] {
+            let center = name == NSWorkspace.screensDidWakeNotification ? NSWorkspace.shared.notificationCenter : nc
+            screenObservers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                self?.followMainWindowScreen()
+            })
+        }
+        // Watchdog: if the link stops (display asleep / gone), keep drawing at ~60 Hz from a timer.
+        let t = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "HongMix.monitors.watchdog", qos: .userInteractive))
+        t.schedule(deadline: .now() + 0.1, repeating: .milliseconds(16), leeway: .milliseconds(2))
+        t.setEventHandler { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            let stalled = CACurrentMediaTime() - self.lastTick > 0.1
+            self.lock.unlock()
+            if stalled { self.drawFrame(fromWatchdog: true) }
+        }
+        t.resume()
+        watchdog = t
+    }
+
+    /// Main thread: drive the monitors from the refresh clock of the screen the main window is on.
+    private func followMainWindowScreen() {
+        guard let link = displayLink else { return }
+        let win = NSApp.mainWindow ?? NSApp.keyWindow ?? NSApp.windows.first { $0.isVisible && $0.screen != nil }
+        guard let n = win?.screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return }
+        let id = CGDirectDisplayID(n.uint32Value)
+        guard id != currentDisplay else { return }
+        currentDisplay = id
+        CVDisplayLinkSetCurrentCGDisplay(link, id)
+        if !CVDisplayLinkIsRunning(link) { CVDisplayLinkStart(link) }
     }
 
     /// Called by CoreVideo on the display's real vertical-refresh clock. A free-running 60 Hz sleep
     /// loop beats against 59.94 media and produces a visible hitch even when decode/render drop 0.
-    private func drawFrame() {
+    private let drawLock = NSLock()     // link and watchdog never draw at the same time
+    private func drawFrame(fromWatchdog: Bool = false) {
         let start = CACurrentMediaTime()
+        if !fromWatchdog {
+            lock.lock(); lastTick = start; lock.unlock()
+        }
+        guard drawLock.try() else { return }
+        defer { drawLock.unlock() }
         autoreleasepool {
             lock.lock()
             let list = renderers.values.compactMap { $0() }

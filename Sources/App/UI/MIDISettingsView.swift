@@ -70,12 +70,16 @@ struct MIDISettingsView: View {
             }
 
             Section(L("학습")) {
-                HStack {
-                    Picker(L("기능"), selection: $function) {
-                        ForEach(Self.common, id: \.self) { Text($0).tag($0) }
-                    }
-                    TextField(L("입력"), text: $input).frame(width: 60)
-                    TextField(L("값"), text: $value).frame(width: 70)
+                Picker(L("기능"), selection: $function) {
+                    ForEach(Self.common, id: \.self) { Text($0).tag($0) }
+                }
+                LabeledContent(L("입력")) {
+                    TextField("", text: $input, prompt: Text(L("번호 또는 이름")))
+                        .textFieldStyle(.roundedBorder).multilineTextAlignment(.trailing).frame(width: 180)
+                }
+                LabeledContent(L("값")) {
+                    TextField("", text: $value, prompt: Text(L("비워 두면 컨트롤 값")))
+                        .textFieldStyle(.roundedBorder).multilineTextAlignment(.trailing).frame(width: 180)
                 }
                 HStack {
                     if midi.learning {
