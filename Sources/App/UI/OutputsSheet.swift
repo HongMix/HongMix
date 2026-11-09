@@ -414,6 +414,7 @@ struct OutputEditor: View {
             Stepper(output.config.splitMinutes == 0 ? L("새 파일 분할: 끔") : Lf("새 파일 분할: %@분마다", "\(output.config.splitMinutes)"),
                     value: $output.config.splitMinutes, in: 0...240, step: 5)
         }
+        RecordingSafetySection(output: output, safety: engine.recordingSafety)
         Section(L("멀티트랙 오디오")) {
             HStack(spacing: 6) {
                 Group {
@@ -586,6 +587,9 @@ struct SettingsView: View {
 
             ShortcutsEditor()
                 .tabItem { Label(L("단축키"), systemImage: "keyboard") }
+
+            MIDISettingsView(midi: engine.midi)
+                .tabItem { Label("MIDI", systemImage: "pianokeys") }
         }
         .frame(width: 860, height: 520)
     }

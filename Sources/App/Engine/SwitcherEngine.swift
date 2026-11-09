@@ -224,6 +224,10 @@ final class SwitcherEngine: ObservableObject {
         didSet { withState { $0.overlaySettings = overlaySettings } }
     }
     @Published private(set) var multiCorderOn = false
+    /// Latest MultiCorder failure ("input: reason"), shown on the button. Before, ISO recordings that
+    /// failed to open or hit a write error (disk full) still showed "recording".
+    @Published private(set) var multiCorderError: String?
+    private var multiCorderGen = 0
     @Published var mixerVisible = true
     @Published var tbar: Double = 0
     @Published private(set) var format: VideoFormat
@@ -232,9 +236,11 @@ final class SwitcherEngine: ObservableObject {
     let scheduler = Scheduler()
     let rundown = Rundown()
     let captions = CaptionEngine()
+    let midi = MIDIControl()   // MIDI controllers (MIDIControl.swift)
     private var appActivity: NSObjectProtocol?
     private var pendingSwitchToken = UUID()
     let srtMonitor = SRTMonitor()
+    let recordingSafety = RecordingSafety()   // [Recording safety hook] disk time left / warnings (Outputs.swift)
     let blackbox = Blackbox()
     /// Recording: "≈ 3.2 h left" on the disk of the record folder (updated every second).
     @Published private(set) var recordRemaining: String = ""
@@ -319,6 +325,7 @@ final class SwitcherEngine: ObservableObject {
     private var renderInputs: [InputSource] = []      // stateLock
     private var renderOutputs: [OutputChannel] = []   // stateLock
     private var isoOutputs: [UUID: OpaquePointer] = [:] // stateLock (MultiCorder)
+    private var isoBoxes: [UUID: Unmanaged<IsoStatusBox>] = [:] // stateLock — status callback contexts
     private var mixer: MetalMixer?
     private var renderThread: Thread?
     private var running = false
@@ -373,6 +380,7 @@ final class SwitcherEngine: ObservableObject {
     private(set) var uiUpdateReport = ""
     private var engineChangeCount = 0
     private var engineChangeSub: AnyCancellable?
+    private var audioOutputSub: AnyCancellable?
 
     private func unwatch(_ id: UUID) {
         childSubscriptions[id] = nil
@@ -399,7 +407,9 @@ final class SwitcherEngine: ObservableObject {
         startRenderThread()
         dataSources.start(engine: self)
         captions.engine = self
+        midi.start(engine: self)   // MIDI: CoreMIDI client, mappings, LED tally
         ShortcutManager.shared.install(engine: self)
+        PTZManager.shared.attach(engine: self)   // PTZ: "Move to preset when put in Preview" hook (PTZ.swift)
         statsTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.publishStats()
         }
@@ -427,6 +437,7 @@ final class SwitcherEngine: ObservableObject {
 
     private func startRenderThread() {
         VideoSlot.programFPS = format.fps
+        SlideOutput.size = CGSize(width: format.width, height: format.height)   // [Slides/Virtual Set] render size
         // program rate changed → re-evaluate each file's 60 ↔ 59.94 conform
         NotificationCenter.default.post(name: .hongMixRateConformChanged, object: nil)
         mixer = MetalMixer(format: format)
@@ -977,10 +988,12 @@ final class SwitcherEngine: ObservableObject {
         df.dateFormat = "yyyyMMdd_HHmmss"
         let stamp = df.string(from: Date())
         var handles: [UUID: OpaquePointer] = [:]
+        var boxes: [UUID: Unmanaged<IsoStatusBox>] = [:]
+        multiCorderGen += 1
+        multiCorderError = nil
+        var openErrors: [String] = []
         for i in targets {
-            let safe = i.name.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_")
-            let ext = s.videoCodec == "prores" ? "mov" : s.container
-            let path = (folder as NSString).appendingPathComponent("\(number(of: i))_\(safe)_\(stamp).\(ext)")
+            let (path, ext) = isoFile(for: i, folder: folder, stamp: stamp)
             var cfg = mc_output_config()
             cfg.width = Int32(format.width)
             cfg.height = Int32(format.height)
@@ -995,37 +1008,112 @@ final class SwitcherEngine: ObservableObject {
             cfg.url = UnsafePointer(uPtr)
             cfg.format = UnsafePointer(fPtr)
             cfg.video_codec = UnsafePointer(vPtr)
-            if let h = mc_output_open(&cfg, nil, nil) { handles[i.id] = h }
+            let box = Unmanaged.passRetained(IsoStatusBox(engine: self, name: i.name, gen: multiCorderGen))
+            if let h = mc_output_open(&cfg, { user, state, msg in
+                guard let user = user, state == Int32(MC_STATE_ERROR) else { return }
+                let b = Unmanaged<IsoStatusBox>.fromOpaque(user).takeUnretainedValue()
+                let text = L(msg.map { String(cString: $0) } ?? "")
+                DispatchQueue.main.async { b.engine?.multiCorderFailed(b, text) }
+            }, box.toOpaque()) {
+                handles[i.id] = h
+                boxes[i.id] = box
+            } else {
+                box.release()
+                openErrors.append(i.name)
+            }
             free(uPtr)
             free(fPtr)
             free(vPtr)
         }
         stateLock.lock()
         isoOutputs = handles
+        isoBoxes = boxes
         rs.isoMasterAudio = s.audioFromMaster
         stateLock.unlock()
         multiCorderStarted = CACurrentMediaTime()
         multiCorderOn = !handles.isEmpty
         lastMessage = Lf("MultiCorder: %@개 입력 녹화 중 → %@", "\(handles.count)", "\(folder)")
+        if !openErrors.isEmpty {
+            multiCorderError = Lf("MultiCorder 오류 — %@: %@", openErrors.joined(separator: ", "), L("출력을 시작할 수 없음"))
+            lastMessage = multiCorderError!
+        }
         switchEvents.send()
+    }
+
+    /// ISO file path ("<number>_<name>_<stamp>.<ext>") and its extension.
+    private func isoFile(for i: InputSource, folder: String, stamp: String) -> (path: String, ext: String) {
+        let s = multiCorderSettings
+        let safe = i.name.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_")
+        let ext = s.videoCodec == "prores" ? "mov" : s.container
+        return ((folder as NSString).appendingPathComponent("\(number(of: i))_\(safe)_\(stamp).\(ext)"), ext)
+    }
+
+    /// MultiCorder "New file every": every ISO recording continues in a new file from its next frame
+    /// (forced keyframe, same encoder) — no frames or audio lost at the boundary, no late "stopped"
+    /// callbacks. Falls back to the old stop + start only if an output can't split.
+    private func splitMultiCorder() {
+        let folder = (multiCorderSettings.folder as NSString).expandingTildeInPath
+        try? FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        let df = DateFormatter()
+        df.dateFormat = "yyyyMMdd_HHmmss"
+        let stamp = df.string(from: Date())
+        stateLock.lock()
+        let ids = Array(isoOutputs.keys)
+        stateLock.unlock()
+        var paths: [UUID: String] = [:]
+        for id in ids { if let i = input(withID: id) { paths[id] = isoFile(for: i, folder: folder, stamp: stamp).path } }
+        var ok = true
+        stateLock.lock()   // held so stopISO can't close a handle while we use it
+        for (id, h) in isoOutputs {
+            if let p = paths[id], mc_output_split(h, p) == 0 { continue }
+            ok = false
+        }
+        stateLock.unlock()
+        if ok {
+            multiCorderStarted = CACurrentMediaTime()
+        } else {
+            stopMultiCorder()
+            startMultiCorder()
+        }
     }
 
     func stopMultiCorder(wait: Bool = false) {
         stateLock.lock()
         let handles = isoOutputs
+        let boxes = isoBoxes
         isoOutputs = [:]
+        isoBoxes = [:]
         stateLock.unlock()
         multiCorderOn = false
-        let close = { handles.values.forEach { mc_output_close($0) } }
+        multiCorderError = nil
+        multiCorderGen += 1
+        let close = {
+            handles.values.forEach { mc_output_close($0) }   // joins the output threads → no more callbacks
+            boxes.values.forEach { $0.release() }
+        }
         if wait { close() } else { DispatchQueue.global(qos: .userInitiated).async(execute: close) }
         switchEvents.send()
+    }
+
+    fileprivate func multiCorderFailed(_ box: IsoStatusBox, _ text: String) {
+        guard multiCorderOn, box.gen == multiCorderGen else { return }   // late message after stop / split
+        multiCorderError = Lf("MultiCorder 오류 — %@: %@", box.name, text)
+        lastMessage = multiCorderError!
+    }
+
+    // [Recording safety hook] MultiCorder folder + bytes written by its ISO recorders (RecordingSafety).
+    var multiCorderFolderPath: String? { multiCorderOn ? (multiCorderSettings.folder as NSString).expandingTildeInPath : nil }
+    func multiCorderBytesWritten() -> Int64 {
+        stateLock.lock(); defer { stateLock.unlock() }
+        return isoOutputs.values.reduce(Int64(0)) { t, h in var st = mc_output_stats(); mc_output_get_stats(h, &st); return t + st.bytes_written }
     }
 
     private func stopISO(_ id: UUID) {
         stateLock.lock()
         let h = isoOutputs.removeValue(forKey: id)
+        let box = isoBoxes.removeValue(forKey: id)
         stateLock.unlock()
-        if let h = h { DispatchQueue.global().async { mc_output_close(h) } }
+        if let h = h { DispatchQueue.global().async { mc_output_close(h); box?.release() } } else { box?.release() }
     }
 
     // MARK: Snapshot
@@ -1156,8 +1244,7 @@ final class SwitcherEngine: ObservableObject {
         // MultiCorder "New file every"
         if multiCorderOn && multiCorderSettings.splitMinutes > 0 &&
             nowT - multiCorderStarted >= Double(multiCorderSettings.splitMinutes) * 60 {
-            stopMultiCorder()
-            startMultiCorder()
+            splitMultiCorder()
         }
         if !volumeFades.isEmpty {
             let now = CACurrentMediaTime()
@@ -1305,7 +1392,8 @@ final class SwitcherEngine: ObservableObject {
         // 2. layers
         for i in ins {
             let ls = i.layersSnapshot.filter { $0.visible && $0.inputID != nil }
-            if ls.isEmpty {
+            let top = i.topOverlayFrame          // [Virtual Set] foreground picture above the layers
+            if ls.isEmpty && top == nil {
                 let o = lutOut[i.id]
                 if i.composed !== o { i.composed = o }
                 continue
@@ -1333,6 +1421,10 @@ final class SwitcherEngine: ObservableObject {
                 let bc = HexColor.parse(l.borderColor) ?? (1, 1, 1, 1)
                 parts.append(ComposeLayer(buffer: buf, params: p, rect: rect, border: Float(l.border),
                                           borderColor: (Float(bc.0), Float(bc.1), Float(bc.2))))
+            }
+            if let top {                         // [Virtual Set] foreground (desk), full frame, premultiplied
+                var p = LayerParams(); p.premul = 1
+                parts.append(ComposeLayer(buffer: top, params: p, rect: CGRect(x: 0, y: 0, width: W, height: H)))
             }
             i.composed = mixer.compose(parts)
         }
@@ -1625,6 +1717,7 @@ final class SwitcherEngine: ObservableObject {
         MonitorRenderer.publishDrawStats()
         droppedTicks = dropped
         for o in outputs { o.refreshStats() }
+        recordingSafety.update(self)   // [Recording safety hook]
         // 2-minute health history for the Statistics graphs
         var rtt = 0.0, loss = 0.0
         for case let f as FFmpegInput in inputs {
@@ -1640,6 +1733,11 @@ final class SwitcherEngine: ObservableObject {
                                                   uiStallMs: uiStallMs, lostInputs: lostInputs.count))
         lastDroppedForHistory = dropped
         if engineChangeSub == nil { engineChangeSub = objectWillChange.sink { [weak self] in self?.engineChangeCount += 1 } }
+        if audioOutputSub == nil {
+            // bus routes / headphones that lost their device (or came back) → message bar
+            audioOutputSub = audioMixer.$outputStatus.removeDuplicates().receive(on: DispatchQueue.main)
+                .sink { [weak self] s in if !s.isEmpty { self?.lastMessage = s } }
+        }
         let top = childChanges.sorted { $0.value > $1.value }.prefix(3)
             .map { "\(self.input(withID: $0.key)?.name ?? "out")=\($0.value)" }.joined(separator: ",")
         uiUpdateReport = "\(engineChangeCount) [\(top)]"
@@ -1811,5 +1909,17 @@ struct ProjectFile: Codable {
             .appendingPathComponent("HongMix", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         return base.appendingPathComponent("last-session.bmix")
+    }
+}
+
+/// Status-callback context for one MultiCorder ISO recording (retained while its output is open).
+final class IsoStatusBox {
+    weak var engine: SwitcherEngine?
+    let name: String
+    let gen: Int
+    init(engine: SwitcherEngine, name: String, gen: Int) {
+        self.engine = engine
+        self.name = name
+        self.gen = gen
     }
 }

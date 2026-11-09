@@ -10,13 +10,33 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 1.4.5</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.0.5</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
-### Latest update · 1.4.5
-- **Desktop Capture permission fixed:** shows the real reason when capture can't start, asks macOS at most once per launch (no repeating "would like to record" alerts) and starts by itself once Screen Recording is allowed. If it still says permission is needed after an update, follow [macOS permissions](#macos-permissions) once.
+### Latest update · 2.0.5
+- **PTZ production control:** a dedicated multi-camera PTZ window, VISCA over IP/TCP/UDP and NDI PTZ, presets and safe Preview-triggered moves.
+- **Faster source setup:** drag video, images, photo folders and PDFs from Finder; new Photos, PDF Slides and Virtual Set inputs.
+- **MIDI control:** learn mode, controller templates and LED tally.
+- **Safer recording and streaming:** crash-resilient fragmented files, backup/rollover disks, remaining-time warnings and a per-destination stream monitor.
+- **Long-show stability:** live clock-drift compensation, device reconnection, preserved broadcast delay, gapless loops and frame-safe file splitting.
+- Verified on an M1 Max with 60-minute recording and SRT soaks. Real PTZ, DeckLink and MIDI hardware validation is still pending. See the [English release notes](docs/RELEASE-NOTES-2.0.5.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.0.5.ko.md).
+
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-main-switcher-test-patterns.png" alt="HongMix 2.0.5 main switcher with generated test patterns" width="100%"><br><sub>Main switcher · generated test patterns</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-ptz-control-test-patterns.png" alt="HongMix 2.0.5 PTZ control window" width="100%"><br><sub>Independent multi-camera PTZ control</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-new-input-types.png" alt="HongMix 2.0.5 new input types" width="100%"><br><sub>Photos, PDF Slides and Virtual Set inputs</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-recording-safety.png" alt="HongMix 2.0.5 recording safety settings" width="100%"><br><sub>Backup recording and disk rollover</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-stream-monitor.png" alt="HongMix 2.0.5 stream monitor" width="100%"><br><sub>Per-destination stream health</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-midi-settings.png" alt="HongMix 2.0.5 MIDI settings" width="100%"><br><sub>MIDI learn, templates and LED tally</sub></td>
+  </tr>
+</table>
 
 ### 1.4.2
 - **Display output fixed for macOS Spaces:** Output Window and borderless Display Fullscreen stay on the active desktop. The green button fills the current display without creating a stranded black full-screen Space; Esc, double-click or right-click returns to a window.

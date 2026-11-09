@@ -580,6 +580,8 @@ struct BottomBar: View {
                                 help: L("Instant Replay — 녹화 · 마크 · 슬로모션 재생"))
             ToolBarWindowButton(title: "Scopes", symbol: "waveform.path.ecg", windowID: "scopes",
                                 help: L("스코프 — 파형 · 벡터스코프 · 히스토그램"))
+            ToolBarWindowButton(title: "PTZ", symbol: "camera.metering.center.weighted", windowID: "ptz",
+                                help: L("PTZ 컨트롤 — 1~9 카메라 · WASD 이동 · Q/E 줌 · Z/X 포커스"))
             Button {
                 engine.mixerVisible.toggle()
             } label: {
@@ -681,6 +683,7 @@ struct OutputBarButton: View {
 
     private var kinds: [OutputKind] { [kind] + (alsoKind.map { [$0] } ?? []) }
     @ViewState private var preflight = false
+    @ViewState private var streamMonitor = false
 
     /// Monochrome: capsule with live status — "● REC 00:12:31 · 30.0 Mb/s".
     @ViewBuilder private func monoLabel(on: Bool, error: Bool) -> some View {
@@ -697,13 +700,16 @@ struct OutputBarButton: View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             HStack(spacing: 7) {
                 if on {
-                    Text("● " + short).foregroundColor(error ? .orange : Color(red: 1, green: 0.42, blue: 0.38))
+                    let diskWarn = kind == .record && engine.recordingSafety.diskWarning
+                    Text("● " + short).foregroundColor(error || diskWarn ? .orange : Color(red: 1, green: 0.42, blue: 0.38))
                     let since = running.compactMap { $0.liveSince }.min()
                     let t = since.map { Int(ctx.date.timeIntervalSince($0)) } ?? 0
                     let mbps = running.map { $0.lastKbps }.reduce(0, +) / 1000
+                    // REC also shows the disk time left ("· 38 min left"), orange once below the warning threshold
+                    let left = kind == .record ? engine.recordingSafety.lowestRemainingSeconds.flatMap { $0 < 24 * 3600 ? $0 : nil } : nil
                     Text(String(format: "%02d:%02d:%02d", t / 3600, (t / 60) % 60, t % 60) +
-                         (mbps > 0 ? String(format: " · %.1f Mb/s", mbps) : ""))
-                        .foregroundColor(Color(white: 0.72))
+                         (left != nil ? " · " + RecordingSafety.remainingText(left) : (mbps > 0 ? String(format: " · %.1f Mb/s", mbps) : "")))
+                        .foregroundColor(diskWarn ? .orange : Color(white: 0.72))
                         .monospacedDigit()
                 } else {
                     Text(short).foregroundColor(.white)
@@ -740,7 +746,7 @@ struct OutputBarButton: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 14)
                         .frame(height: 30)
-                        .background(on ? (error ? Color.orange : Theme.live) : Theme.button)
+                        .background(on ? (error || (kind == .record && engine.recordingSafety.diskWarning) ? Color.orange : Theme.live) : Theme.button)
                 }
             }
             .buttonStyle(.plain)
@@ -755,6 +761,18 @@ struct OutputBarButton: View {
             }
             .buttonStyle(.plain)
             .help(Lf("%@ 설정", "\(title)"))
+            if kind == .stream {
+                Button { streamMonitor = true } label: {
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.8))
+                        .frame(width: AppSkin.isMono ? 28 : 22, height: 30)
+                        .background(AppSkin.isMono ? Color.white.opacity(0.06) : Theme.button.opacity(0.8))
+                }
+                .buttonStyle(.plain)
+                .help(L("송출 모니터"))
+                .popover(isPresented: $streamMonitor, arrowEdge: .top) { StreamMonitorView().environmentObject(engine) }
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: AppSkin.isMono ? 15 : 3, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: AppSkin.isMono ? 15 : 3, style: .continuous)
@@ -917,9 +935,10 @@ struct MultiCorderBarButton: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 14)
                     .frame(height: 30)
-                    .background(engine.multiCorderOn ? Theme.live : Theme.button)
+                    .background(engine.multiCorderOn ? (engine.multiCorderError != nil ? Color.orange : Theme.live) : Theme.button)
             }
             .buttonStyle(.plain)
+            .help(engine.multiCorderError ?? "")
             Button {
                 showSettings = true
             } label: {

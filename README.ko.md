@@ -10,13 +10,33 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 1.4.5 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.0.5 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
-### 최신 업데이트 · 1.4.5
-- **Desktop Capture 권한 문제 수정:** 캡처가 안 될 때 실제 이유를 보여 주고, macOS 허용 창은 앱을 켤 때 최대 한 번만 띄웁니다("기록하려고 합니다" 창 반복 없음). 화면 녹음을 허용하면 저절로 캡처를 시작합니다. 업데이트 후에도 권한 필요가 나오면 [macOS 권한](#macos-권한)을 한 번 따라 해 주세요.
+### 최신 업데이트 · 2.0.5
+- **PTZ 방송 제어:** 여러 카메라를 한 창에서 제어하고 VISCA over IP·TCP·UDP와 NDI PTZ, 프리셋, 안전한 Preview 연동 이동을 지원합니다.
+- **빠른 소스 추가:** Finder에서 영상·이미지·사진 폴더·PDF를 끌어 놓을 수 있고 Photos·PDF 슬라이드·Virtual Set 입력이 추가됐습니다.
+- **MIDI 제어:** 학습 모드, 컨트롤러 템플릿, LED 탤리를 지원합니다.
+- **안전한 녹화·송출:** 강제 종료에도 남는 조각 저장 파일, 백업·이어쓰기 디스크, 남은 시간 경고, 목적지별 송출 모니터를 추가했습니다.
+- **장시간 방송 안정성:** 실시간 소스 시계 차이 보정, 장치 재연결, 방송 딜레이 유지, 끊김 없는 반복 재생과 프레임 손실 없는 파일 분할을 적용했습니다.
+- M1 Max에서 녹화·SRT 송출을 각각 60분 검증했습니다. 실제 PTZ·DeckLink·MIDI 장비 검증은 아직 남아 있습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.0.5.ko.md) · [English release notes](docs/RELEASE-NOTES-2.0.5.md)
+
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-main-switcher-test-patterns.png" alt="생성한 테스트 패턴을 사용한 HongMix 2.0.5 메인 스위처" width="100%"><br><sub>메인 스위처 · 생성한 테스트 패턴</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-ptz-control-test-patterns.png" alt="HongMix 2.0.5 PTZ 제어 창" width="100%"><br><sub>독립된 다중 카메라 PTZ 제어</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-new-input-types.png" alt="HongMix 2.0.5 새 입력 형식" width="100%"><br><sub>Photos·PDF 슬라이드·Virtual Set 입력</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-recording-safety.png" alt="HongMix 2.0.5 녹화 안전 설정" width="100%"><br><sub>백업 녹화와 디스크 이어쓰기</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-stream-monitor.png" alt="HongMix 2.0.5 송출 모니터" width="100%"><br><sub>목적지별 송출 상태</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-midi-settings.png" alt="HongMix 2.0.5 MIDI 설정" width="100%"><br><sub>MIDI 학습·템플릿·LED 탤리</sub></td>
+  </tr>
+</table>
 
 ### 1.4.2
 - **macOS Space에 맞춘 Display 출력:** Output Window와 디스플레이 채우기가 현재 데스크톱에 그대로 열립니다. 초록 버튼은 검은 전체화면 Space를 남기지 않으며 Esc·더블클릭·우클릭으로 일반 창에 복귀합니다.

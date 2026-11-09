@@ -315,6 +315,7 @@ struct InputGrid: View {
     @AppStorage("inputSize") private var inputSize = 1
     @AppStorage("compactInputTiles") private var compactInputTiles = false
     @AppStorage("inputDockLeft") private var inputDockLeft = false
+    @ViewState private var fileDropTarget = false
 
     private var widths: (CGFloat, CGFloat) {
         switch inputSize {
@@ -402,6 +403,20 @@ struct InputGrid: View {
                         }
                     }
                     .padding(6)
+                    .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+                }
+                // Finder → empty input area: new inputs from the dropped files (⌥ = several videos as one List)
+                .onDrop(of: [.fileURL], isTargeted: Binding(get: { fileDropTarget }, set: { fileDropTarget = $0 })) { providers in
+                    FileDrop.add(providers, engine: engine)
+                }
+                .overlay {
+                    if fileDropTarget {
+                        RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.85), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                            .overlay(Text(L("놓으면 새 입력으로 추가 · ⌥ 여러 영상 = List · ⌘ 타일 위 = 파일 교체")).font(.caption)
+                                .padding(6).background(Color.black.opacity(0.7)).clipShape(RoundedRectangle(cornerRadius: 4)))
+                            .padding(4)
+                            .allowsHitTesting(false)
+                    }
                 }
             }
             .overlay(alignment: .top) {
@@ -514,11 +529,9 @@ private struct FoldedInputRow: View {
             Button(L("입력 설정…")) { sheet = SheetRequest(kind: input.kind, editing: input) }
         }
         .draggable(input.id.uuidString) { Text("\(number). \(input.name)").padding(6).background(Theme.panel) }
-        .dropDestination(for: String.self) { items, _ in
-            guard let raw = items.first, let id = UUID(uuidString: raw),
-                  let from = engine.inputs.firstIndex(where: { $0.id == id }) else { return false }
-            engine.moveInput(from: from, to: number - 1)
-            return true
+        .onDrop(of: FileDrop.dropTypes, isTargeted: nil) { providers in
+            // a file from Finder replaces this input's source; a dragged tile reorders
+            FileDrop.dropOnTile(providers, input: input, number: number, engine: engine)
         }
         .help(L("번호는 원래 입력 번호를 유지 · 클릭: Preview 선택 · 화살표: 타일 펼치기 · 우클릭: 추가 작업"))
     }
@@ -769,13 +782,10 @@ struct InputBox: View {
         .draggable(input.id.uuidString) {
             Text("\(number). \(input.name)").padding(6).background(Theme.panel)
         }
-        .dropDestination(for: String.self) { items, _ in
-            // vMix: drag an input onto another to change the order
-            guard let s = items.first, let id = UUID(uuidString: s),
-                  let from = engine.inputs.firstIndex(where: { $0.id == id }) else { return false }
-            engine.moveInput(from: from, to: number - 1)
-            return true
-        } isTargeted: { dropTarget = $0 }
+        .onDrop(of: FileDrop.dropTypes, isTargeted: Binding(get: { dropTarget }, set: { dropTarget = $0 })) { providers in
+            // vMix: drag an input onto another to change the order · a file from Finder replaces the source
+            FileDrop.dropOnTile(providers, input: input, number: number, engine: engine)
+        }
     }
 
     @ViewState private var dropTarget = false

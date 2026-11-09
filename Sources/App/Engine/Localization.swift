@@ -31,7 +31,41 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 /// Localised string (key = the Korean source text).
 func L(_ s: String) -> String {
     guard AppLanguage.current == .en else { return s }
-    return AppLanguage.english[s] ?? s
+    if let e = AppLanguage.english[s] { return e }
+    return LocalizedTemplates.match(s) ?? s
+}
+
+/// Status text formatted in C ("연결 실패: Connection refused") has no exact key: match it against the
+/// "%@" templates in en.json and fill the English template with the same parts. Results are cached.
+private enum LocalizedTemplates {
+    private static let lock = NSLock()
+    private static var cache: [String: String?] = [:]
+    private static let templates: [(NSRegularExpression, String)] = AppLanguage.english.compactMap { k, v in
+        guard k.contains("%@"), !k.hasPrefix("%@") || k.count > 2 else { return nil }
+        let parts = k.components(separatedBy: "%@").map { NSRegularExpression.escapedPattern(for: $0) }
+        guard let re = try? NSRegularExpression(pattern: "^" + parts.joined(separator: "(.*?)") + "$",
+                                                options: [.dotMatchesLineSeparators]) else { return nil }
+        return (re, v)
+    }.sorted { $0.0.pattern.count > $1.0.pattern.count }   // most specific template first
+
+    static func match(_ s: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        if let c = cache[s] { return c }
+        var out: String?
+        let ns = s as NSString
+        for (re, en) in templates {
+            guard let m = re.firstMatch(in: s, range: NSRange(location: 0, length: ns.length)) else { continue }
+            var args = (1..<m.numberOfRanges).map { ns.substring(with: m.range(at: $0)) }
+            args = args.map { AppLanguage.english[$0] ?? $0 }   // a translatable part (e.g. a nested status)
+            var t = "", it = args.makeIterator(), rest = Substring(en)
+            while let r = rest.range(of: "%@") { t += rest[..<r.lowerBound] + (it.next() ?? ""); rest = rest[r.upperBound...] }
+            out = t + rest
+            break
+        }
+        if cache.count > 2000 { cache.removeAll() }
+        cache[s] = out
+        return out
+    }
 }
 
 /// Localised template with `%@` placeholders filled in order (`%%` = literal percent).

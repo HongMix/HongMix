@@ -16,7 +16,7 @@ struct InputEditorSheet: View {
         case ndiDesktop = "NDI / Desktop Capture"
         case image = "Image"
         case photos = "Photos"
-        case powerpoint = "PowerPoint"
+        case powerpoint = "PDF Slides"   // PowerPoint / Keynote / Google Slides exported as PDF
         case title = "Title"
         case camera = "Camera"
         case stream = "Stream / SRT"
@@ -29,7 +29,7 @@ struct InputEditorSheet: View {
         var id: String { rawValue }
         var available: Bool {
             switch self {
-            case .photos, .powerpoint, .videoCall, .virtualSet: return false
+            case .videoCall: return false
             default: return true
             }
         }
@@ -64,6 +64,9 @@ struct InputEditorSheet: View {
             case .browser: return .browser
             case .audio: return .audio
             case .replay: return .replay
+            case .photos: return .photos            // SlideInputs.swift (editor UI pending)
+            case .pdfSlides: return .powerpoint
+            case .virtualSet: return .virtualSet
             }
         }
     }
@@ -89,6 +92,8 @@ struct InputEditorSheet: View {
     @ViewState private var category: Category
     @ViewState private var cfg: InputConfig
     @ViewState private var nameEdited = false
+    @ViewState private var confirmChrome = false
+    @ViewState private var chromeMessage = ""
 
     // stream
     @ViewState private var streamType: StreamType = .srtListener
@@ -134,6 +139,9 @@ struct InputEditorSheet: View {
         case .browser: return "Web Browser"
         case .audio: return "Audio Input"
         case .replay: return "Replay A"
+        case .photos: return "Photos"                // SlideInputs.swift (editor UI pending)
+        case .pdfSlides: return "Slides"
+        case .virtualSet: return "Virtual Set"
         }
     }
 
@@ -150,6 +158,9 @@ struct InputEditorSheet: View {
         case .browser: return .browser
         case .audio: return .audio
         case .replay: return .replay
+        case .photos: return .photos
+        case .powerpoint: return .pdfSlides
+        case .virtualSet: return .virtualSet
         default: return .media
         }
     }
@@ -161,7 +172,7 @@ struct InputEditorSheet: View {
                 List(selection: Binding<Category?>(get: { category }, set: { c in
                     if let c = c, c.available, editing == nil { select(c) }
                 })) {
-                    ForEach(Category.allCases) { c in
+                    ForEach(Category.allCases.filter { $0 != .videoCall }) { c in   // Video Call: not planned
                         Label(c.rawValue, systemImage: c.symbol)
                             .foregroundColor(c.available ? .primary : .secondary.opacity(0.5))
                             .tag(c)
@@ -224,6 +235,9 @@ struct InputEditorSheet: View {
         case .browser: browserSection
         case .audio: audioSection
         case .replay: replaySection
+        case .photos: photosSection
+        case .powerpoint: pdfSection
+        case .virtualSet: virtualSetSection
         default:
             Section {
                 Text(Lf("%@ 입력은 HongMix에서 아직 지원하지 않습니다.", "\(category.rawValue)"))
@@ -394,10 +408,51 @@ struct InputEditorSheet: View {
                 }
             }
             Section(L("옵션")) {
+                Toggle(isOn: $cfg.captureAudio) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L("소리 캡처"))
+                        Text(L("창: 그 앱 소리만 · 디스플레이: 맥 전체 소리 · HongMix 소리는 제외"))
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                }
                 Toggle(L("커서 표시"), isOn: $cfg.showCursor)
                 Stepper(Lf("프레임레이트: %@ fps", "\(cfg.captureFPS)"), value: $cfg.captureFPS, in: 5...60, step: 5)
+                if let b = selectedBrowser {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(Lf("숨겨져도 %@ 계속 그리기", b.name))
+                            Text(ChromeKeepAlive.needsRelaunch(bundleID: b.bundleID)
+                                 ? L("다른 데스크탑에 있으면 브라우저가 화면 그리기를 멈춥니다. 계속 그리기 모드로 다시 열면 탭은 복원됩니다.")
+                                 : L("계속 그리기 모드로 실행 중입니다."))
+                                .font(.caption).foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        if ChromeKeepAlive.needsRelaunch(bundleID: b.bundleID) {
+                            Button(Lf("%@ 다시 실행", b.name)) { confirmChrome = true }
+                        }
+                    }
+                    if !chromeMessage.isEmpty { Text(chromeMessage).font(.caption) }
+                }
+            }
+            .alert(L("브라우저를 다시 실행할까요?"), isPresented: $confirmChrome) {
+                Button(L("다시 실행")) {
+                    guard let b = selectedBrowser else { return }
+                    chromeMessage = L("다시 실행하는 중…")
+                    ChromeKeepAlive.relaunch(bundleID: b.bundleID) { r in
+                        DispatchQueue.main.async { chromeMessage = r.message; engine.lastMessage = r.message }
+                    }
+                }
+                Button(L("취소"), role: .cancel) {}
+            } message: {
+                Text(L("브라우저를 종료했다가 계속 그리기 모드로 다시 엽니다. 저장하지 않은 입력 내용이 있으면 브라우저가 먼저 묻습니다."))
             }
         }
+    }
+
+    /// Chromium browser owning the selected window (Desktop Capture), if any.
+    private var selectedBrowser: ChromeKeepAlive.Browser? {
+        guard cfg.screenWindowID != 0, let w = targets.windows.first(where: { $0.id == cfg.screenWindowID }) else { return nil }
+        return ChromeKeepAlive.browsers.first { w.app == $0.name || w.app.hasPrefix($0.name) || $0.name.hasPrefix(w.app) && !w.app.isEmpty }
     }
 
     private func sourceRow(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -624,6 +679,10 @@ struct InputEditorSheet: View {
         case .ndi: return !cfg.ndiSource.isEmpty
         case .image: return !cfg.imagePath.isEmpty
         case .browser: return cfg.browserURL.count > 8
+        case .photos, .pdfSlides: return !cfg.slides.path.isEmpty
+        case .virtualSet:
+            return !cfg.virtualSet.backgroundPath.isEmpty || cfg.virtualSet.backgroundInputID != nil
+                || cfg.virtualSet.presenterInputID != nil
         default: return true
         }
     }
@@ -760,6 +819,115 @@ struct InputEditorSheet: View {
             engine.addInput(c)
         }
         dismiss()
+    }
+
+    private func pickFolder() -> String? {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        return panel.runModal() == .OK ? panel.url?.path : nil
+    }
+
+    // MARK: Photos / PDF Slides / Virtual Set
+
+    @ViewBuilder private var slideCommonRows: some View {
+        Picker(L("전환"), selection: $cfg.slides.transition) {
+            ForEach(SlideTransitionStyle.allCases) { Text($0.label).tag($0) }
+        }
+        if cfg.slides.transition != .cut {
+            NumberField(L("전환 시간"), value: $cfg.slides.transitionMs, in: 0...5000, unit: "ms")
+        }
+        Picker(L("맞춤"), selection: $cfg.slides.fill) {
+            Text(L("채우기 (잘라냄)")).tag(true)
+            Text(L("맞추기 (검은 여백)")).tag(false)
+        }
+    }
+
+    @ViewBuilder private var photosSection: some View {
+        Section("Photos") {
+            HStack {
+                TextField(L("폴더"), text: $cfg.slides.path)
+                Button("Browse…") {
+                    if let p = pickFolder() {
+                        cfg.slides.path = p
+                        if !nameEdited { cfg.name = (p as NSString).lastPathComponent }
+                    }
+                }
+            }
+            Stepper(Lf("사진마다 %@초", String(format: "%g", cfg.slides.seconds)), value: $cfg.slides.seconds, in: 1...120, step: 1)
+            slideCommonRows
+            Toggle(L("무작위 순서"), isOn: $cfg.slides.shuffle)
+            Text(L("JPG·PNG·HEIC·TIFF·WebP를 이름 순서로 보여 주고, 폴더에 사진을 넣거나 빼면 바로 반영합니다. 재생/일시정지와 반복은 입력의 재생 버튼으로, 넘기기는 NextPicture/PreviousPicture API나 MIDI로 합니다."))
+                .font(.caption).foregroundColor(.secondary)
+        }
+    }
+
+    @ViewBuilder private var pdfSection: some View {
+        Section(L("PDF 슬라이드")) {
+            HStack {
+                TextField(L("파일"), text: $cfg.slides.path)
+                Button("Browse…") {
+                    if let p = pickFile(types: [.pdf]) {
+                        cfg.slides.path = p
+                        if !nameEdited { cfg.name = ((p as NSString).lastPathComponent as NSString).deletingPathExtension }
+                    }
+                }
+            }
+            if !cfg.slides.path.isEmpty { PDFThumbStrip(path: cfg.slides.path, deck: editing as? SlideDeckInput) }
+            slideCommonRows
+            Text(L("PowerPoint·Keynote·Google 슬라이드는 PDF로 내보내서 쓰세요. 파일을 다시 저장하면 같은 페이지를 유지한 채 바로 반영됩니다. 넘기기: 단축키(설정 › 단축키에서 NextPicture 지정), NextPicture/PreviousPicture API, MIDI."))
+                .font(.caption).foregroundColor(.secondary)
+        }
+    }
+
+    @ViewBuilder private var virtualSetSection: some View {
+        let others = engine.inputs.filter { $0.id != editing?.id && $0.kind != .virtualSet }
+        Section("Virtual Set") {
+            HStack {
+                TextField(L("배경 이미지"), text: $cfg.virtualSet.backgroundPath)
+                Button("Browse…") {
+                    if let p = pickFile(types: [.png, .jpeg, .tiff, .heic, .image]) {
+                        cfg.virtualSet.backgroundPath = p
+                        cfg.virtualSet.backgroundInputID = nil
+                    }
+                }
+            }
+            Picker(L("또는 배경 입력"), selection: $cfg.virtualSet.backgroundInputID) {
+                Text(L("없음")).tag(UUID?.none)
+                ForEach(others) { Text("\(engine.number(of: $0)) \($0.name)").tag(UUID?.some($0.id)) }
+            }
+            Picker(L("진행자 (크로마키)"), selection: $cfg.virtualSet.presenterInputID) {
+                Text(L("없음")).tag(UUID?.none)
+                ForEach(others) { Text("\(engine.number(of: $0)) \($0.name)").tag(UUID?.some($0.id)) }
+            }
+            Picker(L("진행자 위치"), selection: Binding(get: { VirtualSetPreset(rawValue: cfg.virtualSet.preset) ?? .centre },
+                                                     set: { p in
+                                                         let v = p.placement
+                                                         cfg.virtualSet.preset = p.rawValue
+                                                         cfg.virtualSet.presenterX = v.x
+                                                         cfg.virtualSet.presenterBottom = v.bottom
+                                                         cfg.virtualSet.presenterScale = v.scale
+                                                     })) {
+                Text(L("가운데")).tag(VirtualSetPreset.centre)
+                Text(L("왼쪽 1/3")).tag(VirtualSetPreset.leftThird)
+                Text(L("오른쪽 1/3")).tag(VirtualSetPreset.rightThird)
+                Text(L("전체")).tag(VirtualSetPreset.full)
+            }
+            LabeledContent(L("크기")) {
+                Slider(value: $cfg.virtualSet.presenterScale, in: 0.2...1.2).frame(width: 220)
+            }
+            HStack {
+                TextField(L("앞쪽 이미지 (책상, 투명 PNG)"), text: $cfg.virtualSet.foregroundPath)
+                Button("Browse…") {
+                    if let p = pickFile(types: [.png, .tiff, .image]) { cfg.virtualSet.foregroundPath = p }
+                }
+            }
+            if let pid = cfg.virtualSet.presenterInputID, let p = engine.input(withID: pid), !p.adjust.keyOn {
+                Label(Lf("%@의 Key 설정에서 Colour Key를 켜야 배경이 빠집니다.", p.name), systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundColor(.orange)
+            }
+        }
     }
 
     private func pickFiles(types: [UTType]) -> [String] {

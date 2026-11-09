@@ -509,15 +509,22 @@ final class AudioRing {
     private var shortReads: Int64 = 0
     private var minAvailableAtRead: Int?
     private var clearGeneration: UInt64 = 0
+    /// Clock-drift resampler state for live sources (mixer thread only, see mc_audio_drift_read).
+    private let drift: OpaquePointer
+    /// Fill level the drift reader was last steered to (mixer thread only).
+    var driftTarget = 0
 
     init(seconds: Double = 2.0) {
         capacity = Int(48000 * seconds)
         data = UnsafeMutablePointer<Float>.allocate(capacity: capacity * 2)
         data.initialize(repeating: 0, count: capacity * 2)
+        guard let d = mc_audio_drift_create() else { fatalError("Could not allocate audio drift state") }
+        drift = d
     }
 
     deinit {
         data.deallocate()
+        mc_audio_drift_destroy(drift)
     }
 
     var available: Int {
@@ -578,6 +585,35 @@ final class AudioRing {
         lock.unlock()
         return n
     }
+
+    /// Live-source read: produces `frames` frames at a slowly adapted rate so the queue stays near
+    /// `target` frames despite the source clock drifting against the mixer. Returns frames produced;
+    /// fewer than `frames` is a true underrun (the tail is faded out and zero-filled).
+    /// Mixer thread only. The lock is held only for the copy, as in `read`.
+    @discardableResult
+    func readAdaptive(into dst: UnsafeMutablePointer<Float>, frames: Int, target: Int) -> Int {
+        lock.lock()
+        minAvailableAtRead = min(minAvailableAtRead ?? count, count)
+        var consumed: Int32 = 0
+        let got = Int(mc_audio_drift_read(drift, data, Int32(capacity), Int32(readPos), Int32(count),
+                                          Int32(target), dst, Int32(frames), &consumed))
+        let c = max(0, min(Int(consumed), count))
+        readPos = (readPos + c) % capacity
+        count -= c
+        readFrames += Int64(c)
+        if got < frames { shortReads += 1 }
+        lock.unlock()
+        return got
+    }
+
+    /// Forget the resampler phase and fill history (after a prime or skip). `keepRate` keeps the learned
+    /// clock offset so a re-prime doesn't have to re-converge. Mixer thread only.
+    func resetDrift(keepRate: Bool) {
+        mc_audio_drift_reset(drift, keepRate ? 1 : 0)
+    }
+
+    /// Current read-rate correction in ppm (+ = source clock faster than the mixer). Diagnostics only.
+    var driftPPM: Double { (mc_audio_drift_ratio(drift) - 1) * 1_000_000 }
 
     func skip(frames: Int) {
         lock.lock()

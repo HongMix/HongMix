@@ -101,6 +101,19 @@ uint64_t mc_audio_ring_priming_silence_frames(const mc_audio_ring *ring);
 void mc_audio_ring_note_priming_silence(mc_audio_ring *ring, uint64_t frames);
 void mc_audio_ring_reset_diagnostics(mc_audio_ring *ring);
 
+/* Clock-drift compensating reader for live inputs (one per input, mixer thread only).
+   Reads `frames` frames from a circular stereo buffer (`available` queued at `read_index`) at a
+   slowly adapted ratio that keeps the queue near `target` frames. Returns frames produced
+   (< frames = underrun: the tail is faded and zero-filled; caller should re-prime);
+   *consumed = ring frames to advance. No allocation, no locks. */
+typedef struct mc_audio_drift mc_audio_drift;
+mc_audio_drift *mc_audio_drift_create(void);
+void mc_audio_drift_destroy(mc_audio_drift *d);
+void mc_audio_drift_reset(mc_audio_drift *d, int keep_rate); /* keep_rate: keep the learned clock offset */
+double mc_audio_drift_ratio(const mc_audio_drift *d);
+int mc_audio_drift_read(mc_audio_drift *d, const float *ring, int capacity, int read_index, int available,
+                        int target, float *out, int frames, int *consumed);
+
 /* ------------------------------------------------------------------ */
 /* FFmpeg output: RTMP/RTMPS, SRT, UDP streaming and file recording    */
 /* ------------------------------------------------------------------ */
@@ -127,6 +140,15 @@ typedef struct {
        (use url "replay:" with format "null"). `frame` = the tick passed to push_video/pixelbuffer. */
     void (*packet_cb)(void *user, const uint8_t *data, int size, int64_t frame, int key);
     void *packet_user;
+    /* Recording safety (file outputs only; ignored for streams and the packet sink). */
+    const char *mirror_dir;       // backup recording: the SAME encoded packets also go to a file of the same
+                                  // name in this folder (no second encode; splits with the main file). A
+                                  // failure of either file keeps the other one recording. NULL/"" = off.
+                                  // Skipped when the folder is on the volume being recorded to.
+    const char *spill_dir;        // continue recording in this folder when the main disk fails or fills
+                                  // (no lost frames). NULL/"" = off.
+    int64_t spill_reserve_bytes;  // with spill_dir: switch over (seamless split) as soon as the main volume
+                                  // has less than this free; 0 = only when a write actually fails
 } mc_output_config;
 
 #define MC_MAX_XTRACKS 8
@@ -142,6 +164,10 @@ typedef struct {
     int delay_buffered_ms;    // broadcast delay: how much is currently held back
     int delay_on_disk;        // 1 = the delay is being held on disk
     int64_t delay_disk_bytes; // bytes of delay currently on disk
+    int mirror_state;         // backup recording: 0 off, 1 writing, 2 failed/stopped (main continues)
+    int main_failed;          // the main file failed; recording continues in the backup file
+    int spills;               // times the recording continued in spill_dir
+    int warning_seq;          // +1 for every recording-safety warning (text: mc_output_last_warning)
 } mc_output_stats;
 
 mc_output *mc_output_open(const mc_output_config *cfg, mc_status_cb status, void *user);
@@ -158,6 +184,17 @@ void mc_output_close(mc_output *out);
 /* Broadcast delay "dump": throw away everything held back (from the newest keyframe on, the output
    goes out live) and stop delaying until the output restarts. */
 void mc_output_dump_delay(mc_output *out);
+/* "New file every N min" without a gap: at the next video frame (forced keyframe) the recording
+   continues in new_path with the same video encoder — no frame or sample lost; each file's timestamps
+   start at 0 and its audio is cut on the same instant. Files only (not streams, not with a delay):
+   returns -1 then (or when not running) and the caller restarts the output instead. */
+int mc_output_split(mc_output *out, const char *new_path);
+/* Path of the file currently being written (changes after a split). Returns its length. */
+int mc_output_current_file(mc_output *out, char *buf, int len);
+/* Path of the backup (mirror) file being written now, "" when none. Returns its length. */
+int mc_output_backup_file(mc_output *out, char *buf, int len);
+/* Last recording-safety warning (backup failed, continued on the backup / spill disk, …). Returns its length. */
+int mc_output_last_warning(mc_output *out, char *buf, int len);
 
 /* ------------------------------------------------------------------ */
 /* Instant replay store: per-stream (camera / audio) frame-indexed packets on disk                    */
@@ -165,9 +202,26 @@ void mc_output_dump_delay(mc_output *out);
 typedef struct mc_replay_store mc_replay_store;
 /* streams: number of streams (cameras + audio). seg_frames: frames per segment file (e.g. 60 s). */
 mc_replay_store *mc_replay_store_open(const char *dir, int streams, int seg_frames);
+/* Disk I/O runs on the store's own writer thread; writes are copied into a preallocated queue of
+   queue_bytes (0 = 64 MB). Queue full: block_when_full = 0 drops the packet (counted in stats; for
+   real-time callers), 1 waits for room (offline renders). */
+mc_replay_store *mc_replay_store_open2(const char *dir, int streams, int seg_frames, int64_t queue_bytes,
+                                       int block_when_full);
+/* Producers must have stopped. delete_files = 0 writes everything still queued first. */
 void mc_replay_store_close(mc_replay_store *st, int delete_files);
-/* Thread-safe. Frames must increase per stream. 0 = ok, -1 = write failed (disk). */
+/* Thread-safe, real-time safe (memcpy into the queue; never waits for the disk unless block_when_full).
+   Frames must increase per stream. 0 = queued, -1 = dropped (queue full) or invalid. Readers see a
+   packet immediately (served from the queue until it is on disk). */
 int mc_replay_store_write(mc_replay_store *st, int stream, int64_t frame, const uint8_t *data, int size);
+/* Waits until everything queued so far is on disk (or failed). */
+void mc_replay_store_flush(mc_replay_store *st);
+typedef struct {
+    int queued_packets;
+    int64_t queued_bytes, max_queued_bytes, queue_capacity;
+    int64_t dropped_packets, dropped_bytes;   // queue full (disk too slow)
+    int64_t write_errors;                     // disk write failed even after recycling the oldest segment
+} mc_replay_store_stats;
+void mc_replay_store_get_stats(mc_replay_store *st, mc_replay_store_stats *stats);
 /* Oldest / newest frame held for a stream (-1 = none). */
 int64_t mc_replay_store_first(mc_replay_store *st, int stream);
 int64_t mc_replay_store_last(mc_replay_store *st, int stream);
@@ -213,6 +267,21 @@ void mc_ndi_recv_set_tally(mc_ndi_recv *r, int program, int preview);
 void mc_ndi_recv_close(mc_ndi_recv *r);
 /* 1 = connected to the sender (frames may still be sparse: screen-capture senders send on change only). */
 int mc_ndi_recv_link(mc_ndi_recv *r);
+/* NDI PTZ (receiver side). cmd = MC_NDI_PTZ_*; a/b as in the NDI SDK (speeds -1…1, positions, preset 0…99).
+ * Returns 1 = sent, 0 = the sender has no PTZ control / call failed, -1 = no live receiver connection. */
+#define MC_NDI_PTZ_SUPPORTED       0   /* query only */
+#define MC_NDI_PTZ_PAN_TILT_SPEED  1   /* a = pan (-1 right … +1 left), b = tilt (-1 down … +1 up) */
+#define MC_NDI_PTZ_PAN_TILT        2   /* absolute: a = pan -1…1, b = tilt -1…1 */
+#define MC_NDI_PTZ_ZOOM_SPEED      3   /* a = -1 (out) … +1 (in) */
+#define MC_NDI_PTZ_ZOOM            4   /* absolute: a = 0 (in) … 1 (out) */
+#define MC_NDI_PTZ_FOCUS_AUTO      5
+#define MC_NDI_PTZ_FOCUS_SPEED     6   /* a = -1 (far) … +1 (near); puts the camera in manual focus */
+#define MC_NDI_PTZ_FOCUS           7   /* absolute: a = 0 (infinity) … 1 (closest) */
+#define MC_NDI_PTZ_STORE_PRESET    8   /* a = preset 0…99 */
+#define MC_NDI_PTZ_RECALL_PRESET   9   /* a = preset 0…99, b = speed 0…1 */
+int mc_ndi_recv_ptz(mc_ndi_recv *r, int cmd, float a, float b);
+/* Same, on the first open receiver of that NDI source name (lets the PTZ engine find an input's receiver). */
+int mc_ndi_ptz_source(const char *source_name, int cmd, float a, float b);
 
 typedef struct mc_ndi_send mc_ndi_send;
 mc_ndi_send *mc_ndi_send_open(const char *name, int fps_num, int fps_den);
@@ -239,6 +308,16 @@ mc_dl_out *mc_decklink_out_open(int device_index, int width, int height, int fps
                                 char *err, int errlen);
 void mc_decklink_out_video(mc_dl_out *o, const uint8_t *bgra, int stride);
 void mc_decklink_out_audio(mc_dl_out *o, const float *stereo, int frames);
+/* Audio clock lock (card SDI clock vs render clock), for diagnostics. */
+typedef struct {
+    int buffered_audio;         // sample frames buffered on the card at the last write
+    int target_audio;           // level the drift control steers to (~3 video frames)
+    int64_t samples_dropped;    // single samples removed (card clock slower than render)
+    int64_t samples_inserted;   // single samples repeated (card clock faster)
+    int64_t resyncs;            // large jumps: silence padded (start/underrun) or backlog skipped
+    int64_t short_writes;       // card took fewer samples than offered (remainder kept for the next write)
+} mc_dl_out_stats;
+void mc_decklink_out_stats(mc_dl_out *o, mc_dl_out_stats *stats);
 void mc_decklink_out_close(mc_dl_out *o);
 
 /* ------------------------------------------------------------------ */

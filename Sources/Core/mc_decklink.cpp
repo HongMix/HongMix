@@ -5,6 +5,7 @@
 #include "mc_util.h"
 
 #include <atomic>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -302,17 +303,124 @@ struct mc_dl_out {
     IDeckLinkKeyer *keyer = nullptr;   // Fill & Key: frames are BGRA, alpha goes out as the key signal
     int which = 0;
     int width = 0, height = 0;
+    int fps_num = 30, fps_den = 1;
     pthread_t thread;
     mc_mailbox box;
     pthread_mutex_t alock;
     mc_audio_fifo afifo;
+    // audio clock-lock stats (written by the output thread, read by mc_decklink_out_stats)
+    std::atomic<int> st_buffered{0}, st_target{0};
+    std::atomic<int64_t> st_dropped{0}, st_inserted{0}, st_resyncs{0}, st_short{0};
+};
+
+/* Frame index (1…n-1) where removing or repeating one stereo sample is least audible: the flattest spot. */
+static int quiet_point(const float *s, int n) {
+    int best = n / 2;
+    float bestd = 1e30f;
+    for (int i = 1; i < n; i++) {
+        float d = fabsf(s[i * 2] - s[i * 2 - 2]) + fabsf(s[i * 2 + 1] - s[i * 2 - 1]);
+        if (d < bestd) { bestd = d; best = i; }
+    }
+    return best;
+}
+
+/* Audio is produced in the render (host) clock's rhythm but played out in the card's SDI reference clock.
+   The two differ by tens of ppm, so without correction the card's buffer slowly fills (growing lip-sync
+   offset, then dropped samples) or drains (clicks). Each loop we look at how much the card holds and steer
+   it to `target`: small drift → drop / repeat one sample at a quiet point, at most every kMinGapMs;
+   a large error (start, render stall) → resync at once with silence or by skipping the backlog. */
+struct DlAudioClock {
+    int frame_samples, target, deadband, hard;
+    double avg = -1;            // smoothed card level before a write (sample frames)
+    int warm = 0;               // loops since the last resync
+    double last_fix_ms = 0;
+    std::vector<int32_t> pend;  // converted samples the card has not accepted yet (written < requested)
+    static constexpr int kMinGapMs = 50;   // ≤ 20 samples/s ≈ 400 ppm, well above real clock drift
+    static constexpr int kMaxPend = MC_AUDIO_RATE / 2;
+
+    DlAudioClock(int fps_num, int fps_den) {
+        frame_samples = fps_num > 0 ? (int)((int64_t)MC_AUDIO_RATE * fps_den / fps_num) : 1600;
+        if (frame_samples < 1) frame_samples = 1;
+        target = 3 * frame_samples;     // ~3 video frames: one loop writes ~1 frame, so the card holds 3–4
+        deadband = frame_samples / 2 > 32 ? frame_samples / 2 : 32;
+        hard = 4 * frame_samples;
+    }
+
+    static double now_ms() { return mc_now_us() / 1000.0; }
+
+    /* fbuf holds n stereo frames (room for n + 1). Adjusts it in place; returns the new frame count. */
+    int correct(mc_dl_out *o, std::vector<float> &fbuf, int n, uint32_t buffered) {
+        int level = (int)buffered + (int)(pend.size() / 2);     // queued ahead of this chunk
+        o->st_buffered.store((int)buffered, std::memory_order_relaxed);
+        o->st_target.store(target, std::memory_order_relaxed);
+        if (n <= 0) return n;                                   // no audio this loop (output without audio)
+        // after this write the card should hold about target + one frame
+        int excess = level + n - (target + frame_samples);
+        if (excess > hard) {                                    // backlog (render burst): skip the oldest audio
+            int drop = excess;
+            int from_pend = drop < (int)(pend.size() / 2) ? drop : (int)(pend.size() / 2);
+            pend.erase(pend.begin(), pend.begin() + (size_t)from_pend * 2);
+            int from_chunk = drop - from_pend < n ? drop - from_pend : n;
+            if (from_chunk > 0) memmove(fbuf.data(), fbuf.data() + (size_t)from_chunk * 2, (size_t)(n - from_chunk) * 2 * sizeof(float));
+            n -= from_chunk;
+            resync(o);
+            return n;
+        }
+        if (excess < -2 * frame_samples) {                      // start or underrun: pad with silence up front
+            int pad = -excess;
+            if (pad > target + frame_samples) pad = target + frame_samples;
+            pend.insert(pend.begin(), (size_t)pad * 2, 0);
+            resync(o);
+            return n;
+        }
+        avg = avg < 0 ? level : avg + (level - avg) / 64.0;
+        if (++warm < 64 || n < 4) return n;                     // let the average settle first
+        double t = now_ms();
+        if (t - last_fix_ms < kMinGapMs) return n;
+        if (avg > target + deadband) {                          // card clock slower: remove one sample
+            int i = quiet_point(fbuf.data(), n);
+            memmove(fbuf.data() + i * 2, fbuf.data() + (i + 1) * 2, (size_t)(n - i - 1) * 2 * sizeof(float));
+            n--;
+            avg -= 1;
+            last_fix_ms = t;
+            o->st_dropped.fetch_add(1, std::memory_order_relaxed);
+        } else if (avg < target - deadband) {                   // card clock faster: repeat one sample
+            int i = quiet_point(fbuf.data(), n);
+            memmove(fbuf.data() + (i + 1) * 2, fbuf.data() + i * 2, (size_t)(n - i) * 2 * sizeof(float));
+            n++;
+            avg += 1;
+            last_fix_ms = t;
+            o->st_inserted.fetch_add(1, std::memory_order_relaxed);
+        }
+        return n;
+    }
+
+    void resync(mc_dl_out *o) {
+        avg = -1;
+        warm = 0;
+        o->st_resyncs.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    /* Writes pend; whatever the card does not take stays in pend for the next loop. */
+    void write(mc_dl_out *o) {
+        if (pend.empty()) return;
+        uint32_t want = (uint32_t)(pend.size() / 2), written = 0;
+        if (o->output->WriteAudioSamplesSync(pend.data(), want, &written) != S_OK) written = 0;
+        if (written > want) written = want;
+        if (written < want) o->st_short.fetch_add(1, std::memory_order_relaxed);
+        pend.erase(pend.begin(), pend.begin() + (size_t)written * 2);
+        if ((int)(pend.size() / 2) > kMaxPend) {                // card refuses audio for long: don't grow forever
+            pend.erase(pend.begin(), pend.end() - (size_t)kMaxPend * 2);
+            resync(o);
+        }
+    }
 };
 
 static void *dl_out_thread(void *arg) {
     mc_dl_out *o = (mc_dl_out *)arg;
     std::vector<uint8_t> local((size_t)o->width * o->height * 4);
     std::vector<float> fbuf;
-    std::vector<int32_t> ibuf;
+    DlAudioClock clock(o->fps_num, o->fps_den);
     for (;;) {
         pthread_mutex_lock(&o->box.lock);
         while (!o->box.has_frame && !o->box.stop) pthread_cond_wait(&o->box.cond, &o->box.lock);
@@ -343,15 +451,17 @@ static void *dl_out_thread(void *arg) {
 
         pthread_mutex_lock(&o->alock);
         int n = o->afifo.count;
-        if ((int)fbuf.size() < n * 2) fbuf.resize((size_t)n * 2);
+        if ((int)fbuf.size() < (n + 1) * 2) fbuf.resize((size_t)(n + 1) * 2);   // +1: room for a repeated sample
         if (n > 0) n = mc_afifo_read(&o->afifo, fbuf.data(), n);
         pthread_mutex_unlock(&o->alock);
+        uint32_t buffered = 0;
+        if (o->output->GetBufferedAudioSampleFrameCount(&buffered) == S_OK) n = clock.correct(o, fbuf, n, buffered);
         if (n > 0) {
-            if ((int)ibuf.size() < n * 2) ibuf.resize((size_t)n * 2);
-            mc_float_to_s32(fbuf.data(), ibuf.data(), n * 2);
-            uint32_t written = 0;
-            o->output->WriteAudioSamplesSync(ibuf.data(), (uint32_t)n, &written);
+            size_t at = clock.pend.size();
+            clock.pend.resize(at + (size_t)n * 2);
+            mc_float_to_s32(fbuf.data(), clock.pend.data() + at, n * 2);
         }
+        clock.write(o);
     }
     return nullptr;
 }
@@ -425,6 +535,8 @@ extern "C" mc_dl_out *mc_decklink_out_open(int device_index, int width, int heig
     o->output = out;
     o->width = width;
     o->height = height;
+    o->fps_num = fps_num;
+    o->fps_den = fps_den > 0 ? fps_den : 1;
     o->keyer = keyer;
     if (keyer) {
         keyer->Enable(true);        // external: fill on SDI A, key on SDI B
@@ -460,6 +572,18 @@ extern "C" void mc_decklink_out_audio(mc_dl_out *o, const float *stereo, int fra
     pthread_mutex_lock(&o->alock);
     mc_afifo_write(&o->afifo, stereo, frames);
     pthread_mutex_unlock(&o->alock);
+}
+
+extern "C" void mc_decklink_out_stats(mc_dl_out *o, mc_dl_out_stats *s) {
+    if (!s) return;
+    memset(s, 0, sizeof(*s));
+    if (!o) return;
+    s->buffered_audio = o->st_buffered.load(std::memory_order_relaxed);
+    s->target_audio = o->st_target.load(std::memory_order_relaxed);
+    s->samples_dropped = o->st_dropped.load(std::memory_order_relaxed);
+    s->samples_inserted = o->st_inserted.load(std::memory_order_relaxed);
+    s->resyncs = o->st_resyncs.load(std::memory_order_relaxed);
+    s->short_writes = o->st_short.load(std::memory_order_relaxed);
 }
 
 extern "C" void mc_decklink_out_close(mc_dl_out *o) {
@@ -503,6 +627,9 @@ extern "C" mc_dl_out *mc_decklink_out_open(int, int, int, int, int, int, char *e
 }
 extern "C" void mc_decklink_out_video(mc_dl_out *, const uint8_t *, int) {}
 extern "C" void mc_decklink_out_audio(mc_dl_out *, const float *, int) {}
+extern "C" void mc_decklink_out_stats(mc_dl_out *, mc_dl_out_stats *s) {
+    if (s) memset(s, 0, sizeof(*s));
+}
 extern "C" void mc_decklink_out_close(mc_dl_out *) {}
 
 #endif

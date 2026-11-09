@@ -1,23 +1,22 @@
-HongMix 1.2 — User Manual (English)
+HongMix 2.0.5 — User Manual (English)
 ================================================================
 A live production switcher for Apple Silicon Macs, with a vMix-style layout, shortcuts and API.
 Made by Hong Seunghoon (홍승훈) · 2026-10-28 · Korea
 Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)
-
 
 1. Installation
 ----------------------------------------------------------------
 Requirements: an Apple Silicon Mac (M1 and later), macOS 14 or later.
 Everything (FFmpeg, SRT, NDI runtime, Chromium web engine) is bundled inside the app — nothing else to install.
 
-[Option A — recommended] Double-click HongMix-1.2.pkg
+[Option A — recommended] Double-click HongMix-2.0.5.pkg
   1) If macOS says "unidentified developer": right-click the file → Open → Open
      (or System Settings → Privacy & Security → "Open Anyway").
   2) Continue → Install. HongMix is installed in Applications.
   3) First launch: if macOS warns, right-click HongMix in Applications → Open → Open (once).
      (HongMix is not notarized by Apple yet, so macOS asks once.)
 
-[Option B] Open HongMix-1.2.dmg → drag HongMix into Applications
+[Option B] Open HongMix-2.0.5.dmg → drag HongMix into Applications
   - If warned on first launch, right-click the app → Open (once).
 
 On first use macOS asks for permissions:
@@ -233,5 +232,22 @@ Settings (⌘,) → General → 언어 / Language: 한국어 / English. Switches
 [Scopes] waveform icon at the bottom → its own window (good on a second display)
   Waveform (luma, 0/25/50/75/100 % lines) · RGB parade · vectorscope (75 % bar targets, skin-tone line) · histogram.
   Source: Output / Preview / any input. Top right: clipping (≥100 %) and black (0 %) percentages.
+
+15. New in 2.0.5
+----------------------------------------------------------------
+[PTZ] Bottom bar › PTZ opens a movable control window. Select cameras with 1–9; use W/A/S/D to pan/tilt,
+Q/E to zoom, Z/X to focus, F for autofocus and the preset keys shown in the window. Configure each camera in
+Input ⚙ › PTZ. Camera movement stops when a key is released or the PTZ window loses focus.
+
+[Finder file drop] Drop video, images, photo folders or PDFs on the input area. Hold Option while dropping several
+videos to make one List, or Command-drop on an existing tile to replace its file after confirmation.
+
+[MIDI] Settings › MIDI provides learn mode, controller templates and LED tally. Test every assigned control before air.
+
+[Recording safety] Record ⚙ shows estimated time left, can write a simultaneous backup and can continue on another
+disk when the first is full. Stream Monitor next to Stream shows bitrate, drops, SRT RTT/loss and reconnects.
+
+[New inputs] Photos, PDF Slides and Virtual Set are available under Add Input. Export PowerPoint, Keynote or Google
+Slides to PDF before adding them as PDF Slides.
 
 Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)

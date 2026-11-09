@@ -89,6 +89,13 @@ struct OutputConfig: Codable, Identifiable, Equatable {
     var extraAudioBuses: String = ""
     /// Return feed to the field (runs on its own — not started/stopped by the Stream button)
     var returnFeed = false
+    /// Backup recording: the same encoded packets also go to a file of the same name in this folder
+    /// (meant for a second disk; no second encode). "" = off.
+    var backupFolder: String = ""
+    /// Continue recording on another disk (spillFolder, else backupFolder) when the record disk fills or fails.
+    var spillToBackupWhenFull = false
+    /// Where to continue when the record disk is full ("" = the backup folder).
+    var spillFolder: String = ""
 
     var extraBusIndices: [Int] {
         extraAudioBuses.uppercased().compactMap { AudioBus.index(String($0)) }.prefix(8).map { $0 }
@@ -173,6 +180,9 @@ extension OutputConfig {
         d.delayFolder = c.value(.delayFolder, d.delayFolder)
         d.extraAudioBuses = c.value(.extraAudioBuses, d.extraAudioBuses)
         d.returnFeed = c.value(.returnFeed, d.returnFeed)
+        d.backupFolder = c.value(.backupFolder, d.backupFolder)
+        d.spillToBackupWhenFull = c.value(.spillToBackupWhenFull, d.spillToBackupWhenFull)
+        d.spillFolder = c.value(.spillFolder, d.spillFolder)
         self = d
     }
 }
@@ -262,6 +272,104 @@ extension OutputConfig {
     }
 }
 
+// MARK: - Recording safety (backup recording, continue on another disk, disk time left)
+extension OutputConfig {
+    /// Free space kept when continuing on another disk: below this the recording moves to the spill disk.
+    static let recordDiskReserve: Int64 = 2_000_000_000
+
+    var backupFolderPath: String? {
+        let f = backupFolder.trimmingCharacters(in: .whitespacesAndNewlines)
+        return kind == .record && !f.isEmpty ? (f as NSString).expandingTildeInPath : nil
+    }
+
+    /// Folder the recording continues in when its disk is full (nil = off).
+    var spillFolderPath: String? {
+        guard kind == .record, spillToBackupWhenFull else { return nil }
+        let f = spillFolder.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !f.isEmpty { return (f as NSString).expandingTildeInPath }
+        return backupFolderPath
+    }
+
+    /// Estimated bytes/s before a measurement exists (ProRes profiles scaled from ProRes 422).
+    func estimatedRecordBytesPerSecond(format: VideoFormat) -> Double {
+        guard videoCodec.hasPrefix("prores"), videoCodec != "prores" else { return encodedBytesPerSecond(format: format) }
+        var c = self
+        c.videoCodec = "prores"
+        let scale: Double = videoCodec == "prores_proxy" ? 0.31 : videoCodec == "prores_lt" ? 0.69 : videoCodec == "prores_hq" ? 1.5 : 1
+        return c.encodedBytesPerSecond(format: format) * scale
+    }
+}
+
+/// Disk helpers for the recording-safety estimate (real free space, not "purgeable" space: a recording
+/// fails when the volume is really full).
+enum RecordDisk {
+    /// Nearest existing folder for a file or folder path.
+    static func existingFolder(_ path: String) -> String {
+        var p = path
+        var isDir: ObjCBool = false
+        let fm = FileManager.default
+        if fm.fileExists(atPath: p, isDirectory: &isDir), isDir.boolValue { return p }
+        p = (p as NSString).deletingLastPathComponent
+        while !p.isEmpty, p != "/", !fm.fileExists(atPath: p) { p = (p as NSString).deletingLastPathComponent }
+        return p.isEmpty ? "/" : p
+    }
+
+    static func freeBytes(_ path: String) -> Int64? {
+        var st = statfs()
+        guard statfs(existingFolder(path), &st) == 0 else { return nil }
+        return Int64(st.f_bavail) * Int64(st.f_bsize)
+    }
+
+    static func volumeID(_ path: String) -> UInt64? {
+        var sb = stat()
+        guard stat(existingFolder(path), &sb) == 0 else { return nil }
+        return UInt64(bitPattern: Int64(sb.st_dev))
+    }
+
+    static func sameVolume(_ a: String, _ b: String) -> Bool {
+        guard let x = volumeID(a), let y = volumeID(b) else { return false }
+        return x == y
+    }
+
+    /// "38분" / "1시간 12분"
+    static func durationText(_ seconds: Double) -> String {
+        let m = max(0, Int(seconds / 60))
+        if m >= 60 { return Lf("%@시간 %@분", "\(m / 60)", "\(m % 60)") }
+        return Lf("%@분", "\(m)")
+    }
+}
+
+/// Measured write rate over the last ~30 s (bytes/s), from bytes_written samples.
+struct WriteRateMeter {
+    private var samples: [(t: Double, bytes: Int64)] = []
+
+    mutating func reset() { samples.removeAll() }
+
+    mutating func add(_ bytes: Int64, at t: Double = ProcessInfo.processInfo.systemUptime) {
+        if let last = samples.last, bytes < last.bytes { samples.removeAll() }   // counter restarted
+        samples.append((t, bytes))
+        while let f = samples.first, t - f.t > 31 { samples.removeFirst() }
+    }
+
+    /// nil until ~5 s have been measured.
+    var bytesPerSecond: Double? {
+        guard let f = samples.first, let l = samples.last, l.t - f.t >= 5, l.bytes > f.bytes else { return nil }
+        return Double(l.bytes - f.bytes) / (l.t - f.t)
+    }
+}
+
+/// One second of a network output, for the stream monitor popover (bars per second, orange where drops happened).
+struct StreamSample {
+    var time: Date
+    var kbps: Double
+    var framesDropped: Int      // frames dropped during this second
+    var queueDepth: Int         // encoder input queue (of 8)
+    var connected: Bool
+    var rttMs: Double?          // SRT only
+    var lossPercent: Double?
+    var retransmitted: Int?     // packets retransmitted during this second
+}
+
 /// One running (or idle) output destination.
 final class OutputChannel: ObservableObject, Identifiable {
     let id: UUID
@@ -283,6 +391,55 @@ final class OutputChannel: ObservableObject, Identifiable {
     @Published private(set) var delayDiskBytes: Int64 = 0
     private static var cleanedDelayFolders = Set<String>()
 
+    // Recording safety (record outputs)
+    /// Backup (mirror) file being written now ("" = none).
+    @Published private(set) var backupFile: String = ""
+    /// 0 = no backup recording, 1 = writing, 2 = failed/stopped (the main recording goes on).
+    @Published private(set) var backupState = 0
+    /// The record disk failed; the recording continues in the backup file.
+    @Published private(set) var mainDiskFailed = false
+    /// Times the recording continued on another disk because the record disk was full.
+    @Published private(set) var spillCount = 0
+    /// Recording time left on the record disk (incl. the spill disk), nil = unknown / not recording.
+    @Published private(set) var remainingSeconds: Double?
+    /// Recording time left on the backup disk while backing up.
+    @Published private(set) var backupRemainingSeconds: Double?
+    /// Measured (else estimated) bytes/s written to the recording.
+    private(set) var writeBytesPerSecond: Double = 0
+    private var writeRate = WriteRateMeter()
+    private var lastWarningSeq: Int32 = 0
+    /// Safety events from the encoder (backup failed, continued on another disk…), drained by RecordingSafety.
+    var pendingSafetyMessages: [String] = []
+
+    // Stream monitor (network outputs)
+    static let historySeconds = 60
+    /// Last 60 s, one sample per second (oldest first).
+    @Published private(set) var history: [StreamSample] = []
+    /// Reconnects since the output was started.
+    @Published private(set) var reconnectCount = 0
+    /// When the current connection came up (nil while not connected).
+    @Published private(set) var connectedSince: Date?
+    private var wasConnected = false
+    private var lostConnection = false
+    private var lastDroppedTotal: Int64 = 0
+    private var lastRetrans: Int64?
+    /// Time since the output was started.
+    var uptime: TimeInterval? { running ? Date().timeIntervalSince(startedAt) : nil }
+
+    /// Status callback (main thread): counts reconnects of network outputs.
+    private func noteState(_ s: Int32) {
+        guard config.kind == .stream else { return }
+        if s == Int32(MC_STATE_RUNNING) {
+            if lostConnection { reconnectCount += 1 }
+            lostConnection = false
+            wasConnected = true
+            connectedSince = Date()
+        } else if s == Int32(MC_STATE_CONNECTING) || s == Int32(MC_STATE_ERROR) {
+            if wasConnected { lostConnection = true }
+            connectedSince = nil
+        }
+    }
+
     /// Throw the delayed part away and go live (profanity/accident button).
     func dumpDelay() {
         lock.lock(); let f = ffOut; lock.unlock()
@@ -291,12 +448,24 @@ final class OutputChannel: ObservableObject, Identifiable {
 
     private let lock = NSLock()
     private var ffOut: OpaquePointer?
+    /// Status-callback context of ffOut (released after mc_output_close returns).
+    private var ffBox: Unmanaged<OutputStatusBox>?
+    /// Bumped on every start/stop. A status callback carries the generation it was opened with, so a
+    /// late "중지됨" from a closing encoder can never overwrite the state of the one that replaced it.
+    private var generation = 0
     private var ndiOut: OpaquePointer?
     private var dlOut: OpaquePointer?
     private var format = VideoFormat.defaultFormat
     private var startedAt = Date()
+    /// When the current recording file began (splits start a new file but keep the output running).
+    private var fileStartedAt = Date()
     /// When this output started (nil while stopped) — for the bar's elapsed time.
-    var liveSince: Date? { running ? startedAt : nil }
+    /// A failed recording stops its timer, so a dead REC doesn't look like it is still counting.
+    var liveSince: Date? {
+        guard running else { return nil }
+        if config.kind == .record && state == Int32(MC_STATE_ERROR) { return nil }
+        return startedAt
+    }
 
     init(config: OutputConfig) {
         self.id = config.id
@@ -344,18 +513,12 @@ final class OutputChannel: ObservableObject, Identifiable {
                 url = c.streamURL()
                 if url.isEmpty { return fail(L("스트림 주소가 비어 있음")) }
             } else {
-                let folder = (c.recordFolder as NSString).expandingTildeInPath
-                do {
-                    try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
-                } catch {
-                    return fail(Lf("녹화 폴더를 만들 수 없음: %@", "\(folder)"))
+                switch nextRecordFile() {
+                case .failure(let e): return fail(e.message)
+                case .success(let r):
+                    url = r.path
+                    container = r.container
                 }
-                let df = DateFormatter()
-                df.dateFormat = "yyyyMMdd_HHmmss"
-                var ext = c.recordContainer
-                if c.videoCodec == "prores" { ext = "mov" }
-                url = (folder as NSString).appendingPathComponent("HongMix_\(df.string(from: Date())).\(ext)")
-                container = ext == "ts" ? "mpegts" : (ext == "mp4" ? "mp4" : "mov")
                 lastFile = url
             }
             var cfg = mc_output_config()
@@ -393,6 +556,13 @@ final class OutputChannel: ObservableObject, Identifiable {
             defer { free(delayDir) }
             cfg.delay_dir = UnsafePointer(delayDir)
             cfg.extra_audio_tracks = c.kind == .record ? Int32(c.extraBusIndices.count) : 0
+            // Recording safety: backup file on a second disk + continue on another disk when full.
+            let mirrorPtr: UnsafeMutablePointer<CChar>? = c.backupFolderPath.map { strdup($0) }
+            let spillPtr: UnsafeMutablePointer<CChar>? = c.spillFolderPath.map { strdup($0) }
+            defer { free(mirrorPtr); free(spillPtr) }
+            cfg.mirror_dir = UnsafePointer(mirrorPtr)
+            cfg.spill_dir = UnsafePointer(spillPtr)
+            cfg.spill_reserve_bytes = spillPtr != nil ? OutputConfig.recordDiskReserve : 0
             let uPtr = strdup(url)
             let fPtr: UnsafeMutablePointer<CChar>? = container != nil ? strdup(container!) : nil
             let vPtr = strdup(c.videoCodec)
@@ -404,20 +574,27 @@ final class OutputChannel: ObservableObject, Identifiable {
             cfg.url = UnsafePointer(uPtr)
             cfg.format = UnsafePointer(fPtr)
             cfg.video_codec = UnsafePointer(vPtr)
-            let user = Unmanaged.passUnretained(self).toOpaque()
+            generation += 1
+            let box = Unmanaged.passRetained(OutputStatusBox(channel: self, generation: generation))
             let handle = mc_output_open(&cfg, { user, state, msg in
                 guard let user = user else { return }
-                let me = Unmanaged<OutputChannel>.fromOpaque(user).takeUnretainedValue()
+                let b = Unmanaged<OutputStatusBox>.fromOpaque(user).takeUnretainedValue()
                 let text = msg.map { String(cString: $0) } ?? ""
                 DispatchQueue.main.async {
-                    guard me.running else { return }  // ignore late messages after stop()
+                    // ignore late messages after stop() and from an earlier start (split / restart)
+                    guard let me = b.channel, me.running, me.generation == b.generation else { return }
                     me.state = state
                     me.message = L(text)
+                    me.noteState(state)
                 }
-            }, user)
-            guard let h = handle else { return fail(L("출력을 시작할 수 없음")) }
+            }, box.toOpaque())
+            guard let h = handle else {
+                box.release()
+                return fail(L("출력을 시작할 수 없음"))
+            }
             lock.lock()
             ffOut = h
+            ffBox = box
             lock.unlock()
         case .ndi:
             guard mc_ndi_available() != 0 else { return fail(L("NDI 런타임이 설치되어 있지 않음")) }
@@ -451,7 +628,52 @@ final class OutputChannel: ObservableObject, Identifiable {
         running = true
         delayDumped = false
         startedAt = Date()
+        fileStartedAt = startedAt
+        resetSafetyAndMonitor()
         return nil
+    }
+
+    private func resetSafetyAndMonitor() {
+        backupFile = ""
+        backupState = 0
+        mainDiskFailed = false
+        spillCount = 0
+        remainingSeconds = nil
+        backupRemainingSeconds = nil
+        writeBytesPerSecond = 0
+        writeRate.reset()
+        lastWarningSeq = 0
+        history = []
+        reconnectCount = 0
+        connectedSince = nil
+        wasConnected = false
+        lostConnection = false
+        lastDroppedTotal = 0
+        lastRetrans = nil
+    }
+
+    struct RecordFileError: Error { let message: String }
+
+    /// Path + muxer for a new recording file ("HongMix_<date>_<time>.<ext>" in the record folder).
+    private func nextRecordFile() -> Result<(path: String, container: String), RecordFileError> {
+        let c = config
+        let folder = (c.recordFolder as NSString).expandingTildeInPath
+        do {
+            try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        } catch {
+            return .failure(RecordFileError(message: Lf("녹화 폴더를 만들 수 없음: %@", "\(folder)")))
+        }
+        let df = DateFormatter()
+        df.dateFormat = "yyyyMMdd_HHmmss"
+        var ext = c.recordContainer
+        if c.videoCodec == "prores" { ext = "mov" }
+        var path = (folder as NSString).appendingPathComponent("HongMix_\(df.string(from: Date())).\(ext)")
+        var n = 2
+        while FileManager.default.fileExists(atPath: path) {   // never overwrite (split within the same second)
+            path = (folder as NSString).appendingPathComponent("HongMix_\(df.string(from: Date()))_\(n).\(ext)")
+            n += 1
+        }
+        return .success((path, ext == "ts" ? "mpegts" : (ext == "mp4" ? "mp4" : "mov")))
     }
 
     private func fail(_ msg: String) -> String {
@@ -462,24 +684,32 @@ final class OutputChannel: ObservableObject, Identifiable {
 
     func stop(waitForClose: Bool = false) {
         lock.lock()
-        let f = ffOut, n = ndiOut, d = dlOut
+        let f = ffOut, n = ndiOut, d = dlOut, box = ffBox
         ffOut = nil
+        ffBox = nil
         ndiOut = nil
         dlOut = nil
         lock.unlock()
+        generation += 1   // callbacks still queued from this encoder are now stale
         // Closing can take a moment (flush + trailer); do it off the main thread for streams,
         // but synchronously enough that the handles are gone before we report "stopped".
         if let f = f, waitForClose {
             mc_output_close(f)
+            box?.release()
         } else if let f = f {
             DispatchQueue.global(qos: .userInitiated).async {
-                mc_output_close(f)
-                _ = self  // keep the callback target alive until the worker has exited
+                mc_output_close(f)   // joins the output thread → no more callbacks
+                box?.release()
             }
+        } else {
+            box?.release()
         }
         if let n = n { mc_ndi_send_close(n) }
         if let d = d { mc_decklink_out_close(d) }
         running = false
+        remainingSeconds = nil
+        backupRemainingSeconds = nil
+        connectedSince = nil
         state = Int32(MC_STATE_STOPPED)
         message = config.kind == .record && !lastFile.isEmpty ? Lf("저장됨: %@", "\((lastFile as NSString).lastPathComponent)") : L("중지됨")
         statsText = ""
@@ -532,19 +762,42 @@ final class OutputChannel: ObservableObject, Identifiable {
     func refreshStats() {
         guard running else { return }
         if config.kind == .record && config.splitMinutes > 0 &&
-            Date().timeIntervalSince(startedAt) >= Double(config.splitMinutes) * 60 {
-            // "New file every N minutes": close this file and continue in a new one
-            stop()
-            start(format: format)
-            return
+            Date().timeIntervalSince(fileStartedAt) >= Double(config.splitMinutes) * 60 {
+            // "New file every N minutes": the encoder switches files on its next frame (forced keyframe)
+            // without stopping — no lost frames or audio at the boundary. Restart only if it can't.
+            lock.lock(); let f = ffOut; lock.unlock()
+            if let f = f, case .success(let r) = nextRecordFile(), mc_output_split(f, r.path) == 0 {
+                fileStartedAt = Date()
+            } else {
+                stop()
+                start(format: format)
+                return
+            }
         }
         lock.lock()
         let f = ffOut, n = ndiOut
         var st = mc_output_stats()
-        if let f = f { mc_output_get_stats(f, &st) }
+        var cur = [CChar](repeating: 0, count: 1024)
+        var bak = [CChar](repeating: 0, count: 1024)
+        var warn = [CChar](repeating: 0, count: 256)
+        if let f = f {
+            mc_output_get_stats(f, &st)
+            if config.kind == .record {
+                mc_output_current_file(f, &cur, Int32(cur.count))
+                mc_output_backup_file(f, &bak, Int32(bak.count))
+                if st.warning_seq != lastWarningSeq { mc_output_last_warning(f, &warn, Int32(warn.count)) }
+            }
+        }
         let conns = n.map { mc_ndi_send_connections($0) } ?? 0
+        var dl = mc_dl_out_stats()
+        let d = dlOut
+        if let d = d { mc_decklink_out_stats(d, &dl) }
         lock.unlock()
         if f != nil {
+            if config.kind == .record, cur[0] != 0 {   // follows the split once the new file is open
+                let path = String(cString: cur)
+                if path != lastFile { lastFile = path }
+            }
             let enc = withUnsafePointer(to: &st.encoder) {
                 $0.withMemoryRebound(to: CChar.self, capacity: 48) { String(cString: $0) }
             }
@@ -555,12 +808,193 @@ final class OutputChannel: ObservableObject, Identifiable {
             if delayDiskBytes != st.delay_disk_bytes { delayDiskBytes = st.delay_disk_bytes }
             statsText = String(format: L("%@ · %.0f kbps · %.1f MB · 드롭 %lld · 대기 %d/8"),
                                enc, st.kbps, mb, st.frames_dropped, st.queue_depth)
+            if config.kind == .record {
+                updateRecordSafety(st, backup: String(cString: bak),
+                                   warning: st.warning_seq != lastWarningSeq ? String(cString: warn) : nil)
+            } else if config.kind == .stream {
+                appendStreamSample(st)
+            }
         } else if n != nil {
             statsText = Lf("연결된 수신기 %@", "\(conns)")
+        } else if d != nil {
+            // card audio clock lock: buffered level vs target, and how often it had to correct
+            statsText = Lf("오디오 버퍼 %@/%@ · 보정 −%@ +%@ · 재동기 %@", "\(dl.buffered_audio)", "\(dl.target_audio)",
+                           "\(dl.samples_dropped)", "\(dl.samples_inserted)", "\(dl.resyncs)")
         }
     }
 }
 
+extension OutputChannel {
+    /// Once a second (refreshStats): backup/spill state, write rate and recording time left.
+    fileprivate func updateRecordSafety(_ st: mc_output_stats, backup: String, warning: String?) {
+        if backupFile != backup { backupFile = backup }
+        if backupState != Int(st.mirror_state) { backupState = Int(st.mirror_state) }
+        if mainDiskFailed != (st.main_failed != 0) { mainDiskFailed = st.main_failed != 0 }
+        if spillCount != Int(st.spills) { spillCount = Int(st.spills) }
+        if let w = warning {
+            lastWarningSeq = st.warning_seq
+            if !w.isEmpty { pendingSafetyMessages.append(L(w)) }
+        }
+        writeRate.add(st.bytes_written)
+        let rate = writeRate.bytesPerSecond ?? config.estimatedRecordBytesPerSecond(format: format)
+        writeBytesPerSecond = rate
+        guard rate > 0, !lastFile.isEmpty else { remainingSeconds = nil; backupRemainingSeconds = nil; return }
+        let reserve = OutputConfig.recordDiskReserve
+        let mainFree = RecordDisk.freeBytes(lastFile) ?? 0
+        var usable = Double(mainFree)
+        let mirroring = backupState == 1 && !backupFile.isEmpty
+        if let spill = config.spillFolderPath, !RecordDisk.sameVolume(lastFile, spill) {
+            // moves to the spill disk at the reserve; while mirroring onto that disk, the backup uses it too
+            let mainPart = max(0, Double(mainFree - reserve))
+            var spillFree = Double(max(0, (RecordDisk.freeBytes(spill) ?? 0) - reserve))
+            if mirroring && RecordDisk.sameVolume(backupFile, spill) { spillFree = max(0, spillFree - mainPart) }
+            usable = mainPart + spillFree
+        }
+        let left = usable / rate
+        if remainingSeconds.map({ abs($0 - left) >= 1 }) ?? true { remainingSeconds = left }
+        if mirroring, let bf = RecordDisk.freeBytes(backupFile) {
+            let b = Double(bf) / rate
+            if backupRemainingSeconds.map({ abs($0 - b) >= 1 }) ?? true { backupRemainingSeconds = b }
+        } else if backupRemainingSeconds != nil {
+            backupRemainingSeconds = nil
+        }
+    }
+
+    /// Once a second (refreshStats) for network outputs: one sample of the 60-s monitor history.
+    fileprivate func appendStreamSample(_ st: mc_output_stats) {
+        let srt = srtStats()
+        let dropped = Int(max(0, st.frames_dropped - lastDroppedTotal))
+        lastDroppedTotal = st.frames_dropped
+        var retrans: Int?
+        if let s = srt {
+            if let l = lastRetrans { retrans = Int(max(0, s.retransmitted - l)) }
+            lastRetrans = s.retransmitted
+        }
+        let sample = StreamSample(time: Date(), kbps: st.kbps, framesDropped: dropped, queueDepth: Int(st.queue_depth),
+                                  connected: state == Int32(MC_STATE_RUNNING), rttMs: srt?.rttMs,
+                                  lossPercent: srt?.lossPercent, retransmitted: retrans)
+        var h = history
+        h.append(sample)
+        if h.count > OutputChannel.historySeconds { h.removeFirst(h.count - OutputChannel.historySeconds) }
+        history = h
+    }
+
+    /// API: last n kbps samples, comma separated (compact, for tests).
+    func kbpsHistoryText(last n: Int = 10) -> String {
+        history.suffix(n).map { String(Int($0.kbps.rounded())) }.joined(separator: ",")
+    }
+}
+
+/// Recording safety for the REC button: lowest recording time left over all recordings (+ MultiCorder),
+/// disk warnings at a threshold (10/30/60 min, off) and again at 5 min, and the encoder's backup/spill events.
+final class RecordingSafety: ObservableObject {
+    static let warnOptions = [10, 30, 60, 0]   // minutes; 0 = off
+    static let criticalMinutes = 5
+    private static let defaultsKey = "HongMix.recordDiskWarnMinutes"
+
+    /// Warning threshold in minutes (0 = off).
+    @Published var warnMinutes: Int {
+        didSet { UserDefaults.standard.set(warnMinutes, forKey: RecordingSafety.defaultsKey) }
+    }
+    /// Lowest recording time left over the running recordings (incl. their backup disks and MultiCorder).
+    @Published private(set) var lowestRemainingSeconds: Double?
+    /// MultiCorder folder: time left at the current ISO write rate.
+    @Published private(set) var multiCorderRemainingSeconds: Double?
+    /// Below the threshold somewhere → REC turns orange.
+    @Published private(set) var diskWarning = false
+    /// Below 5 minutes somewhere.
+    @Published private(set) var diskCritical = false
+    /// What the warning is about ("" = none).
+    @Published private(set) var diskWarningMessage = ""
+
+    private var levels: [String: Int] = [:]
+    private var mcRate = WriteRateMeter()
+
+    init() {
+        let v = UserDefaults.standard.object(forKey: RecordingSafety.defaultsKey) as? Int
+        warnMinutes = v ?? 30
+    }
+
+    /// "38분 남음"; nil → "".
+    static func remainingText(_ s: Double?) -> String {
+        guard let s = s else { return "" }
+        return Lf("%@ 남음", RecordDisk.durationText(s))
+    }
+
+    /// REC button text: "REC 1:02:14 · 38 min left" (time left only while it is worth showing).
+    func recLabel(elapsed: TimeInterval) -> String {
+        let t = Int(max(0, elapsed))
+        var s = String(format: "REC %d:%02d:%02d", t / 3600, t / 60 % 60, t % 60)
+        if let r = lowestRemainingSeconds, r < 24 * 3600 { s += " · " + RecordingSafety.remainingText(r) }
+        return s
+    }
+
+    private func level(_ seconds: Double?, key: String) -> Int {
+        guard warnMinutes > 0, let s = seconds else { return 0 }
+        let prev = levels[key] ?? 0
+        if s < Double(RecordingSafety.criticalMinutes * 60) { return 2 }
+        if s < Double(warnMinutes * 60) { return prev == 2 && s < Double(RecordingSafety.criticalMinutes * 60 + 60) ? 2 : 1 }
+        // hysteresis: stay warned until clearly above the threshold again (space freed / spill disk added)
+        if prev > 0 && s < Double(warnMinutes * 60) * 1.1 + 60 { return 1 }
+        return 0
+    }
+
+    /// Once a second from the engine tick.
+    func update(_ e: SwitcherEngine) {
+        var lowest: Double?
+        var worst = 0
+        var worstText = ""
+        var seen = Set<String>()
+        func consider(_ key: String, _ name: String, _ secs: Double?, backup: Bool) {
+            seen.insert(key)
+            if let s = secs { lowest = min(lowest ?? s, s) }
+            let lv = level(secs, key: key)
+            let prev = levels[key] ?? 0
+            levels[key] = lv
+            guard lv > 0, let s = secs else { return }
+            let left = RecordDisk.durationText(s)
+            let text = backup ? Lf("⚠︎ 백업 디스크 공간: %@ — 약 %@ 남음", name, left)
+                : lv == 2 ? Lf("⚠︎ 녹화 디스크가 곧 가득 참: %@ — 약 %@ 남음", name, left)
+                : Lf("⚠︎ 녹화 디스크 공간: %@ — 약 %@ 남음", name, left)
+            if lv > prev { e.lastMessage = text }   // once per threshold crossing
+            if lv > worst || worstText.isEmpty { worst = max(worst, lv); worstText = text }
+        }
+        for o in e.outputs where o.running && o.config.kind == .record {
+            for m in o.pendingSafetyMessages { e.lastMessage = "⚠︎ \(o.config.name): \(m)" }
+            o.pendingSafetyMessages.removeAll()
+            consider("rec:\(o.id)", o.config.name, o.remainingSeconds, backup: false)
+            if o.backupRemainingSeconds != nil {
+                consider("bak:\(o.id)", o.config.name, o.backupRemainingSeconds, backup: true)
+            }
+        }
+        // MultiCorder: free space of its folder / measured ISO write rate
+        if let folder = e.multiCorderFolderPath {
+            mcRate.add(e.multiCorderBytesWritten())
+            let rate = mcRate.bytesPerSecond ?? 0
+            let left = rate > 0 ? RecordDisk.freeBytes(folder).map { Double($0) / rate } : nil
+            if multiCorderRemainingSeconds.map({ abs($0 - (left ?? -1)) >= 1 }) ?? (left != nil) { multiCorderRemainingSeconds = left }
+            consider("multicorder", "MultiCorder", left, backup: false)
+        } else {
+            mcRate.reset()
+            if multiCorderRemainingSeconds != nil { multiCorderRemainingSeconds = nil }
+        }
+        levels = levels.filter { seen.contains($0.key) }
+        if lowestRemainingSeconds.map({ abs($0 - (lowest ?? -1)) >= 1 }) ?? (lowest != nil) { lowestRemainingSeconds = lowest }
+        if diskWarning != (worst > 0) { diskWarning = worst > 0 }
+        if diskCritical != (worst == 2) { diskCritical = worst == 2 }
+        if diskWarningMessage != worstText { diskWarningMessage = worstText }
+    }
+}
+
+/// Status-callback context for one encoder start (retained until its mc_output is closed).
+final class OutputStatusBox {
+    weak var channel: OutputChannel?
+    let generation: Int
+    init(channel: OutputChannel, generation: Int) {
+        self.channel = channel
+        self.generation = generation
+    }
+}
 
 /// Swift view of `mc_srt_stats` (vMix SRT statistics window).
 struct SRTStats {

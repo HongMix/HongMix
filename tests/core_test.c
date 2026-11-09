@@ -39,9 +39,11 @@ static void on_audio_presence(void *u, int present) {
     ctx_t *c = (ctx_t *)u;
     atomic_store(&c->audio_track, present ? 2 : 1);
 }
+static atomic_int srt_out_error;   // the SRT listener/output reported an error
 static void on_status(void *u, int st, const char *m) {
     printf("  [%s] state=%d %s\n", (const char *)u, st, m);
     fflush(stdout);
+    if (st == MC_STATE_ERROR && strcmp((const char *)u, "srt-out") == 0) atomic_store(&srt_out_error, 1);
 }
 
 int main(int argc, char **argv) {
@@ -89,6 +91,14 @@ int main(int argc, char **argv) {
     mc_output_get_stats(rec, &st);
     printf("record: encoder=%s frames=%lld dropped=%lld bytes=%lld\n", st.encoder, (long long)st.frames_encoded,
            (long long)st.frames_dropped, (long long)st.bytes_written);
+#ifdef __APPLE__
+    if (!strstr(st.encoder, "videotoolbox"))
+        printf("WARNING: VideoToolbox encoder unavailable — fell back to %s\n", st.encoder[0] ? st.encoder : "(none)");
+#endif
+    if (st.frames_encoded <= 0) {
+        fprintf(stderr, "FAIL: recording encoded no frames\n");
+        return 6;
+    }
     mc_input_audio_queue_stats aq;
     if (!mc_input_get_audio_queue_stats(in, &aq)) {
         fprintf(stderr, "file audio queue diagnostics unavailable\n");
@@ -134,6 +144,10 @@ int main(int argc, char **argv) {
     so.url = "srt://127.0.0.1:9710?mode=listener&latency=120000&pkt_size=1316";
     so.reconnect = 1;
     mc_output *srt = mc_output_open(&so, on_status, "srt-out");
+    if (!srt) {
+        fprintf(stderr, "FAIL: SRT output could not be created\n");
+        return 7;
+    }
     usleep(300000);
     mc_input_config si = {.url = "srt://127.0.0.1:9710?mode=caller&latency=120000", .realtime = 0, .low_latency = 1};
     mc_callbacks rcb = {on_video, on_audio, on_status, &r};
@@ -152,5 +166,13 @@ int main(int argc, char **argv) {
     mc_output_close(srt);
     printf("srt in: video frames=%d (%dx%d) audio frames=%d\n", atomic_load(&r.vframes), r.w, r.h,
            atomic_load(&r.aframes));
+    // Before, a listener that failed to open (port busy, no libsrt) still ended with exit 0.
+    int fail = 0;
+    if (atomic_load(&srt_out_error)) { fprintf(stderr, "FAIL: SRT output reported an error\n"); fail = 1; }
+    if (st.frames_encoded <= 0) { fprintf(stderr, "FAIL: SRT output sent no frames\n"); fail = 1; }
+    if (atomic_load(&r.vframes) <= 0) { fprintf(stderr, "FAIL: SRT input received no video\n"); fail = 1; }
+    if (atomic_load(&r.aframes) <= 0) { fprintf(stderr, "FAIL: SRT input received no audio\n"); fail = 1; }
+    if (fail) return 8;
+    puts("core test: PASS");
     return 0;
 }

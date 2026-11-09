@@ -22,5 +22,15 @@ SRTD="$HOMEBREW_PREFIX/opt/srt"
 cc -std=gnu11 -O2 -ISources/Core -I"$SRTD/include" tests/core_test.c Sources/Core/mc_input.c Sources/Core/mc_output.c \
   Sources/Core/mc_pixel.c Sources/Core/mc_srt.c -L"$SRTD/lib" -lsrt -Wl,-rpath,"$SRTD/lib" -o $OUT $(pkg-config --cflags --libs $PKG) -Wl,-rpath,$FFP/lib -lpthread -lm \
   $( [ "$(uname)" = Darwin ] && echo "-framework VideoToolbox -framework CoreVideo -framework CoreMedia -framework CoreFoundation" )
-./$OUT /tmp/mc_src.mp4
+# Check the exit status explicitly (and keep the log for the encoder line): a failed run must fail the script.
+LOG="${TMPDIR:-/tmp}/mc_core_test.log"
+set +e
+./$OUT /tmp/mc_src.mp4 2>&1 | tee "$LOG"
+rc=${PIPESTATUS[0]}
+set -e
+echo "video encoder used: $(sed -n 's/^record: encoder=\([^ ]*\).*/\1/p' "$LOG")"
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL: core_test exited with $rc"
+  exit "$rc"
+fi
 "$FFPROBE" -v error -show_entries stream=codec_name,width,height -of compact /tmp/mc_rec.mp4

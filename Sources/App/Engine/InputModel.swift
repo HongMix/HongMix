@@ -3,6 +3,7 @@ import CoreVideo
 
 enum InputKind: String, Codable, CaseIterable {
     case camera, media, stream, ndi, decklink, color, image, title, screen, browser, audio, replay
+    case photos, pdfSlides, virtualSet      // SlideInputs.swift
 
     var label: String {
         switch self {
@@ -18,6 +19,9 @@ enum InputKind: String, Codable, CaseIterable {
         case .browser: return L("웹 브라우저")
         case .audio: return L("오디오 입력")
         case .replay: return "Instant Replay"
+        case .photos: return L("사진 (슬라이드쇼)")
+        case .pdfSlides: return L("PDF 슬라이드")
+        case .virtualSet: return L("가상 세트")
         }
     }
 
@@ -35,6 +39,9 @@ enum InputKind: String, Codable, CaseIterable {
         case .browser: return "globe"
         case .audio: return "mic"
         case .replay: return "gobackward"
+        case .photos: return "photo.on.rectangle.angled"
+        case .pdfSlides: return "doc.richtext"
+        case .virtualSet: return "person.crop.rectangle"
         }
     }
 }
@@ -339,6 +346,8 @@ struct InputConfig: Codable, Identifiable, Equatable {
     var screenDisplayID: UInt32 = 0     // 0 = main display
     var screenWindowID: UInt32 = 0      // 0 = whole display
     var showCursor: Bool = true
+    /// Also capture sound: display = whole Mac (minus HongMix), window = the owning app only.
+    var captureAudio: Bool = false
     var captureFPS: Int = 30
     // web browser
     var browserURL: String = "https://"
@@ -387,11 +396,18 @@ struct InputConfig: Codable, Identifiable, Equatable {
     var alphaKey = AlphaKeySettings()
     /// Instant Replay input: 0 = channel A, 1 = channel B
     var replayChannel: Int = 0
+    /// Photos (folder slideshow) / PDF Slides settings (SlideInputs.swift)
+    var slides = SlideSettings()
+    /// Virtual Set settings (SlideInputs.swift)
+    var virtualSet = VirtualSetSettings()
+    /// PTZ camera control (PTZ.swift); nil = not configured
+    var ptz: PTZCameraConfig? = nil
 
     init(kind: InputKind, name: String) {
         self.kind = kind
         self.name = name
         collapsed = kind == .audio          // audio-only inputs start collapsed (no empty picture box)
+        if kind == .pdfSlides { slides.transition = .cut }   // presentations: Cut by default
     }
 
     private enum LegacyKeys: String, CodingKey { case busMaster }
@@ -427,6 +443,7 @@ struct InputConfig: Codable, Identifiable, Equatable {
         screenDisplayID = c.value(.screenDisplayID, d.screenDisplayID)
         screenWindowID = c.value(.screenWindowID, d.screenWindowID)
         showCursor = c.value(.showCursor, d.showCursor)
+        captureAudio = c.value(.captureAudio, d.captureAudio)
         captureFPS = c.value(.captureFPS, d.captureFPS)
         browserURL = c.value(.browserURL, d.browserURL)
         browserWidth = c.value(.browserWidth, d.browserWidth)
@@ -457,6 +474,9 @@ struct InputConfig: Codable, Identifiable, Equatable {
         lutStrength = c.value(.lutStrength, d.lutStrength)
         alphaKey = c.value(.alphaKey, d.alphaKey)
         replayChannel = c.value(.replayChannel, d.replayChannel)
+        slides = c.value(.slides, d.slides)
+        virtualSet = c.value(.virtualSet, d.virtualSet)
+        ptz = c.value(.ptz, d.ptz)
         if let b: String = try? c.decodeIfPresent(String.self, forKey: .buses) {
             buses = b
         } else {
@@ -711,6 +731,8 @@ class InputSource: ObservableObject, Identifiable {
     /// Overlay sources with straight alpha (NDI) vs premultiplied (images/titles drawn by CoreGraphics).
     var alphaPremultiplied: Bool { false }
     var supportsTransport: Bool { false }
+    /// Full-frame picture drawn above this input's layers (Virtual Set foreground); premultiplied BGRA.
+    var topOverlayFrame: CVPixelBuffer? { nil }
 
     init(config: InputConfig) {
         self.id = config.id
@@ -757,7 +779,7 @@ class InputSource: ObservableObject, Identifiable {
         syncAudioParams()
         syncVideoParams()
         // rendered on demand → reported at the program rate (vMix shows these at the output frame rate)
-        video.followsProgramRate = [.color, .image, .title, .browser].contains(config.kind)
+        video.followsProgramRate = [.color, .image, .title, .browser, .photos, .pdfSlides, .virtualSet].contains(config.kind)
     }
 
     var busMaster: Bool {
@@ -875,6 +897,9 @@ class InputSource: ObservableObject, Identifiable {
         case .browser: return BrowserInput(config: config)
         case .audio: return AudioDeviceInput(config: config)
         case .replay: return ReplayInput(config: config)
+        case .photos: return PhotosInput(config: config)
+        case .pdfSlides: return PDFSlidesInput(config: config)
+        case .virtualSet: return VirtualSetInput(config: config)
         }
     }
 }

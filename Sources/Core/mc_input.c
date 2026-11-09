@@ -49,7 +49,8 @@ typedef struct vpkt {
 #define VPQ_MAX_COUNT 1200
 typedef struct video_chunk {
     AVFrame *frame;
-    int64_t pos_us;
+    int64_t pos_us;             // timeline position (file position + loop offset)
+    int64_t loop_off_us;        // loop offset it was decoded with (file position = pos_us - loop_off_us)
     unsigned generation;
     struct video_chunk *next;
 } video_chunk;
@@ -286,6 +287,12 @@ struct session {
     int64_t last_pts_us;
     int64_t start_us;        // container start time
     int64_t skip_until_us;   // drop frames before this position after a seek
+    // Gapless looping: pacing, the media clock and the audio/video queues run on a timeline that keeps
+    // counting across loop wraps (timeline = file position + loop_off_us). Before, every wrap threw the
+    // decoded tail away, waited for the queues to drain and restarted the clock from the first new
+    // frame, so audio had a hole of one frame + seek + keyframe decode (~45 ms) at every loop point.
+    int64_t loop_off_us;
+    int64_t vend_us, aend_us;    // timeline end of the video / audio decoded in this pass (0 = none)
     int cur_rate_milli;
     int64_t slack_min_us;        // live pacing: smallest "early" margin seen in the current window
     int64_t slack_t0_us;
@@ -899,6 +906,7 @@ static int queue_file_video(mc_input *in, session *s, AVFrame *f, int64_t pos_us
     c->frame = av_frame_clone(f);
     if (!c->frame) { free(c); return -1; }
     c->pos_us = pos_us;
+    c->loop_off_us = s->loop_off_us;
     c->generation = atomic_load(&s->video_generation);
     pthread_mutex_lock(&s->video_lock);
     while (s->video_count >= FILE_VIDEO_QUEUE_MAX && !s->video_stop && !wake_requested(in) &&
@@ -986,7 +994,7 @@ static void *video_release_thread(void *opaque) {
             // A seek/restart can happen while pace is sleeping. Never flash a stale pre-seek frame.
             if (c->generation == atomic_load(&s->video_generation) && !atomic_load(&in->stop)) {
                 if (c->pos_us != AV_NOPTS_VALUE)
-                    atomic_store(&in->position_us, (long long)c->pos_us);
+                    atomic_store(&in->position_us, (long long)(c->pos_us - c->loop_off_us));
                 deliver_video(in, s, c->frame);
                 s->need_frame = 0;
             }
@@ -1070,6 +1078,10 @@ static void deliver_audio(mc_input *in, session *s, AVFrame *f, int64_t pos_us) 
     uint8_t *out[1] = {(uint8_t *)s->abuf};
     int n = swr_convert(s->swr, out, out_max, (const uint8_t **)f->extended_data, f->nb_samples);
     if (n > 0) {
+        if (in->is_file && pos_us != AV_NOPTS_VALUE) {
+            int64_t end = pos_us + (int64_t)n * arate * 1000 / MC_AUDIO_RATE;   // media µs of n samples
+            if (end > s->aend_us) s->aend_us = end;
+        }
         if (in->is_file) queue_file_audio(in, s->abuf, n, pos_us);
         else in->cb.on_audio(in->cb.user, s->abuf, n);
     }
@@ -1098,11 +1110,18 @@ static int decode_packet(mc_input *in, session *s, AVCodecContext *dec, AVPacket
             if (mo > 0 && pos >= mo) { av_frame_unref(fr); continue; }   // past Mark Out
         }
         int drives_clock = video || s->vidx < 0;
+        int64_t tl = pos == AV_NOPTS_VALUE ? AV_NOPTS_VALUE : pos + s->loop_off_us;   // timeline position
+        if (video && in->is_file && tl != AV_NOPTS_VALUE) {
+            AVRational vtb = s->fmt->streams[s->vidx]->time_base;
+            int64_t d = fr->duration > 0 ? av_rescale_q(fr->duration, vtb, (AVRational){1, 1000000})
+                      : (s->nominal_fps_milli > 0 ? 1000000000LL / s->nominal_fps_milli : 16667);
+            if (tl + d > s->vend_us) s->vend_us = tl + d;
+        }
         // File audio must also be paced by its own PTS. MP4 commonly stores the final audio chunk
         // before the final video packets; delivering it immediately made the audio ring run dry
         // 200–350 ms before picture EOF, heard as a playlist transition dropout.
         if (drives_clock && !(in->is_file && video && s->video_thread_running)) {
-            pace(in, s, pos);
+            pace(in, s, tl);
             if (in->is_file && drives_clock && pos != AV_NOPTS_VALUE) atomic_store(&in->position_us, (long long)pos);
         }
         if (video) {
@@ -1114,7 +1133,7 @@ static int decode_packet(mc_input *in, session *s, AVCodecContext *dec, AVPacket
                     s->need_frame = 0;
                 }
             } else if (in->is_file && s->video_thread_running) {
-                queue_file_video(in, s, fr, pos);
+                queue_file_video(in, s, fr, tl);
             }
             else {
                 deliver_video(in, s, fr);
@@ -1125,7 +1144,7 @@ static int decode_packet(mc_input *in, session *s, AVCodecContext *dec, AVPacket
             // Files: decoded audio is held on the play clock while paused (e.g. the packets read to
             // show the cue frame), so resuming has no audio hole.
             // The audio thread releases it FILE_AUDIO_LEAD_US ahead of the shared media clock.
-            deliver_audio(in, s, fr, pos);
+            deliver_audio(in, s, fr, tl);
         }
         av_frame_unref(fr);
         if (atomic_load(&in->stop)) return -1;
@@ -1294,6 +1313,8 @@ static void do_seek(mc_input *in, session *s, int64_t target_us) {
     s->base_pts_us = AV_NOPTS_VALUE;
     s->audio_base_pts_us = AV_NOPTS_VALUE;
     s->skip_until_us = target_us;
+    s->loop_off_us = 0;          // queues and clock were thrown away: the timeline restarts here
+    s->vend_us = s->aend_us = 0;
     s->need_frame = 1;
     atomic_store(&in->position_us, (long long)target_us);
     atomic_store(&in->finished, 0);
@@ -1313,13 +1334,40 @@ static int has_queued_next(mc_input *in) {
     return yes;
 }
 
-/* End of media (or mark out). Returns 1 to keep reading, 0 to leave the session. */
-static int handle_end(mc_input *in, session *s) {
+/* Gapless loop wrap at end of file. The decoders are already drained and flushed (EOF path) and the
+   video decode thread is idle. Unlike do_seek, the decoded tail stays queued and the media clock keeps
+   running: the next pass is decoded while the tail is presented, and its timestamps continue where
+   this pass ended, so neither the pacer nor the audio release thread sees a discontinuity. */
+static void loop_wrap(mc_input *in, session *s) {
+    int64_t sp = start_point(in);
+    int64_t end = s->vend_us > s->aend_us ? s->vend_us : s->aend_us;
+    if (end <= 0) { do_seek(in, s, sp); return; }   // nothing decoded this pass: plain seek
+    // Audio track shorter than the picture: fill the rest with silence so the mixer doesn't run dry.
+    int64_t hole = s->aend_us > 0 ? end - s->aend_us : 0;
+    int arate = atomic_load(&in->rate_milli);
+    if (hole > 1000 && hole < 1000000 && s->aidx >= 0 && in->cb.on_audio && arate >= 990 && arate <= 1010) {
+        int frames = (int)(hole * MC_AUDIO_RATE / 1000000);
+        float *z = (float *)calloc((size_t)frames * 2, sizeof(float));
+        if (z) queue_file_audio(in, z, frames, s->aend_us);
+        free(z);
+    }
+    av_seek_frame(s->fmt, -1, sp + s->start_us, AVSEEK_FLAG_BACKWARD);
+    if (s->adec) avcodec_flush_buffers(s->adec);
+    s->skip_until_us = sp;
+    s->loop_off_us = end - sp;
+    s->vend_us = s->aend_us = end;
+    atomic_store(&in->finished, 0);
+}
+
+/* End of media (or mark out). Returns 1 to keep reading, 0 to leave the session.
+   seamless = called at the demuxer's end of file with the decoders drained (gapless loop possible). */
+static int handle_end(mc_input *in, session *s, int seamless) {
     // A pre-opened next session (also used for a one-item loop) is warmer and preserves the queued
     // tail than seeking the active VideoToolbox decoder after EOF.
     if (has_queued_next(in)) return 0;
     if (atomic_load(&in->loop)) {
-        do_seek(in, s, start_point(in));
+        if (seamless) loop_wrap(in, s);
+        else do_seek(in, s, start_point(in));
         return 1;
     }
     atomic_store(&in->finished, 1);
@@ -1413,7 +1461,7 @@ static void *input_thread(void *arg) {
                 }
                 long long mo = atomic_load(&in->mark_out_us);
                 if (mo > 0 && atomic_load(&in->position_us) >= mo) {
-                    if (!handle_end(in, &s)) break;
+                    if (!handle_end(in, &s, 0)) break;
                     continue;
                 }
             }
@@ -1451,22 +1499,8 @@ static void *input_thread(void *arg) {
                     }
                     if (s.adec) decode_packet(in, &s, s.adec, NULL, 0, s.frame);
                     if (s.adec) avcodec_flush_buffers(s.adec);
-                    if (s.video_thread_running && atomic_load(&in->loop) && !has_queued_next(in)) {
-                        // Looping: show the frames already decoded up to the end / Mark Out before
-                        // the seek back discards the presentation queue.
-                        int interrupted = 0;
-                        for (;;) {
-                            pthread_mutex_lock(&s.video_lock);
-                            int left = s.video_count;
-                            pthread_mutex_unlock(&s.video_lock);
-                            if (left == 0) break;
-                            if (wake_requested(in)) { interrupted = 1; break; }
-                            mc_sleep_us(2000);
-                        }
-                        if (interrupted) continue;
-                        mc_sleep_us(s.nominal_fps_milli > 0 ? 1000000000LL / s.nominal_fps_milli : 16667);
-                    }
-                    if (!handle_end(in, &s)) break;
+                    // Looping keeps the decoded tail queued (loop_wrap) — no drain-and-wait here.
+                    if (!handle_end(in, &s, 1)) break;
                     continue;
                 }
                 if (atomic_load(&in->stop)) break;

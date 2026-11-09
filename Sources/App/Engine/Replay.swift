@@ -232,6 +232,9 @@ final class ReplayEngine: ObservableObject {
     private var playerAudioFollow = true
     private var fps: Double = 59.94
     private var format = VideoFormat.defaultFormat
+    private let encoderCloses = DispatchGroup()     // encoder closes in flight (they still write into the store)
+    private var reportedDrops: Int64 = 0            // main thread: store drop / write-error counts already reported
+    private var reportedWriteErrors: Int64 = 0
 
     // player
     private let queue = DispatchQueue(label: "replay.player", qos: .userInteractive)
@@ -359,8 +362,10 @@ final class ReplayEngine: ObservableObject {
             }
         }
         if !closing.isEmpty {
+            encoderCloses.enter()
             DispatchQueue.global(qos: .userInitiated).async {
                 for (o, s) in closing { mc_output_close(o); if let s = s { mc_replay_sink_free(s) } }
+                self.encoderCloses.leave()
             }
         }
         refreshStatus()
@@ -407,11 +412,18 @@ final class ReplayEngine: ObservableObject {
         }
         if !sameSetup {
             let dir = (folder as NSString).appendingPathComponent("session")
-            guard let st = mc_replay_store_open(dir, Self.streamCount, Int32((60 * fps).rounded())) else {
+            // The store's writer thread does the disk I/O; this queue absorbs disk stalls (~2.5 s at full
+            // bitrate for all CAM slots, which can be added live) before packets get dropped.
+            let perSecond = settings.kbpsPerCamera(width: fmt.width, height: fmt.height, fps: fmt.fps) * 1000 / 8
+                * Double(Self.cams) + 48_000 * 8 * Double(Self.cams + 1)
+            let queueBytes = Int64(min(512e6, max(64e6, perSecond * 2.5)))
+            guard let st = mc_replay_store_open2(dir, Self.streamCount, Int32((60 * fps).rounded()), queueBytes, 0) else {
                 return L("리플레이 저장소를 열 수 없음")
             }
             lock.lock()
             store = st
+            reportedDrops = 0
+            reportedWriteErrors = 0
             recCodec = settings.codec
             liveFrames = Array(repeating: nil, count: Self.cams)
             head = -1
@@ -455,9 +467,11 @@ final class ReplayEngine: ObservableObject {
         sinks = Array(repeating: nil, count: Self.cams)
         lock.unlock()
         recording = false
+        encoderCloses.enter()
         DispatchQueue.global(qos: .userInitiated).async {
             for h in o.compactMap({ $0 }) { mc_output_close(h) }          // flushes the last frames into the store
             for k in s.compactMap({ $0 }) { mc_replay_sink_free(k) }
+            self.encoderCloses.leave()
         }
         refreshStatus()
     }
@@ -476,6 +490,8 @@ final class ReplayEngine: ObservableObject {
     }
 
     private func closeStore() {
+        // Encoders still flushing write into the store from their threads: let them finish first.
+        encoderCloses.wait()
         lock.lock()
         let st = store
         store = nil
@@ -519,17 +535,25 @@ final class ReplayEngine: ObservableObject {
                 recordingNow = true
             }
         }
-        if recordingNow, n > 0 {
-            let bytes = Int32(n * 2 * MemoryLayout<Float>.size)
-            mc_replay_store_write(st, Self.audioStream, tick, UnsafeRawPointer(audio).assumingMemoryBound(to: UInt8.self), bytes)
-            // each CAM's own audio (silence for a source without audio), so a replay angle sounds like its camera
+        // each CAM's own audio (silence for a source without audio), so a replay angle sounds like its camera
+        var camAudio = [UnsafePointer<Float>?](repeating: nil, count: Self.cams)
+        if recordingNow, n > 0, n <= 48_000 {
             for k in 0..<Self.cams where o[k] != nil {
-                guard let id = cams[k], n <= 48_000 else { continue }
-                let p = sourceAudio(id) ?? UnsafePointer(Self.silence)
-                mc_replay_store_write(st, Self.camAudioStream(k), tick, UnsafeRawPointer(p).assumingMemoryBound(to: UInt8.self), bytes)
+                guard let id = cams[k] else { continue }
+                camAudio[k] = sourceAudio(id) ?? UnsafePointer(Self.silence)
             }
         }
         lock.lock()
+        // The store writes only copy into its queue (its writer thread does the disk I/O), so they are cheap
+        // enough to do under the lock — which keeps closeStore from freeing the store mid-write.
+        if recordingNow, n > 0, store == st {
+            let bytes = Int32(n * 2 * MemoryLayout<Float>.size)
+            mc_replay_store_write(st, Self.audioStream, tick, UnsafeRawPointer(audio).assumingMemoryBound(to: UInt8.self), bytes)
+            for k in 0..<Self.cams {
+                guard let p = camAudio[k] else { continue }
+                mc_replay_store_write(st, Self.camAudioStream(k), tick, UnsafeRawPointer(p).assumingMemoryBound(to: UInt8.self), bytes)
+            }
+        }
         liveFrames = live
         if recordingNow {
             head = tick
@@ -598,8 +622,21 @@ final class ReplayEngine: ObservableObject {
             let first = firstFrame(st)
             s.bufferedSeconds = first >= 0 && h >= first ? Double(h - first) / fps : 0
             s.bytes = mc_replay_store_bytes(st)
+            // The disk could not keep up (queue full → packets dropped) or failed: say so, never stall the program.
+            var qs = mc_replay_store_stats()
+            mc_replay_store_get_stats(st, &qs)
+            var problems: [String] = []
+            if qs.dropped_packets > 0 { problems.append(Lf("리플레이 디스크가 느려 패킷 %@개를 버림", "\(qs.dropped_packets)")) }
+            if qs.write_errors > 0 { problems.append(Lf("리플레이 디스크 쓰기 실패 %@회", "\(qs.write_errors)")) }
+            s.error = problems.isEmpty ? nil : problems.joined(separator: " · ")
+            if qs.dropped_packets > reportedDrops || qs.write_errors > reportedWriteErrors {
+                reportedDrops = qs.dropped_packets
+                reportedWriteErrors = qs.write_errors
+                engine?.blackbox.record(.outputError, s.error ?? "")
+                engine?.lastMessage = s.error ?? ""
+            }
         } else {
-            s.bufferedSeconds = 0; s.bytes = 0
+            s.bufferedSeconds = 0; s.bytes = 0; s.error = nil
         }
         s.free = OutputConfig.freeSpace(at: settings.folderPath) ?? 0
         let perHour = Double(estimate(cameras: max(1, cams > 0 ? cams : settings.assignedCount)).perHour)
@@ -910,7 +947,8 @@ final class ReplayEngine: ObservableObject {
               let dec = mc_replay_dec_open_codec(Int32(kind)) else { return finish(failed: true) }
         defer { mc_replay_dec_close(dec) }
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        guard let ast = mc_replay_store_open(dir, 1, 4 * 3600),
+        // offline render: wait for the disk rather than drop frames
+        guard let ast = mc_replay_store_open2(dir, 1, 4 * 3600, 32_000_000, 1),
               let sink = mc_replay_sink_new(ast, 0) else { return finish(failed: true) }
         var cfg = mc_output_config()
         cfg.width = Int32(fmt.width); cfg.height = Int32(fmt.height)
@@ -972,6 +1010,7 @@ final class ReplayEngine: ObservableObject {
         }
         mc_output_close(out)                // flush the last frames into the clip store
         mc_replay_sink_free(sink)
+        mc_replay_store_flush(ast)          // on disk before playback (readers would also find it queued)
         lock.lock()
         let stillValid = ok && aiEpoch == epoch && !aiCancelled.contains(e.id)
         if stillValid {

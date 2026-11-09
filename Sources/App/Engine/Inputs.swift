@@ -606,9 +606,15 @@ final class CameraInput: InputSource {
         }
     }
 
-    private var session: AVCaptureSession?
+    private var session: AVCaptureSession?            // queue
     private let delegate = CaptureDelegate()
     private let queue = DispatchQueue(label: "camera.capture", qos: .userInteractive)
+    /// Device watching: reopen when the camera / capture card / its audio device is plugged back in,
+    /// unplugged, or the session fails — before, the input stayed dead until it was re-added.
+    private let watch = CaptureDeviceWatch()
+    private var active = false
+    private var reopenPending = false                  // queue
+    private var deviceLabel = ""
     private let audioQueue = DispatchQueue(label: "camera.audio", qos: .userInteractive)
     private var audioScratch = [Float]()
 
@@ -666,7 +672,13 @@ final class CameraInput: InputSource {
     }
 
     override func start() {
-        guard session == nil else { return }
+        guard queue.sync(execute: { session == nil }) else { return }
+        active = true
+        deviceLabel = name
+        watch.start(ids: { [weak self] in
+            guard let self = self else { return [] }
+            return [self.config.cameraID, self.config.audioDeviceID].filter { !$0.isEmpty }
+        }, onChange: { [weak self] in self?.reopen(after: 0.5) })
         AVCaptureDevice.requestAccess(for: .video) { granted in
             guard granted else {
                 self.postStatus(Int32(MC_STATE_ERROR), L("카메라 권한이 거부됨 (시스템 설정 > 개인정보 보호)"))
@@ -682,15 +694,43 @@ final class CameraInput: InputSource {
         }
     }
 
+    /// Rebuild the session on the capture queue (coalesced).
+    private func reopen(after delay: Double) {
+        queue.async {
+            guard self.active, !self.reopenPending else { return }
+            self.reopenPending = true
+            self.queue.asyncAfter(deadline: .now() + delay) {
+                self.reopenPending = false
+                guard self.active else { return }
+                if let s = self.session {
+                    s.stopRunning()
+                    self.session = nil
+                }
+                self.configureSession()
+            }
+        }
+    }
+
     private func configureSession() {
+        guard active, session == nil else { return }
         delegate.owner = self
         let s = AVCaptureSession()
         s.beginConfiguration()
-        let device = CameraInput.videoDevices().first(where: { $0.uniqueID == config.cameraID })
-            ?? AVCaptureDevice.default(for: .video)
-        guard let dev = device, let input = try? AVCaptureDeviceInput(device: dev), s.canAddInput(input) else {
+        // A chosen device that isn't connected must NOT fall back to the default camera (that put the
+        // MacBook's FaceTime camera on air when a capture card was missing). Only an input that never
+        // picked a device uses the default one.
+        let device = config.cameraID.isEmpty
+            ? AVCaptureDevice.default(for: .video)
+            : CameraInput.videoDevices().first(where: { $0.uniqueID == config.cameraID })
+        guard let dev = device else {
             s.commitConfiguration()
-            postStatus(Int32(MC_STATE_ERROR), L("카메라를 열 수 없음"))
+            postStatus(Int32(MC_STATE_ERROR), Lf("장치가 연결되지 않음: %@ — 연결되면 자동으로 다시 엽니다", deviceLabel))
+            return
+        }
+        guard let input = try? AVCaptureDeviceInput(device: dev), s.canAddInput(input) else {
+            s.commitConfiguration()
+            postStatus(Int32(MC_STATE_ERROR), L("카메라를 열 수 없음 — 다시 시도 중"))
+            reopen(after: 3)
             return
         }
         s.addInput(input)
@@ -732,6 +772,10 @@ final class CameraInput: InputSource {
         // the session may re-apply its own frame rate when it starts: lock it again
         applyCaptureFormat(dev)
         session = s
+        watch.watch(session: s) { [weak self] in
+            self?.postStatus(Int32(MC_STATE_ERROR), L("카메라 세션 오류 — 다시 여는 중"))
+            self?.reopen(after: 1)
+        }
         let d = CMVideoFormatDescriptionGetDimensions(dev.activeFormat.formatDescription)
         let fps = dev.activeVideoMinFrameDuration.seconds > 0 ? 1 / dev.activeVideoMinFrameDuration.seconds : 0
         let audioStatus = matchedAudioName.map { Lf(" · 오디오: %@", $0) } ?? L(" · 오디오 없음")
@@ -740,10 +784,11 @@ final class CameraInput: InputSource {
     }
 
     override func stop() {
-        let s = session
-        session = nil
+        active = false
+        watch.stop()
         queue.sync {
-            s?.stopRunning()
+            session?.stopRunning()
+            session = nil
         }
         video.clear()
         audio.clear()
@@ -768,5 +813,42 @@ final class CameraInput: InputSource {
                 noteAudioFrame()
             }
         }
+    }
+}
+
+/// Watches the capture devices of one input (connect / disconnect) and its session's runtime errors.
+final class CaptureDeviceWatch {
+    private let lock = NSLock()
+    private var tokens: [NSObjectProtocol] = []
+    private var sessionToken: NSObjectProtocol?
+
+    func start(ids: @escaping () -> [String], onChange: @escaping () -> Void) {
+        lock.lock(); defer { lock.unlock() }
+        guard tokens.isEmpty else { return }
+        let handler: (Notification) -> Void = { n in
+            guard let d = n.object as? AVCaptureDevice, ids().contains(d.uniqueID) else { return }
+            onChange()
+        }
+        let nc = NotificationCenter.default
+        for name in [AVCaptureDevice.wasConnectedNotification, AVCaptureDevice.wasDisconnectedNotification] {
+            tokens.append(nc.addObserver(forName: name, object: nil, queue: nil, using: handler))
+        }
+    }
+
+    func watch(session: AVCaptureSession?, onError: @escaping () -> Void) {
+        lock.lock(); defer { lock.unlock() }
+        if let t = sessionToken { NotificationCenter.default.removeObserver(t) }
+        sessionToken = session.map {
+            NotificationCenter.default.addObserver(forName: AVCaptureSession.runtimeErrorNotification, object: $0,
+                                                   queue: nil) { _ in onError() }
+        }
+    }
+
+    func stop() {
+        lock.lock(); defer { lock.unlock() }
+        tokens.forEach { NotificationCenter.default.removeObserver($0) }
+        tokens = []
+        if let t = sessionToken { NotificationCenter.default.removeObserver(t) }
+        sessionToken = nil
     }
 }

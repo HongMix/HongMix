@@ -8,14 +8,13 @@ import CoreImage
 enum APIProcessor {
 
     /// Function families that exist in the reference but are intentionally not implemented.
-    static let unsupportedPrefixes = ["ptz", "script", "playlist",
+    static let unsupportedPrefixes = ["script", "playlist",
                                       "nextplaylist", "previousplaylist", "selectplaylist", "startplaylist",
-                                      "stopplaylist", "videocall", "list", "layer", "multiviewoverlay",
-                                      "movemultiviewoverlay", "setmultiviewoverlay", "audioplugin", "busaaudioplugin",
+                                      "stopplaylist", "videocall", "listplayout", "listexport", "listshowhide",
+                                      "audioplugin", "busaaudioplugin",
                                       "busbaudioplugin", "busxaudioplugin", "masteraudioplugin", "ndicommand",
                                       "ndistartrecording", "ndistoprecording", "previewoverlayinput",
-                                      "setdynamicinput", "selectcategory", "selectindex", "nextitem", "previousitem",
-                                      "nextpicture", "previouspicture", "setpictureeffect", "setpicturetransition",
+                                      "setdynamicinput", "selectcategory", "setpictureeffect", "setpicturetransition",
                                       "videodelay", "savevideodelay", "createvirtualinput", "autoplayfirst",
                                       "autoplaynext", "audiochannelmatrix", "setvolumechannelmixer",
                                       "colourcorrectionauto", "inputpreview", "waitforcompletion", "livepause",
@@ -533,6 +532,11 @@ enum APIProcessor {
             guard let f = input as? FFmpegInput else { return needInput() }
             f.previousItem()
         case "selectindex":
+            if let s = input as? SlideDeckInput {      // Photos / PDF Slides: Value=n (1-based)
+                guard let n = Int(value), n >= 1, n <= s.count else { return "Value=1…\(s.count)" }
+                s.select(n - 1)
+                return nil
+            }
             guard let f = input as? FFmpegInput, let n = Int(value) else { return "List input + Value=n" }
             f.selectItem(n - 1, play: f.playing)
         case "listadd":
@@ -616,6 +620,79 @@ enum APIProcessor {
         case "displayoutputmode":      // Value=window|fullscreen
             guard let m = DisplayOutputMode(rawValue: value.lowercased()) else { return "Value=window|fullscreen" }
             FullscreenOutput.shared.setMode(m, engine: e)
+        case "setmulticorder":         // HongMix extension: Input, Value=on|off — "MultiCorder 녹화" checkbox
+            guard let i = input else { return needInput() }
+            i.multiCorder = value.lowercased() != "off"
+        // HongMix MIDI extensions (MIDIControl.swift)
+        case "midilearn":        // Value=Function|Input|Value — next MIDI message maps to it ("" / cancel = stop)
+            return e.midi.apiLearn(value)
+        case "midienable":       // Value=on|off (empty = toggle)
+            let v = value.lowercased()
+            e.midi.enabled = v == "on" || v == "true" || v == "1" ? true : (v == "off" || v == "false" || v == "0" ? false : !e.midi.enabled)
+        case "testreplacefile":        // HongMix test hook: Input, Value=path — the Finder ⌘-drop replace (asks first)
+            guard let i = input, !value.isEmpty else { return "Input, Value=path" }
+            let u = URL(fileURLWithPath: (value as NSString).expandingTildeInPath)
+            DispatchQueue.main.async { FileDrop.replace(i, with: u, engine: e) }
+        case "displayoutputdisplay":   // Value=CGDirectDisplayID (0 = automatic) — which monitor Display uses
+            guard let id = UInt32(value) else { return "Value=displayID (0 = automatic)" }
+            FullscreenOutput.shared.setDisplay(id, engine: e)
+        case "recorddiskwarning":      // HongMix: Value=10|30|60|0 — warn when recording time left drops below (0 = off)
+            guard let m = Int(value), RecordingSafety.warnOptions.contains(m) else { return "Value=10|30|60|0" }
+            e.recordingSafety.warnMinutes = m
+        case "setrecordbackup":        // HongMix: Value=folder ("" = off) — backup recording of every record output (next start)
+            for o in e.outputs where o.config.kind == .record { o.config.backupFolder = value }
+        case "setrecordspill":         // HongMix: Value=on|off[,folder] — continue on another disk when full (next start)
+            let parts = value.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            let on = (parts.first ?? "").lowercased() == "on"
+            for o in e.outputs where o.config.kind == .record {
+                o.config.spillToBackupWhenFull = on
+                if parts.count > 1 { o.config.spillFolder = parts[1] }
+            }
+        // ===== Photos / PDF Slides (SlideInputs.swift): vMix NextPicture / PreviousPicture (SelectIndex above)
+        case "nextpicture", "previouspicture":
+            guard let s = input as? SlideDeckInput else { return input == nil ? needInput() : "Input is not Photos / PDF Slides" }
+            if fn == "nextpicture" { s.next() } else { s.previous() }
+        case "virtualsetpresenter":    // HongMix extension: Input (Virtual Set), Value=presenter input (empty/0 = none)
+            guard let v = input as? VirtualSetInput else { return input == nil ? needInput() : "Input is not a Virtual Set" }
+            if value.isEmpty || value == "0" { v.virtualSet.presenterInputID = nil }
+            else if let p = resolveInput(value, e), p.id != v.id { v.virtualSet.presenterInputID = p.id }
+            else { return "Input not found: \(value)" }
+        case "virtualsetpreset":       // HongMix extension: Input (Virtual Set), Value=centre|leftThird|rightThird|full
+            guard let v = input as? VirtualSetInput else { return input == nil ? needInput() : "Input is not a Virtual Set" }
+            guard let p = VirtualSetPreset.allCases.first(where: { $0.rawValue.caseInsensitiveCompare(value) == .orderedSame }) else {
+                return "Value=centre|leftThird|rightThird|full"
+            }
+            v.applyPreset(p)
+        case _ where fn.hasPrefix("ptz"):   // vMix PTZ… functions + HongMix PTZPresetRecall/Store (PTZ.swift)
+            return PTZManager.shared.api(fn, value: value, input: input, engine: e)
+        case "desktopcaptureaudio":    // HongMix extension: Input (Desktop Capture), Value=on|off (empty = toggle)
+            guard let i = input else { return needInput() }
+            guard i.kind == .screen else { return "Input is not a Desktop Capture" }
+            let on: Bool
+            switch value.lowercased() {
+            case "on", "true", "1": on = true
+            case "off", "false", "0": on = false
+            case "": on = !i.config.captureAudio
+            default: return "Value=on|off"
+            }
+            guard on != i.config.captureAudio else { return nil }
+            var c = i.currentConfig()
+            c.captureAudio = on
+            e.replaceInput(i, with: c)      // capture restarts with the new setting, like other source changes
+        case "relaunchchromekeepdrawing": // HongMix extension: Value=confirm [, Browser=chrome|edge|brave]
+            // Quits the operator's browser (tabs are restored), so it must be asked for explicitly.
+            guard value.lowercased() == "confirm" else {
+                return "This quits and relaunches the browser (tabs are restored) so hidden windows keep drawing. Call again with Value=confirm"
+            }
+            let id: String?
+            switch (q["browser"] ?? "").lowercased() {
+            case "": id = nil
+            case "chrome": id = "com.google.Chrome"
+            case "edge": id = "com.microsoft.edgemac"
+            case "brave": id = "com.brave.Browser"
+            default: return "Browser=chrome|edge|brave"
+            }
+            ChromeKeepAlive.relaunch(bundleID: id) { result in e.lastMessage = result.message }
         case "outputwindowfill":       // green button of the output window
             FullscreenOutput.shared.testFill()
         case "outputwindowzoombutton": // real click on the output window's green button
@@ -634,6 +711,66 @@ enum APIProcessor {
         case "snapshotinput":
             guard let i = input else { return needInput() }
             return e.snapshot(input: i, path: value.isEmpty ? nil : value) == nil ? "Snapshot failed" : nil
+
+        // ===== List input (vMix List): Input = the list, Value = 1-based index / file path
+        case "nextitem", "previousitem", "selectindex", "listadd", "listremove", "listremoveall", "listshuffle":
+            guard let i = input else { return needInput() }
+            guard let list = i as? FFmpegInput, list.kind == .media else { return "Input is not a List" }
+            switch fn {
+            case "nextitem": list.nextItem()
+            case "previousitem": list.previousItem()
+            case "selectindex":
+                guard let n = Int(value), list.playlist.indices.contains(n - 1) else { return "Value=1…\(list.playlist.count)" }
+                list.selectItem(n - 1, play: list.playing)
+            case "listadd":
+                let path = (value as NSString).expandingTildeInPath
+                guard FileManager.default.fileExists(atPath: path) else { return "File not found: \(value)" }
+                list.addItems([path])
+            case "listremove":
+                guard let n = Int(value), list.playlist.indices.contains(n - 1) else { return "Value=1…\(list.playlist.count)" }
+                list.removeItem(n - 1)
+            case "listremoveall":
+                // keep the item on air so the input doesn't go black; vMix empties the list
+                if list.playlist.indices.contains(list.playlistIndex) { list.playlist = [list.playlist[list.playlistIndex]] }
+            default: list.shuffleList()
+            }
+        // ===== Layers (vMix: Layer… and the older MultiViewOverlay… names). Value = layer 1…10
+        case "layeron", "layeroff", "layeronoff", "multiviewoverlay", "multiviewoverlayon", "multiviewoverlayoff":
+            guard let i = input else { return needInput() }
+            guard let n = Int(value), i.layers.indices.contains(n - 1) else { return "Value=layer 1…\(i.layers.count)" }
+            switch fn {
+            case "layeron", "multiviewoverlayon": i.layers[n - 1].visible = true
+            case "layeroff", "multiviewoverlayoff": i.layers[n - 1].visible = false
+            default: i.layers[n - 1].visible.toggle()
+            }
+        case "setlayer", "setmultiviewoverlay":
+            // Value = "layer,input" (input by number, name or key); creates the layer if it's the next free one
+            guard let i = input else { return needInput() }
+            let p = value.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            guard p.count == 2, let n = Int(p[0]), (1...10).contains(n) else { return "Value=layer,input" }
+            let src: UUID?
+            if p[1].isEmpty || p[1] == "0" { src = nil }
+            else if let s = resolveInput(p[1], e) { src = s.id }
+            else { return "Input not found: \(p[1])" }
+            if src == i.id { return "An input can't be its own layer" }
+            if i.layers.indices.contains(n - 1) {
+                i.layers[n - 1].inputID = src
+            } else if n == i.layers.count + 1 {
+                // new layer: same default box as "+" in the Layers editor
+                let k = Double(i.layers.count % 4)
+                i.layers.append(InputLayer(inputID: src, x: 0.6 - k * 0.04, y: 0.6 - k * 0.04, w: 0.3, h: 0.3))
+            } else {
+                return "Layer \(n) doesn't exist (next free layer is \(i.layers.count + 1))"
+            }
+        case "movelayer", "movemultiviewoverlay":
+            // Value = "from,to" (1-based): changes stacking order (higher = in front)
+            guard let i = input else { return needInput() }
+            let p = value.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+            guard p.count == 2, i.layers.indices.contains(p[0] - 1), i.layers.indices.contains(p[1] - 1) else {
+                return "Value=from,to"
+            }
+            let l = i.layers.remove(at: p[0] - 1)
+            i.layers.insert(l, at: p[1] - 1)
 
         default:
             if unsupportedPrefixes.contains(where: { fn.hasPrefix($0) }) {
@@ -804,6 +941,15 @@ enum APIProcessor {
         case "video", "audiofile", "media":
             c = InputConfig(kind: .media, name: (arg as NSString).lastPathComponent)
             c.url = arg
+        case "photos" where isDirectory(arg):  // vMix Photos: a folder as a slideshow
+            c = InputConfig(kind: .photos, name: (arg as NSString).lastPathComponent)
+            c.slides.path = arg
+        case "pdf", "slides", "powerpoint":    // PDF Slides (vMix PowerPoint; export the deck as PDF)
+            c = InputConfig(kind: .pdfSlides, name: ((arg as NSString).lastPathComponent as NSString).deletingPathExtension)
+            c.slides.path = arg
+        case "virtualset":                     // Value=VirtualSet|background picture (presenter: VirtualSetPresenter)
+            c = InputConfig(kind: .virtualSet, name: arg.isEmpty ? "Virtual Set" : ((arg as NSString).lastPathComponent as NSString).deletingPathExtension)
+            c.virtualSet.backgroundPath = arg
         case "image", "photos":
             c = InputConfig(kind: .image, name: (arg as NSString).lastPathComponent)
             c.imagePath = arg
@@ -834,6 +980,11 @@ enum APIProcessor {
         }
         e.addInput(c)
         return nil
+    }
+
+    private static func isDirectory(_ path: String) -> Bool {
+        var dir: ObjCBool = false
+        return FileManager.default.fileExists(atPath: (path as NSString).expandingTildeInPath, isDirectory: &dir) && dir.boolValue
     }
 
     private static func snapshotWindow(_ path: String) -> Bool {
@@ -896,6 +1047,9 @@ enum APIProcessor {
         case .browser: return "Browser"
         case .audio: return "Audio"
         case .replay: return "Replay"
+        case .photos: return "Photos"
+        case .pdfSlides: return "PowerPoint"
+        case .virtualSet: return "VirtualSet"
         }
     }
 
@@ -920,6 +1074,7 @@ enum APIProcessor {
             x += "balance=\"\(i.balance)\" solo=\"\(tf(i.solo))\" soloPFL=\"\(tf(i.solo))\" audiobusses=\"\(busList)\" "
             x += "gainDb=\"\(i.gainDB)\" audioauto=\"\(tf(i.audioFollowsVideo))\" "
             if let f = i as? FFmpegInput, f.isList { x += "selectedIndex=\"\(f.playlistIndex + 1)\" " }
+            if let s = i as? SlideDeckInput, s.count > 0 { x += "selectedIndex=\"\(s.currentIndex + 1)\" hmSlideCount=\"\(s.count)\" " }
             x += "hmState=\"\(i.state)\" hmStatus=\"\(esc(i.status))\" "
             if !i.lutPath.isEmpty {
                 let st = LUTCache.shared.error(i.lutPath) ?? (LUTCache.shared.isLoaded(i.lutPath) ? "loaded" : "loading")
@@ -968,10 +1123,13 @@ enum APIProcessor {
             x += "<transition number=\"\(i + 1)\" effect=\"\(t.type.label)\" duration=\"\(t.durationMs)\" />"
         }
         x += "</transitions>"
-        x += "<recording>\(tf(e.anyRunning(kind: .record)))</recording>"
+        // a recording that failed (disk full, no write access) is not reported as recording to Companion etc.
+        let recordingOK = e.outputs.contains { $0.config.kind == .record && $0.running && $0.state != Int32(MC_STATE_ERROR) }
+        x += "<recording>\(tf(recordingOK))</recording>"
         x += "<external>\(tf(e.anyRunning(kind: .ndi) || e.anyRunning(kind: .decklink)))</external>"
         x += "<streaming>\(tf(e.anyRunning(kind: .stream)))</streaming>"
         x += "<playList>False</playList><multiCorder>\(tf(e.multiCorderOn))</multiCorder>"
+        if let err = e.multiCorderError { x += "<hmMultiCorderError>\(esc(err))</hmMultiCorderError>" }
         x += "<fullscreen>\(tf(FullscreenOutput.shared.isShowing))</fullscreen>"
         x += "<audio>"
         for b in 0..<AudioMixer.busCount {
@@ -1027,7 +1185,7 @@ enum APIProcessor {
             }
         }
         for o in e.outputs where o.running {
-            x += "<outputStats name=\"\(esc(o.config.name))\" kind=\"\(o.config.kind.rawValue)\" stats=\"\(esc(o.statsText))\" delayMs=\"\(o.delayBufferedMs)\" dumped=\"\(tf(o.delayDumped))\" file=\"\(esc(o.lastFile))\" />"
+            x += "<outputStats name=\"\(esc(o.config.name))\" kind=\"\(o.config.kind.rawValue)\" state=\"\(o.state)\" message=\"\(esc(o.message))\" stats=\"\(esc(o.statsText))\" delayMs=\"\(o.delayBufferedMs)\" dumped=\"\(tf(o.delayDumped))\" file=\"\(esc(o.lastFile))\" backupFile=\"\(esc(o.backupFile))\" backupState=\"\(o.backupState)\" mainDiskFailed=\"\(tf(o.mainDiskFailed))\" spills=\"\(o.spillCount)\" remaining=\"\(o.remainingSeconds.map { String(Int($0)) } ?? "")\" backupRemaining=\"\(o.backupRemainingSeconds.map { String(Int($0)) } ?? "")\" diskWarning=\"\(tf(e.recordingSafety.diskWarning))\" uptime=\"\(Int(o.uptime ?? 0))\" reconnects=\"\(o.reconnectCount)\" kbpsHistory=\"\(o.kbpsHistoryText())\" />"
         }
         for b in e.inputs.compactMap({ $0 as? BrowserInput }) {
             let st = b.video.stats

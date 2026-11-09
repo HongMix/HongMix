@@ -138,7 +138,13 @@ struct mc_ndi_recv {
     atomic_int link;          // 1 = the NDI connection to the sender is up (even if no new frames arrive)
     float *abuf;
     int abuf_frames;
+    NDIlib_recv_instance_t ptz_inst;   // PTZ: live recv instance (guarded by g_ptz_lock), NULL when not connected
+    struct mc_ndi_recv *ptz_next;      // PTZ: registry of open receivers (guarded by g_ptz_lock)
 };
+
+/* PTZ: open receivers, so the PTZ engine can reach an input's recv instance by NDI source name. */
+static pthread_mutex_t g_ptz_lock = PTHREAD_MUTEX_INITIALIZER;
+static mc_ndi_recv *g_ptz_list = NULL;
 
 static void ndi_rstatus(mc_ndi_recv *r, int st, const char *msg) {
     if (r->cb.on_status) r->cb.on_status(r->cb.user, st, msg);
@@ -213,6 +219,9 @@ static void *ndi_recv_thread(void *arg) {
         ndi_rstatus(r, MC_STATE_ERROR, "NDI 수신기 생성 실패");
         return NULL;
     }
+    pthread_mutex_lock(&g_ptz_lock);   // PTZ: publish the instance for mc_ndi_recv_ptz
+    r->ptz_inst = recv;
+    pthread_mutex_unlock(&g_ptz_lock);
     ndi_rstatus(r, MC_STATE_CONNECTING, "NDI 연결 중");
     int connected = 0;
     int64_t last_frame = mc_now_us();
@@ -268,6 +277,9 @@ static void *ndi_recv_thread(void *arg) {
             ndi_rstatus(r, MC_STATE_CONNECTING, "NDI 신호 없음 — 대기 중");
         }
     }
+    pthread_mutex_lock(&g_ptz_lock);   // PTZ: no PTZ call may use the instance from here on
+    r->ptz_inst = NULL;
+    pthread_mutex_unlock(&g_ptz_lock);
     g_ndi->recv_destroy(recv);
     ndi_rstatus(r, MC_STATE_STOPPED, "중지됨");
     return NULL;
@@ -289,7 +301,57 @@ mc_ndi_recv *mc_ndi_recv_open(const char *source_name, int low_bandwidth, mc_cal
         free(r);
         return NULL;
     }
+    pthread_mutex_lock(&g_ptz_lock);   // PTZ registry
+    r->ptz_next = g_ptz_list;
+    g_ptz_list = r;
+    pthread_mutex_unlock(&g_ptz_lock);
     return r;
+}
+
+/* ------------------------------- PTZ ------------------------------- */
+
+// Caller holds g_ptz_lock.
+static int ndi_ptz_locked(mc_ndi_recv *r, int cmd, float a, float b) {
+    NDIlib_recv_instance_t in = r ? r->ptz_inst : NULL;
+    if (!in) return -1;
+    if (!g_ndi->recv_ptz_is_supported(in)) return 0;
+    bool ok = false;
+    switch (cmd) {
+    case MC_NDI_PTZ_SUPPORTED: ok = true; break;
+    case MC_NDI_PTZ_PAN_TILT_SPEED: ok = g_ndi->recv_ptz_pan_tilt_speed(in, a, b); break;
+    case MC_NDI_PTZ_PAN_TILT: ok = g_ndi->recv_ptz_pan_tilt(in, a, b); break;
+    case MC_NDI_PTZ_ZOOM_SPEED: ok = g_ndi->recv_ptz_zoom_speed(in, a); break;
+    case MC_NDI_PTZ_ZOOM: ok = g_ndi->recv_ptz_zoom(in, a); break;
+    case MC_NDI_PTZ_FOCUS_AUTO: ok = g_ndi->recv_ptz_auto_focus(in); break;
+    case MC_NDI_PTZ_FOCUS_SPEED: ok = g_ndi->recv_ptz_focus_speed(in, a); break;
+    case MC_NDI_PTZ_FOCUS: ok = g_ndi->recv_ptz_focus(in, a); break;
+    case MC_NDI_PTZ_STORE_PRESET: ok = g_ndi->recv_ptz_store_preset(in, (int)a); break;
+    case MC_NDI_PTZ_RECALL_PRESET: ok = g_ndi->recv_ptz_recall_preset(in, (int)a, b); break;
+    default: ok = false; break;
+    }
+    return ok ? 1 : 0;
+}
+
+int mc_ndi_recv_ptz(mc_ndi_recv *r, int cmd, float a, float b) {
+    if (!r || !g_ndi) return -1;
+    pthread_mutex_lock(&g_ptz_lock);
+    int rc = ndi_ptz_locked(r, cmd, a, b);
+    pthread_mutex_unlock(&g_ptz_lock);
+    return rc;
+}
+
+int mc_ndi_ptz_source(const char *source_name, int cmd, float a, float b) {
+    if (!source_name || !g_ndi) return -1;
+    int rc = -1;
+    pthread_mutex_lock(&g_ptz_lock);
+    for (mc_ndi_recv *r = g_ptz_list; r; r = r->ptz_next) {
+        if (!r->name || strcmp(r->name, source_name) != 0) continue;
+        int x = ndi_ptz_locked(r, cmd, a, b);
+        if (x > rc) rc = x;
+        if (rc == 1) break;   // first receiver with PTZ control wins
+    }
+    pthread_mutex_unlock(&g_ptz_lock);
+    return rc;
 }
 
 void mc_ndi_recv_set_tally(mc_ndi_recv *r, int program, int preview) {
@@ -306,6 +368,10 @@ int mc_ndi_recv_link(mc_ndi_recv *r) {
 
 void mc_ndi_recv_close(mc_ndi_recv *r) {
     if (!r) return;
+    pthread_mutex_lock(&g_ptz_lock);   // PTZ: unregister
+    for (mc_ndi_recv **pp = &g_ptz_list; *pp; pp = &(*pp)->ptz_next)
+        if (*pp == r) { *pp = r->ptz_next; break; }
+    pthread_mutex_unlock(&g_ptz_lock);
     atomic_store(&r->stop, 1);
     pthread_join(r->thread, NULL);
     free(r->abuf);
@@ -476,6 +542,8 @@ mc_ndi_recv *mc_ndi_recv_open(const char *n, int l, mc_callbacks cb) {
 void mc_ndi_recv_set_tally(mc_ndi_recv *r, int p, int v) { (void)r; (void)p; (void)v; }
 void mc_ndi_recv_close(mc_ndi_recv *r) { (void)r; }
 int mc_ndi_recv_link(mc_ndi_recv *r) { (void)r; return 0; }
+int mc_ndi_recv_ptz(mc_ndi_recv *r, int c, float a, float b) { (void)r; (void)c; (void)a; (void)b; return -1; }
+int mc_ndi_ptz_source(const char *n, int c, float a, float b) { (void)n; (void)c; (void)a; (void)b; return -1; }
 mc_ndi_send *mc_ndi_send_open(const char *n, int a, int b) {
     (void)n; (void)a; (void)b;
     return NULL;

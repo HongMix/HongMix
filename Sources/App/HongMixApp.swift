@@ -70,6 +70,13 @@ struct HongMixApp: App {
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 960, height: 560)
+        Window("PTZ Control", id: "ptz") {
+            PTZControlWindow()
+                .id(language + skin)
+                .environmentObject(engine)
+                .preferredColorScheme(.dark)
+        }
+        .defaultSize(width: 680, height: 520)
         Window(L("통계 및 모니터링"), id: "statistics") {
             StatisticsSheet(engine: engine)
                 .id(language + skin)

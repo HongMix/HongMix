@@ -73,6 +73,7 @@ struct InputPropertiesSheet: View {
                     case 6: LayersEditor(input: input)
                     case 7: TriggersEditor(input: input)
                     case 8: if let f = input as? FFmpegInput { ListEditor(input: f) }
+                    case 9: PTZPanel(ptz: PTZManager.shared.controller(for: input))
                     default: generalTab
                     }
                 }
@@ -106,6 +107,7 @@ struct InputPropertiesSheet: View {
         if input.supportsTransport { tabs.append((5, "Playback", "play.rectangle")) }
         if input.supportsTransport, input is FFmpegInput { tabs.append((8, "List", "list.number")) }
         tabs.append((7, "Triggers", "bolt"))
+        if input.isLiveSource { tabs.append((9, "PTZ", "camera.metering.center.weighted")) }
         return tabs.map { (id: $0.0, title: $0.1, icon: $0.2) }
     }
 

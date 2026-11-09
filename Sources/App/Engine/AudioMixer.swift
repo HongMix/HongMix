@@ -3,6 +3,7 @@ import AVFoundation
 import QuartzCore
 import CoreAudio
 import AudioToolbox
+import Combine
 
 struct AudioOutputDevice: Identifiable, Hashable {
     let id: AudioDeviceID
@@ -116,7 +117,7 @@ struct DuckSettings: Codable, Equatable {
 
 /// Per-tick audio mixer: pulls each input's ring buffer, applies trim / balance / fader / audio-follow-video,
 /// routes to Master and buses A–G, keeps peak meters, ISO feeds for MultiCorder and the headphone mix.
-final class AudioMixer {
+final class AudioMixer: ObservableObject {
     static let rate = 48000
     static let busCount = 8
     /// Screen-capture, HDMI and aggregate CoreAudio devices can request 32768+ frames in one render
@@ -129,7 +130,9 @@ final class AudioMixer {
     private var isoBufs: [UUID: UnsafeMutablePointer<Float>] = [:]   // render thread
     private let liveInputCushion = 5760 // 120 ms for capture/HDMI/aggregate clock jitter
     private let fileInputCushion = 2400 // 50 ms; file audio feeder schedules 100 ms ahead
-    private let maxLatency = 14400   // cap excess source latency at 300 ms; trim back to the stable 120 ms cushion
+    private let maxLatency = 14400   // files: cap excess source latency at 300 ms; trim back to the cushion
+    private let liveSkipExcess = 24000   // live: hard-skip only beyond 500 ms over target (gross error, not drift)
+    private let liveRetargetStep = 2400  // live: delay changes > 50 ms re-prime / trim instead of slow resampling
 
     private let lock = NSLock()
     private var meters: [UUID: (Float, Float)] = [:]
@@ -154,24 +157,55 @@ final class AudioMixer {
     // diagnostics (render thread): seconds spent in the last mix call
     var diagDSP: Double = 0, diagFrames = 0
     var diagIn: Double = 0, diagBus: Double = 0, diagLockWait: Double = 0
-    private var monitorEngine: AVAudioEngine?
+    /// Headphone monitor requested and not given up on (it may be waiting for its device to return).
     private(set) var monitoring = false
-    private var monitorDeviceUID = ""
-    private var monitorFirstChannel = 0
+    private var monitorDeviceUID = ""      // outputQueue
+    private var monitorFirstChannel = 0    // outputQueue
     private(set) var monitorError: String?
-    private let monitorScratch = UnsafeMutablePointer<Float>.allocate(capacity: AudioMixer.maxOutputCallbackFrames * 2)
     private let routeRings = (0..<8).map { _ in RealtimeAudioRing(seconds: 3) }
-    private var routeEngines: [Int: AVAudioEngine] = [:]
-    private var routeActive = [Bool](repeating: false, count: 8)
+    private var routeActive = [Bool](repeating: false, count: 8)   // lock; render thread writes these rings
+
+    // Output devices (8 bus routes + headphone monitor). AVAudioEngine stops for good on a device
+    // unplug or sample-rate change, so every engine is supervised: configuration-change notifications
+    // and CoreAudio device-list changes rebuild it, and outputs whose device is gone wait (with a
+    // visible status) and come back by themselves. All engine work runs on `outputQueue`.
+    private final class OutputSlot {
+        let name: String
+        let ring: RealtimeAudioRing
+        var route = AudioOutputRoute()   // device + channel pair to play on
+        var wanted = false               // user has this output on
+        var engine: AVAudioEngine?
+        var observer: NSObjectProtocol?
+        var generation = 0               // bumps on every stop; stale notifications are ignored
+        var debounce = 0
+        var waiting = false              // wanted but not running; retried on device changes / poll
+        var status: String?
+        var lastError: String?           // reason of the last failed start
+        init(name: String, ring: RealtimeAudioRing) { self.name = name; self.ring = ring }
+    }
+    private static let monitorSlot = 8
+    private static let slotNames = ["Master", "Bus A", "Bus B", "Bus C", "Bus D", "Bus E", "Bus F", "Bus G", "Headphones"]
+    private let outputQueue = DispatchQueue(label: "HongMix.AudioOutputs", qos: .userInitiated)
+    private let slots: [OutputSlot]
+    private var slotWanted = [Bool](repeating: false, count: 9)          // lock (UI snapshot)
+    private var slotStatus = [String?](repeating: nil, count: 9)         // lock (UI snapshot)
+    private var deviceListener: AudioObjectPropertyListenerBlock?        // outputQueue
+    private var deviceDebounce = 0                                       // outputQueue
+    private var retryTimer: DispatchSourceTimer?                         // outputQueue
+    /// Outputs that stopped and are waiting to recover ("Bus A: …"), empty when all are fine. Main thread.
+    @Published private(set) var outputStatus = ""
 
     /// Snapshot of the final realtime rings feeding CoreAudio devices, distinct from each
-    /// input's PCM buffer and from the software mixer underflow counters.
+    /// input's PCM buffer and from the software mixer underflow counters. Outputs waiting for their
+    /// device are listed too, with the reason after the name.
     var outputRingStats: [AudioOutputRingStats] {
         var rows: [AudioOutputRingStats] = []
-        if monitoring { rows.append(Self.outputStats(name: "Headphones", ring: monitorRing)) }
-        lock.lock(); let active = routeActive; lock.unlock()
-        let names = ["Master", "Bus A", "Bus B", "Bus C", "Bus D", "Bus E", "Bus F", "Bus G"]
-        for i in active.indices where active[i] { rows.append(Self.outputStats(name: names[i], ring: routeRings[i])) }
+        lock.lock(); let wanted = slotWanted; let status = slotStatus; lock.unlock()
+        for i in [AudioMixer.monitorSlot] + Array(0..<8) where wanted[i] {
+            var name = AudioMixer.slotNames[i]
+            if let s = status[i] { name += " — " + s }
+            rows.append(Self.outputStats(name: name, ring: slots[i].ring))
+        }
         return rows
     }
 
@@ -194,14 +228,27 @@ final class AudioMixer {
         }
         tmpBuf = UnsafeMutablePointer<Float>.allocate(capacity: maxFrames * 2)
         soloBuf = UnsafeMutablePointer<Float>.allocate(capacity: maxFrames * 2)
+        var outs: [OutputSlot] = []
+        for i in 0..<8 { outs.append(OutputSlot(name: AudioMixer.slotNames[i], ring: routeRings[i])) }
+        outs.append(OutputSlot(name: AudioMixer.slotNames[AudioMixer.monitorSlot], ring: monitorRing))
+        slots = outs
     }
 
     deinit {
+        // No outputQueue.sync here: the last reference may be dropped on that queue.
+        retryTimer?.cancel()
+        if let block = deviceListener {
+            var address = Self.devicesAddress
+            AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, outputQueue, block)
+        }
+        for slot in slots {
+            if let o = slot.observer { NotificationCenter.default.removeObserver(o) }
+            slot.engine?.stop()
+        }
         busBufs.forEach { $0.deallocate() }
         isoBufs.values.forEach { $0.deallocate() }
         tmpBuf.deallocate()
         soloBuf.deallocate()
-        monitorScratch.deallocate()
     }
 
     // MARK: Settings (any thread)
@@ -233,24 +280,36 @@ final class AudioMixer {
     }
 
     func setMonitoringDevice(uid: String, firstChannel: Int = 0) {
-        guard uid != monitorDeviceUID || firstChannel != monitorFirstChannel else { return }
-        monitorDeviceUID = uid
-        monitorFirstChannel = firstChannel
-        if monitoring {
-            setMonitoring(false)
-            setMonitoring(true)
+        outputQueue.sync {
+            guard uid != monitorDeviceUID || firstChannel != monitorFirstChannel else { return }
+            monitorDeviceUID = uid
+            monitorFirstChannel = firstChannel
+            let slot = slots[Self.monitorSlot]
+            slot.route = AudioOutputRoute(enabled: true, deviceUID: uid, firstChannel: firstChannel)
+            if slot.wanted { startSlot(Self.monitorSlot) }
+            publishOutputStatus()
         }
     }
 
     func setOutputRoutes(_ routes: [AudioOutputRoute]) {
-        for engine in routeEngines.values { engine.stop() }
-        routeEngines.removeAll()
-        lock.lock(); routeActive = [Bool](repeating: false, count: 8); lock.unlock()
-        for bus in 0..<min(8, routes.count) where routes[bus].enabled {
-            if let engine = makeOutputEngine(ring: routeRings[bus], route: routes[bus]) {
-                routeEngines[bus] = engine
-                lock.lock(); routeActive[bus] = true; lock.unlock()
+        outputQueue.sync {
+            for bus in 0..<8 {
+                let slot = slots[bus]
+                if bus < routes.count && routes[bus].enabled {
+                    // This runs for every route edit (including the headphone row); leave an
+                    // unchanged, running route alone — a restart is an audible gap.
+                    if slot.wanted && slot.route == routes[bus] && slot.engine?.isRunning == true { continue }
+                    slot.wanted = true
+                    slot.route = routes[bus]
+                    startSlot(bus)
+                } else if slot.wanted || slot.engine != nil {
+                    slot.wanted = false
+                    stopSlot(bus)
+                    slot.waiting = false
+                    slot.status = nil
+                }
             }
+            publishOutputStatus()
         }
     }
 
@@ -328,13 +387,16 @@ final class AudioMixer {
                 continue
             }
             if params.solo { anySolo = true }
-            // When audio follows video and this source is fully off-air, consume its
-            // real-time PCM ring without copying samples or running per-sample DSP.
-            // Keep the first block after a live fade in the normal path so the gain
-            // ramp reaches zero cleanly; ISO recording and transition pre-roll also
+            // Live sources run on their own clock and are read through the drift-compensating
+            // resampler; transport-driven inputs (files, replay) keep the plain read.
+            let live = Self.isLiveClocked(input.kind)
+            // When audio follows video and this source is fully off-air, skip the
+            // per-sample DSP. Keep the first block after a live fade in the normal path so the
+            // gain ramp reaches zero cleanly; ISO recording and transition pre-roll also
             // retain their existing full processing paths.
-            if params.followsVideo, (weights[input.id] ?? 0) <= 0,
-               input.mixLastGains[0] == 0, !isoIDs.contains(input.id), !input.audioMixHeld {
+            let offAir = params.followsVideo && (weights[input.id] ?? 0) <= 0
+                && input.mixLastGains[0] == 0 && !isoIDs.contains(input.id) && !input.audioMixHeld
+            if offAir && !live {
                 // Off air: no DSP, but still show the input level (dimmed in the UI) so the operator
                 // can see the source has sound before taking it.
                 let got = ring.read(into: tmpBuf, frames: n)
@@ -359,31 +421,76 @@ final class AudioMixer {
                 // repeated short reads while the decoder refills the buffer.
                 input.mixBufferGeneration = sourceBuffer.generation
                 input.mixPrimed = false
+                // A reset source may come back on a different clock: relearn the rate.
+                if live { ring.resetDrift(keepRate: false) }
             }
             var avail = sourceBuffer.available
             let delay = max(0, min(params.fx.delayMs, 1000)) * 48   // audio delay = extra buffering
+            let fillTarget = cushion + delay
+            if live {
+                // The resampler corrects only ±0.5 %, far too slow for a delay-knob change:
+                // re-prime to build up extra delay, drop the excess when it shrinks.
+                let previous = ring.driftTarget
+                ring.driftTarget = fillTarget
+                if input.mixPrimed && abs(fillTarget - previous) > liveRetargetStep {
+                    if fillTarget > previous {
+                        input.mixPrimed = false
+                    } else if avail > n + fillTarget {
+                        ring.skip(frames: avail - n - fillTarget)
+                        ring.resetDrift(keepRate: true)
+                        avail = ring.available
+                    }
+                }
+            }
             if !input.mixPrimed {
-                if avail >= n + cushion + delay {
+                if avail >= n + fillTarget {
                     input.mixPrimed = true
                     input.recordMixPrime()
+                    if live { ring.resetDrift(keepRate: true) }
                 } else {
                     meterScratch[input.id] = (0, 0)
                     if let iso = isoBufs[input.id] { iso.initialize(repeating: 0, count: n * 2) }
+                    if offAir { flagsScratch[input.id] = 0 }
                     continue
                 }
             }
-            if avail > n + maxLatency + delay {
-                ring.skip(frames: avail - n - cushion - delay)
-                avail = ring.available
+            let got: Int
+            if live {
+                // Last-resort safety net only (source burst / stall recovery): normal drift never
+                // gets here because the resampler holds the fill at `fillTarget`.
+                if avail > n + fillTarget + liveSkipExcess {
+                    ring.skip(frames: avail - n - fillTarget)
+                    ring.resetDrift(keepRate: true)
+                }
+                got = ring.readAdaptive(into: tmpBuf, frames: n, target: fillTarget)
+            } else {
+                if avail > n + maxLatency + delay {
+                    ring.skip(frames: avail - n - cushion - delay)
+                    avail = ring.available
+                }
+                got = ring.read(into: tmpBuf, frames: n)
             }
-            let got = ring.read(into: tmpBuf, frames: n)
             if got < n {
                 (tmpBuf + got * 2).initialize(repeating: 0, count: (n - got) * 2)
-                // Keep the stream primed after a brief underrun. The current block
-                // conceals only the missing samples; requiring another 120 ms of
-                // queued audio here turns a one-block scheduling hiccup into a much
-                // longer audible dropout.
                 input.recordMixUnderflow()
+                // Files: keep the stream primed after a brief underrun; requiring another
+                // cushion turns a one-block decoder hiccup into a longer dropout.
+                // Live: the drift-controlled cushion was fully drained, so the source really
+                // stalled — re-prime to the cushion instead of streaming zeros (the resampler
+                // faded the tail out and fades the restart in).
+                if live { input.mixPrimed = false }
+            }
+            if offAir {
+                // Live source off air: consumed at the controlled rate (not drained to zero) so the
+                // cushion and lip-sync are intact when it is cut back to air. Meter only, no DSP.
+                if got > 0 {
+                    let pk = peaks(tmpBuf, got)
+                    meterScratch[input.id] = (pk.0 * params.gain, pk.1 * params.gain)
+                } else {
+                    meterScratch[input.id] = (0, 0)
+                }
+                flagsScratch[input.id] = 0
+                continue
             }
             // channel mode, noise gate, EQ, compressor (before gain, as in the Audio Settings order)
             let td = CACurrentMediaTime()
@@ -499,6 +606,15 @@ final class AudioMixer {
         return n
     }
 
+    /// Sources clocked by their own hardware/network sender (drift against the mixer's 48 kHz).
+    /// Files and replay are paced by the engine itself and keep the plain read path.
+    private static func isLiveClocked(_ kind: InputKind) -> Bool {
+        switch kind {
+        case .camera, .stream, .ndi, .decklink, .screen, .browser, .audio: return true
+        case .media, .replay, .color, .image, .title, .photos, .pdfSlides, .virtualSet: return false
+        }
+    }
+
     /// Broadcast-style meter ballistics. The old fixed `peak or old * 0.85` rule decayed by roughly
     /// 85 dB per second at 60 fps, making speech meters chatter even though the audio itself was fine.
     /// These coefficients are derived from the actual audio block duration, so the visual response is
@@ -547,102 +663,198 @@ final class AudioMixer {
     // MARK: Headphone monitoring (selectable CoreAudio output device)
 
     func setMonitoring(_ on: Bool) {
-        if on == monitoring { return }
-        if on {
-            monitorRing.clear()
-            let engine = AVAudioEngine()
-            guard let fmt = AVAudioFormat(standardFormatWithSampleRate: Double(AudioMixer.rate), channels: 2) else { return }
-            if !monitorDeviceUID.isEmpty {
-                guard let device = CoreAudioOutputs.devices().first(where: { $0.uid == monitorDeviceUID }),
-                      let unit = engine.outputNode.audioUnit else {
-                    monitorError = "선택한 오디오 출력 장치를 찾을 수 없습니다."
-                    return
+        outputQueue.sync {
+            let slot = slots[Self.monitorSlot]
+            if on == slot.wanted { return }
+            if on {
+                slot.route = AudioOutputRoute(enabled: true, deviceUID: monitorDeviceUID, firstChannel: monitorFirstChannel)
+                slot.wanted = true
+                if !startSlot(Self.monitorSlot) {
+                    // Switching the monitor on fails right away (the UI turns it back off) rather than
+                    // waiting; only a monitor that was already playing waits for its device.
+                    slot.wanted = false
+                    slot.waiting = false
+                    slot.status = slot.lastError
                 }
-                var deviceID = device.id
-                let result = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
-                                                  kAudioUnitScope_Global, 0, &deviceID,
-                                                  UInt32(MemoryLayout<AudioDeviceID>.size))
-                guard result == noErr else {
-                    monitorError = "오디오 출력 장치를 열 수 없습니다 (\(result))."
-                    return
-                }
-                let count = max(2, device.channels)
-                var map = [Int32](repeating: -1, count: count)
-                let first = max(0, min(count - 1, monitorFirstChannel))
-                map[first] = 0
-                if first + 1 < count { map[first + 1] = 1 }
-                map.withUnsafeBytes { bytes in
-                    _ = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_ChannelMap, kAudioUnitScope_Global, 0,
-                                             bytes.baseAddress, UInt32(bytes.count))
-                }
+            } else {
+                slot.wanted = false
+                stopSlot(Self.monitorSlot)
+                slot.waiting = false
+                slot.status = nil
             }
-            let ring = monitorRing
-            let scratch = monitorScratch
-            engine.outputNode.auAudioUnit.maximumFramesToRender = AUAudioFrameCount(AudioMixer.maxOutputCallbackFrames)
-            final class PrimedFlag { var value = false }
-            let primed = PrimedFlag()
-            let node = AVAudioSourceNode(format: fmt) { _, _, frameCount, ablPtr -> OSStatus in
-                let abl = UnsafeMutableAudioBufferListPointer(ablPtr)
-                let n = min(Int(frameCount), AudioMixer.maxOutputCallbackFrames)
-                let avail = ring.available
-                // CoreAudio commonly asks for 4096–8192 frames on aggregate/HDMI devices. Priming
-                // with a fixed 2400 frames made every large callback drain the ring, producing the
-                // repeating 0.3–0.5 s gaps seen on otherwise continuous playlist audio.
-                // Keep at least ~50 ms queued, scaling up for large device callbacks. The
-                // ring is 3 s (144k frames), so never require more than it can hold.
-                let cushion = Self.outputCushion(for: n)
-                if !primed.value && avail >= n + cushion { primed.value = true }
-                if avail > n + max(9600, cushion * 3) { ring.skip(frames: avail - n - cushion) }
-                let wasPrimed = primed.value
-                let got = wasPrimed ? ring.read(into: scratch, frames: n) : 0
-                if !wasPrimed { ring.notePrimingSilence(frames: n) }
-                // 1.3.32: a short underrun used to drop the monitor back into the startup-prime
-                // state, muting it for another ≥50 ms (up to 250 ms on large device callbacks)
-                // until the cushion refilled — the audible "audio frame drops" on headphones/monitor.
-                // Same policy as the main output: conceal only the missing samples and keep going.
-                guard abl.count >= 2,
-                      let l = abl[0].mData?.assumingMemoryBound(to: Float.self),
-                      let r = abl[1].mData?.assumingMemoryBound(to: Float.self) else { return noErr }
-                for i in 0..<Int(frameCount) {
-                    if i < got {
-                        l[i] = scratch[i * 2]
-                        r[i] = scratch[i * 2 + 1]
-                    } else {
-                        l[i] = 0
-                        r[i] = 0
-                    }
-                }
-                return noErr
-            }
-            engine.attach(node)
-            engine.connect(node, to: engine.mainMixerNode, format: fmt)
-            do {
-                try engine.start()
-                monitorEngine = engine
-                monitoring = true
-                monitorError = nil
-            } catch {
-                monitoring = false
-                monitorError = error.localizedDescription
-            }
-        } else {
-            monitoring = false
-            monitorEngine?.stop()
-            monitorEngine = nil
+            publishOutputStatus()
         }
     }
 
+    // MARK: Output supervision (outputQueue)
 
-    private func makeOutputEngine(ring: RealtimeAudioRing, route: AudioOutputRoute) -> AVAudioEngine? {
+    private static var devicesAddress: AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices,
+                                   mScope: kAudioObjectPropertyScopeGlobal,
+                                   mElement: kAudioObjectPropertyElementMain)
+    }
+
+    private func setRouteActive(_ i: Int, _ active: Bool) {
+        guard i < 8 else { return }
+        lock.lock(); routeActive[i] = active; lock.unlock()
+    }
+
+    /// (Re)builds the engine of one output. On failure the slot waits and is retried on device
+    /// changes and every 2 s. Returns whether the output is playing.
+    @discardableResult
+    private func startSlot(_ i: Int) -> Bool {
+        let slot = slots[i]
+        stopSlot(i)
+        installDeviceListener()
+        switch makeOutputEngine(ring: slot.ring, route: slot.route) {
+        case .success(let engine):
+            slot.engine = engine
+            let generation = slot.generation
+            slot.observer = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange,
+                                                                   object: engine, queue: nil) { [weak self] _ in
+                self?.outputQueue.async { self?.outputConfigurationChanged(i, generation: generation) }
+            }
+            slot.waiting = false
+            slot.status = nil
+            setRouteActive(i, true)
+            return true
+        case .failure(let failure):
+            slot.lastError = failure.message
+            slot.waiting = true
+            slot.status = Lf("%@ 장치가 돌아오면 자동으로 다시 연결합니다.", failure.message)
+            startRetryTimer()
+            return false
+        }
+    }
+
+    private func stopSlot(_ i: Int) {
+        let slot = slots[i]
+        slot.generation &+= 1
+        if let o = slot.observer { NotificationCenter.default.removeObserver(o) }
+        slot.observer = nil
+        setRouteActive(i, false)   // the mixer stops feeding this ring first
+        slot.engine?.stop()
+        slot.engine = nil
+    }
+
+    /// AVAudioEngineConfigurationChange: device unplugged, sample rate / channel layout changed.
+    /// Debounced 0.5 s because a replug or rate change posts a burst of notifications.
+    private func outputConfigurationChanged(_ i: Int, generation: Int) {
+        let slot = slots[i]
+        guard slot.wanted, slot.generation == generation else { return }
+        slot.debounce &+= 1
+        let token = slot.debounce
+        outputQueue.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self, slot.debounce == token, slot.wanted, slot.generation == generation else { return }
+            // Spurious notification (e.g. posted while the device was being assigned): leave a running
+            // engine on a present device alone, otherwise rebuild it on the new configuration.
+            if slot.engine?.isRunning == true, self.deviceIsPresent(slot.route.deviceUID) { return }
+            self.startSlot(i)
+            self.publishOutputStatus()
+        }
+    }
+
+    private func deviceIsPresent(_ uid: String) -> Bool {
+        uid.isEmpty || CoreAudioOutputs.devices().contains { $0.uid == uid }
+    }
+
+    /// CoreAudio device list changes (plug/unplug): notices a vanished device even when the engine
+    /// posts no configuration change, and brings waiting outputs back as soon as their device returns.
+    private func installDeviceListener() {
+        guard deviceListener == nil else { return }
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            guard let self else { return }
+            self.deviceDebounce &+= 1
+            let token = self.deviceDebounce
+            self.outputQueue.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self, self.deviceDebounce == token else { return }
+                self.checkOutputs()
+            }
+        }
+        var address = Self.devicesAddress
+        if AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, outputQueue, block) == noErr {
+            deviceListener = block
+        }
+    }
+
+    /// Poll every 2 s while any output waits (covers devices that come back busy or late).
+    private func startRetryTimer() {
+        guard retryTimer == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: outputQueue)
+        timer.schedule(deadline: .now() + 2, repeating: 2)
+        timer.setEventHandler { [weak self] in self?.checkOutputs() }
+        timer.resume()
+        retryTimer = timer
+    }
+
+    /// Restarts outputs whose device vanished or whose engine stopped; retries waiting ones whose
+    /// device is present again.
+    private func checkOutputs() {
+        let present = Set(CoreAudioOutputs.devices().map(\.uid))
+        for i in slots.indices where slots[i].wanted {
+            let slot = slots[i]
+            let deviceHere = slot.route.deviceUID.isEmpty || present.contains(slot.route.deviceUID)
+            if slot.waiting {
+                if deviceHere { startSlot(i) }
+            } else if !deviceHere || slot.engine?.isRunning != true {
+                startSlot(i)   // marks it waiting, with a status, if the device is gone
+            }
+        }
+        if !slots.contains(where: { $0.wanted && $0.waiting }) {
+            retryTimer?.cancel()
+            retryTimer = nil
+        }
+        publishOutputStatus()
+    }
+
+    private func publishOutputStatus() {
+        let monitor = slots[Self.monitorSlot]
+        monitoring = monitor.wanted
+        monitorError = monitor.status
+        lock.lock()
+        for i in slots.indices {
+            slotWanted[i] = slots[i].wanted
+            slotStatus[i] = slots[i].wanted ? slots[i].status : nil
+        }
+        lock.unlock()
+        var lines: [String] = []
+        for i in slots.indices where slots[i].wanted {
+            if let s = slots[i].status { lines.append("\(Self.slotNames[i]): \(s)") }
+        }
+        let summary = lines.joined(separator: " · ")
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.outputStatus != summary else { return }
+            self.outputStatus = summary
+        }
+    }
+
+    private enum OutputStartError: Error {
+        case deviceMissing
+        case openFailed(OSStatus)
+        case startFailed(String)
+
+        var message: String {
+            switch self {
+            case .deviceMissing: return L("선택한 오디오 출력 장치를 찾을 수 없습니다.")
+            case .openFailed(let code): return Lf("오디오 출력 장치를 열 수 없습니다 (%@).", "\(code)")
+            case .startFailed(let reason): return Lf("오디오 출력을 시작할 수 없습니다: %@", reason)
+            }
+        }
+    }
+
+    private func makeOutputEngine(ring: RealtimeAudioRing, route: AudioOutputRoute) -> Result<AVAudioEngine, OutputStartError> {
         ring.clear()
         let engine = AVAudioEngine()
-        guard let fmt = AVAudioFormat(standardFormatWithSampleRate: Double(AudioMixer.rate), channels: 2) else { return nil }
+        guard let fmt = AVAudioFormat(standardFormatWithSampleRate: Double(AudioMixer.rate), channels: 2) else {
+            return .failure(.startFailed("format"))
+        }
         if !route.deviceUID.isEmpty {
             guard let device = CoreAudioOutputs.devices().first(where: { $0.uid == route.deviceUID }),
-                  let unit = engine.outputNode.audioUnit else { return nil }
+                  let unit = engine.outputNode.audioUnit else { return .failure(.deviceMissing) }
             var deviceID = device.id
-            guard AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
-                                       &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size)) == noErr else { return nil }
+            let result = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                                              &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size))
+            guard result == noErr else { return .failure(.openFailed(result)) }
             let count = max(2, device.channels)
             var map = [Int32](repeating: -1, count: count)
             let first = max(0, min(count - 1, route.firstChannel))
@@ -666,6 +878,8 @@ final class AudioMixer {
             let abl = UnsafeMutableAudioBufferListPointer(ablPtr)
             let n = min(Int(frameCount), AudioMixer.maxOutputCallbackFrames)
             let avail = ring.available
+            // CoreAudio commonly asks for 4096–8192 frames on aggregate/HDMI devices: keep at least
+            // ~50 ms queued, scaling up for large device callbacks (see outputCushion).
             let cushion = Self.outputCushion(for: n)
             if !state.primed && avail >= n + cushion { state.primed = true }
             if avail > n + max(9600, cushion * 3) { ring.skip(frames: avail - n - cushion) }
@@ -686,7 +900,14 @@ final class AudioMixer {
         }
         engine.attach(node)
         engine.connect(node, to: engine.mainMixerNode, format: fmt)
-        do { try engine.start(); return engine } catch { scratch.deallocate(); return nil }
+        // `scratch` is owned by `state` (freed in its deinit when the engine/node go away) — freeing it here
+        // as well was a double free → crash when an output route's device was busy or missing.
+        do {
+            try engine.start()
+            return .success(engine)
+        } catch {
+            return .failure(.startFailed(error.localizedDescription))
+        }
     }
 
     /// CoreAudio callback sizes vary by device and aggregate configuration. A fixed
