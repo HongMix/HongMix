@@ -14,11 +14,11 @@
 
 새 영상의 기본 루프 설정(꺼짐):
 
-![새 영상 기본 루프 설정](https://raw.githubusercontent.com/HongMix/HongMix/main/docs/screenshots/2.1.0/2.1.0-loop-default-ko.png)
+![새 영상 기본 루프 설정](https://github.com/HongMix/HongMix/releases/download/v2.1.0/2.1.0-loop-default-ko.png)
 
 화면 맞춤·꽉 채우기·늘리기와 가로/세로 개별 줌:
 
-![화면 맞춤과 가로 세로 줌](https://raw.githubusercontent.com/HongMix/HongMix/main/docs/screenshots/2.1.0/2.1.0-fit-fill-axis-zoom-ko.png)
+![화면 맞춤과 가로 세로 줌](https://github.com/HongMix/HongMix/releases/download/v2.1.0/2.1.0-fit-fill-axis-zoom-ko.png)
 
 처음 실행이 막히면 **시스템 설정 › 개인정보 보호 및 보안 › 그래도 열기**를 누르세요. [한국어 전체 내용](https://github.com/HongMix/HongMix/blob/main/docs/RELEASE-NOTES-2.1.0.ko.md)
 
@@ -38,10 +38,10 @@ Verified: loop defaults, fit modes, X/Y zoom, quit paths, Metal build and the SR
 
 Default loop setting for newly added video inputs (off):
 
-![Default loop setting for new videos](https://raw.githubusercontent.com/HongMix/HongMix/main/docs/screenshots/2.1.0/2.1.0-loop-default-en.png)
+![Default loop setting for new videos](https://github.com/HongMix/HongMix/releases/download/v2.1.0/2.1.0-loop-default-en.png)
 
 Fit, Fill, Stretch and separate horizontal/vertical zoom:
 
-![Fit fill and axis zoom controls](https://raw.githubusercontent.com/HongMix/HongMix/main/docs/screenshots/2.1.0/2.1.0-fit-fill-axis-zoom-en.png)
+![Fit fill and axis zoom controls](https://github.com/HongMix/HongMix/releases/download/v2.1.0/2.1.0-fit-fill-axis-zoom-en.png)
 
 If macOS blocks the first launch, use **System Settings › Privacy & Security › Open Anyway**. [Full English notes](https://github.com/HongMix/HongMix/blob/main/docs/RELEASE-NOTES-2.1.0.md)
