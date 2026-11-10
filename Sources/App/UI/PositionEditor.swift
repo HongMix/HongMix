@@ -22,8 +22,12 @@ struct EditableLayer: Identifiable {
         let a = input.adjust
         let s = sourceSize(out)
         let sa = s.width / max(1, s.height), da = out.width / max(1, out.height)
-        var w: CGFloat = sa > da ? 1 : sa / da
-        var h: CGFloat = sa > da ? da / sa : 1
+        var w: CGFloat, h: CGFloat
+        switch a.fitMode {
+        case 2: w = 1; h = 1
+        case 1: w = sa > da ? sa / da : 1; h = sa > da ? 1 : da / sa
+        default: w = sa > da ? 1 : sa / da; h = sa > da ? da / sa : 1
+        }
         var x = (1 - w) / 2, y = (1 - h) / 2
         x += CGFloat(a.cropL) * w; y += CGFloat(a.cropT) * h
         w *= CGFloat(max(0, 1 - a.cropL - a.cropR)); h *= CGFloat(max(0, 1 - a.cropT - a.cropB))
@@ -34,10 +38,10 @@ struct EditableLayer: Identifiable {
     func rect(out: CGSize) -> CGRect {
         let a = input.adjust
         let b = baseRect(out: out)
-        let z = CGFloat(a.zoom * extraZoom)
+        let zx = CGFloat(a.zoom * a.zoomX * extraZoom), zy = CGFloat(a.zoom * a.zoomY * extraZoom)
         let px = CGFloat(a.panX + extraPanX), py = CGFloat(a.panY + extraPanY)
-        return CGRect(x: (b.minX - 0.5) * z + 0.5 + px / 2, y: (b.minY - 0.5) * z + 0.5 - py / 2,
-                      width: b.width * z, height: b.height * z)
+        return CGRect(x: (b.minX - 0.5) * zx + 0.5 + px / 2, y: (b.minY - 0.5) * zy + 0.5 - py / 2,
+                      width: b.width * zx, height: b.height * zy)
     }
 }
 

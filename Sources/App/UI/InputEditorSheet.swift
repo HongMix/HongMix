@@ -118,7 +118,8 @@ struct InputEditorSheet: View {
 
     init(kind: InputKind, editing: InputSource?) {
         self.editing = editing
-        let c = editing?.currentConfig() ?? InputConfig(kind: kind, name: InputEditorSheet.defaultName(kind))
+        var c = editing?.currentConfig() ?? InputConfig(kind: kind, name: InputEditorSheet.defaultName(kind))
+        if editing == nil { c.loop = InputConfig.newVideoLoop }
         _cfg = ViewState(initialValue: c)
         _category = ViewState(initialValue: c.playlist.count > 1 ? .list : Category.of(kind))
         _ndiMode = ViewState(initialValue: kind == .screen ? 1 : 0)

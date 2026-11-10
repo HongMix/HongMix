@@ -1573,5 +1573,19 @@
  "인식 중 (새 엔진 · 맥 안에서 처리)": "Recognising (new engine · on this Mac)",
  "새 엔진 오류 — 기존 엔진으로 전환: %@": "New engine error — switched to the classic engine: %@",
  "새 엔진을 시작하지 못해 기존 엔진으로 전환: %@": "Couldn't start the new engine — switched to the classic engine: %@",
- "음성 인식 모델 내려받는 중…": "Downloading the speech model…"
+ "음성 인식 모델 내려받는 중…": "Downloading the speech model…",
+ "새 영상 입력 기본 루프": "Loop new video inputs",
+ "새로 추가하는 영상(Add Input · Finder 드래그 · API)에 적용됩니다. 이미 있는 입력은 각 타일의 Loop 버튼으로 바꿉니다.": "Applies to newly added videos (Add Input · Finder drop · API). Change existing inputs with the Loop button on each tile.",
+ "화면 맞춤": "Fit",
+ "꽉 채우기 (잘림)": "Fill (crop)",
+ "늘리기": "Stretch",
+ "맞추기: 비율 유지·검은 띠 · 꽉 채우기: 비율 유지·넘치는 부분 잘림 · 늘리기: 비율 무시하고 화면 전체 (LED 와이드 등)": "Fit: keep aspect, black bars · Fill: keep aspect, crop the overflow · Stretch: ignore aspect, fill the whole frame (wide LED walls etc.)",
+ "가로·세로 줌 따로": "Separate horizontal / vertical zoom",
+ "가로 줌": "Zoom X",
+ "세로 줌": "Zoom Y",
+ "맥 잠자기": "Mac sleep",
+ "⚠︎ 맥이 잠자기에 들어갔다 깨어났습니다 (덮개 닫힘) — %@초 동안 방송·녹화가 멈췄습니다": "⚠︎ The Mac went to sleep and woke up (lid closed) — programme and recording stopped for %@ s",
+ "⚠︎ 맥이 잠자기에 들어갔다 깨어났습니다 — %@초 동안 방송·녹화가 멈췄습니다": "⚠︎ The Mac went to sleep and woke up — programme and recording stopped for %@ s",
+ "송출 연결 안 됨 — 다시 연결하는 중 (설정에서 상태 확인)": "Stream not connected — reconnecting (see its settings for the status)",
+ "HongMix 종료": "Quit HongMix"
 }

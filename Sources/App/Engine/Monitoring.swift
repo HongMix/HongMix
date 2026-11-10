@@ -73,7 +73,7 @@ final class SRTMonitor: ObservableObject {
 /// When something goes wrong on air (signal loss, frame drops, silence, SRT loss, output error) this keeps a
 /// record with the Output pictures from ~10 s before to ~10 s after, in ~/Movies/HongMix/Incidents.
 final class Blackbox: ObservableObject {
-    enum Kind: String { case signalLost, frameDrop, silence, srtLoss, outputError }
+    enum Kind: String { case signalLost, frameDrop, silence, srtLoss, outputError, systemSleep }
     struct Incident: Identifiable {
         let id = UUID()
         let time: Date
@@ -97,6 +97,7 @@ final class Blackbox: ObservableObject {
         case .silence: return L("무음")
         case .srtLoss: return L("SRT 손실")
         case .outputError: return L("출력 오류")
+        case .systemSleep: return L("맥 잠자기")
         }
     }
 

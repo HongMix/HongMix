@@ -57,11 +57,17 @@ extension KeyedDecodingContainer {
 struct VideoAdjust: Codable, Equatable {
     /// Nothing that changes where/how the picture sits in the frame (Preview can show the raw input).
     var isIdentityPlacement: Bool {
-        zoom == 1 && panX == 0 && panY == 0 && cropL == 0 && cropT == 0 && cropR == 0 && cropB == 0 && alpha >= 1
+        zoom == 1 && zoomX == 1 && zoomY == 1 && fitMode == 0
+            && panX == 0 && panY == 0 && cropL == 0 && cropT == 0 && cropR == 0 && cropB == 0 && alpha >= 1
             && !mirror && !keyOn
     }
 
     var zoom: Float = 1
+    /// Extra horizontal / vertical scale on top of `zoom` (1 = proportional). vMix SetZoomX / SetZoomY.
+    var zoomX: Float = 1
+    var zoomY: Float = 1
+    /// 0 = fit (letterbox), 1 = fill (crop to fill), 2 = stretch (ignore aspect)
+    var fitMode: Int = 0
     var panX: Float = 0
     var panY: Float = 0
     var cropL: Float = 0
@@ -96,6 +102,9 @@ struct VideoAdjust: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = VideoAdjust()
         zoom = c.value(.zoom, d.zoom)
+        zoomX = c.value(.zoomX, d.zoomX)
+        zoomY = c.value(.zoomY, d.zoomY)
+        fitMode = c.value(.fitMode, d.fitMode)
         panX = c.value(.panX, d.panX)
         panY = c.value(.panY, d.panY)
         cropL = c.value(.cropL, d.cropL)
@@ -145,6 +154,9 @@ struct VideoAdjust: Codable, Equatable {
         p.sharpen = sharpen ? 1 : 0
         p.hasCC = hasColorCorrection ? 1 : 0
         p.zoom = zoom
+        p.zoomX = zoomX
+        p.zoomY = zoomY
+        p.fitMode = Int32(fitMode)
         p.panX = panX
         p.panY = panY
         p.cropL = cropL
@@ -312,6 +324,11 @@ enum LayerLayout: String, CaseIterable, Identifiable {
 
 /// Everything needed to recreate an input (saved in project files).
 struct InputConfig: Codable, Identifiable, Equatable {
+    /// Settings › General › "Loop new video inputs" (default off). Used when an input is *created*
+    /// (Add Input, Finder drop, API AddInput) — loading a project keeps each input's saved value.
+    static let newVideoLoopKey = "newVideoLoop"
+    static var newVideoLoop: Bool { UserDefaults.standard.bool(forKey: newVideoLoopKey) }
+
     var id = UUID()
     var kind: InputKind
     var name: String

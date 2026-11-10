@@ -43,6 +43,9 @@ struct LayerParams {
     var keySoft: Float = 0.08
     var keySpill: Float = 0.5
     var yuv: Int32 = 0      // 0 BGRA, 1 NV12 709 video, 2 NV12 601 video, 3 709 full, 4 601 full
+    var zoomX: Float = 1
+    var zoomY: Float = 1
+    var fitMode: Int32 = 0  // 0 fit, 1 fill, 2 stretch
 }
 
 /// Must match `MixParams` in Mixer.metal.

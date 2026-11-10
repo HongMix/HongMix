@@ -81,7 +81,8 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `AutoPlayOn/Off, AutoPauseOn/Off, AutoRestartOn/Off` | Input | Output에 들어가거나 빠질 때의 자동 동작을 정합니다. |
 | `AddInput` | Value=Type|경로 | 입력을 추가합니다. Type은 Video, Image, Colour, NDI, Stream, Title, Browser, DesktopCapture, Audio 중 하나입니다 (예: Title|lowerThird, Browser|https://…). |
 | `RemoveInput / MoveInput / SetInputName` | Input [Value] | 입력을 삭제하거나, 순서를 옮기거나, 이름을 바꿉니다. |
-| `SetZoom / SetPanX / SetPanY` | Input, Value | 위치를 바꿉니다. 줌은 0.01~5, 팬은 -2~2입니다. |
+| `SetZoom / SetZoomX / SetZoomY / SetPanX / SetPanY` | Input, Value | 위치와 줌을 바꿉니다. 줌은 0.01~5, 팬은 -2~2입니다. `SetZoom`은 X/Y를 다시 비례 줌으로 맞춥니다. |
+| `SetFitMode / SetPositionFit` | Input, Value=fit\|fill\|stretch | 화면 맞춤·꽉 채우기(잘림)·늘리기를 선택합니다. |
 | `SetCropX1 / X2 / Y1 / Y2, SetCrop` | Input, Value=0~1 (SetCrop: X1,Y1,X2,Y2) | 크롭합니다. |
 | `SetAlpha` | Input, Value=0~255 | 불투명도를 바꿉니다. |
 | `MirrorOn/Off, DeinterlaceOn/Off, SharpenOn/Off` | Input | 영상 처리를 켜고 끕니다. |

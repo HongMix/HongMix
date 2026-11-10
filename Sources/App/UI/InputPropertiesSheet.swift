@@ -11,6 +11,7 @@ struct InputPropertiesSheet: View {
     var initialTab: Int = 0
     var onChangeSource: (() -> Void)? = nil
     @ViewState private var tab = 0
+    @ViewState private var zoomUnlinked = false
 
     init(input: InputSource, initialTab: Int = 0, onChangeSource: (() -> Void)? = nil) {
         self.input = input
@@ -216,10 +217,41 @@ struct InputPropertiesSheet: View {
         }
     }
 
+    /// Effective horizontal / vertical zoom (= zoom × axis factor) as one slider value.
+    private func zoomAxis(_ kp: WritableKeyPath<VideoAdjust, Float>) -> Binding<Float> {
+        Binding(get: { input.adjust.zoom * input.adjust[keyPath: kp] },
+                set: { v in
+                    var a = input.adjust
+                    a[keyPath: kp] = max(0.01, v) / max(0.01, a.zoom)
+                    input.adjust = a
+                })
+    }
+
     private var positionTab: some View {
         Form {
             Section(L("위치 (SetZoom / SetPanX / SetPanY)")) {
-                slider(L("줌"), $input.adjust.zoom, 0.1...5, reset: 1)
+                Picker(L("화면 맞춤"), selection: $input.adjust.fitMode) {
+                    Text(L("맞추기")).tag(0)
+                    Text(L("꽉 채우기 (잘림)")).tag(1)
+                    Text(L("늘리기")).tag(2)
+                }
+                .pickerStyle(.segmented)
+                .help(L("맞추기: 비율 유지·검은 띠 · 꽉 채우기: 비율 유지·넘치는 부분 잘림 · 늘리기: 비율 무시하고 화면 전체 (LED 와이드 등)"))
+                Toggle(L("가로·세로 줌 따로"), isOn: Binding(get: { input.adjust.zoomX != input.adjust.zoomY || zoomUnlinked },
+                                                         set: { on in
+                                                             zoomUnlinked = on
+                                                             if !on {   // relink: keep the horizontal size
+                                                                 var a = input.adjust
+                                                                 a.zoom = max(0.01, a.zoom * a.zoomX); a.zoomX = 1; a.zoomY = 1
+                                                                 input.adjust = a
+                                                             }
+                                                         }))
+                if input.adjust.zoomX != input.adjust.zoomY || zoomUnlinked {
+                    slider(L("가로 줌"), zoomAxis(\.zoomX), 0.1...5, reset: 1)
+                    slider(L("세로 줌"), zoomAxis(\.zoomY), 0.1...5, reset: 1)
+                } else {
+                    slider(L("줌"), $input.adjust.zoom, 0.1...5, reset: 1)
+                }
                 slider(L("가로 이동 (Pan X)"), $input.adjust.panX, -2...2, reset: 0)
                 slider(L("세로 이동 (Pan Y)"), $input.adjust.panY, -2...2, reset: 0)
             }

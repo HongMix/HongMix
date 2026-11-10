@@ -1,4 +1,4 @@
-HongMix 2.0.9 — User Manual (English)
+HongMix 2.1.0 — User Manual (English)
 ================================================================
 A live production switcher for Apple Silicon Macs, with a vMix-style layout, shortcuts and API.
 Made by Hong Seunghoon (홍승훈) · 2026-10-28 · Korea
@@ -9,14 +9,14 @@ Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)
 Requirements: an Apple Silicon Mac (M1 and later), macOS 14 or later.
 Everything (FFmpeg, SRT, NDI runtime, Chromium web engine) is bundled inside the app — nothing else to install.
 
-[Option A — recommended] Double-click HongMix-2.0.9.pkg
+[Option A — recommended] Double-click HongMix-2.1.0.pkg
   1) If macOS says "unidentified developer": right-click the file → Open → Open
      (or System Settings → Privacy & Security → "Open Anyway").
   2) Continue → Install. HongMix is installed in Applications.
   3) First launch: if macOS warns, right-click HongMix in Applications → Open → Open (once).
      (HongMix is not notarized by Apple yet, so macOS asks once.)
 
-[Option B] Open HongMix-2.0.9.dmg → drag HongMix into Applications
+[Option B] Open HongMix-2.1.0.dmg → drag HongMix into Applications
   - If warned on first launch, right-click the app → Open (once).
 
 On first use macOS asks for permissions:
@@ -82,6 +82,9 @@ If a live input (SRT/NDI/camera) drops on air, HongMix cuts to the backup and re
   corners to resize. Green guides snap to the centre, edges and safe areas. On Output you can move on-air overlays too.
   Right-click: reset position · centre · fit to screen.
 [Safe Areas] dashed-rectangle button on Preview: 90 % / 80 % guides.
+[Fit and axis zoom] Input ⚙ › Position: Fit keeps the whole source, Fill crops to cover the frame,
+  and Stretch fills it without preserving aspect ratio. Enable separate X/Y zoom for wide LED walls.
+  API: SetFitMode Value=fit|fill|stretch · SetZoomX / SetZoomY.
 
 [Split screens — 4-split, 9-split …]
   1) Add Input → Colour → "Transparent" (or any background colour)
@@ -124,6 +127,9 @@ API: SetText Input=number SelectedName=Headline.Text Value=text
 - Overlay: overlay 1–4 effects, duration, PIP position; stinger setup.
 - Schedule: run any function (start streaming, record, cut …) at set times/days.
 - Snapshot (camera icon): saves the current Output as PNG.
+- New video inputs start with Loop off by default. Change Settings › General › Playback › New video input default loop.
+- STREAM blinks orange while an enabled destination is connecting, reconnecting or in error; it returns to red when connected.
+- Quit works while a settings sheet is open. Mac sleep/wake is recorded as a warning instead of frame drops.
 
 
 9. Health

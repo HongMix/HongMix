@@ -10,18 +10,19 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.0.9 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.1.0 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
-### 최신 업데이트 · 2.0.9
-- **AI 배경 제거:** 크로마키 없이 사람만 남기며 투명·블러·이미지 배경과 세 가지 품질을 지원합니다.
-- **리플레이 클립 내보내기:** 가로·세로·정사각 하이라이트, 한 각도/모든 각도, 핸들, H.264·HEVC·ProRes 및 일반·슬로모션 출력을 지원합니다.
-- **macOS 26+ 장시간 자막:** 끊지 않는 온디바이스 세션, 단어 단위 갱신, 실제 발화 시각 SRT, 읽기 속도와 한국어 용어집·교정을 제공합니다. 이전 macOS는 기존 엔진으로 동작합니다.
-- **자막 디자인:** 오른쪽 열·시네마·밴드·사용자 설정과 글꼴·배경·“AI 자막” 라벨을 조정할 수 있습니다.
-- **UI·모니터 안정성:** 숫자 입력 형식을 통일하고 빈 화면 안내를 개선했으며, 프리뷰 모니터가 창이 있는 디스플레이를 따라갑니다.
-- M1 Max에서 생성 미디어와 합성 한국어 음성으로 검증했습니다. 실제 회의, 라이브 카메라 배경 제거, 실제 PTZ·DeckLink·MIDI 장비와 두 번째 물리 모니터는 아직 미검증입니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.0.9.ko.md) · [English release notes](docs/RELEASE-NOTES-2.0.9.md)
+> **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
+
+### 최신 업데이트 · 2.1.0
+- 새 영상 입력은 기본으로 반복 재생하지 않습니다. 설정 › 일반에서 바꿀 수 있습니다.
+- 맞추기·꽉 채우기·늘리기와 가로·세로 개별 줌으로 LED 와이드 화면과 비표준 비율 소스를 맞춥니다.
+- 설정 창이 열려 있어도 HongMix가 정상 종료됩니다.
+- 맥 잠자기는 프레임 드롭 대신 경고로 기록하며, 송출 미연결 중에는 STREAM 버튼이 주황으로 깜빡입니다.
+- 검증 완료: 루프 기본값, 화면 맞춤, X/Y 줌, 종료 경로. 실제 덮개 닫힘과 송출 미연결 주황 표시는 직접 확인하지 못했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.0.ko.md) · [English release notes](docs/RELEASE-NOTES-2.1.0.md)
 
 <table>
   <tr>

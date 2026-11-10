@@ -221,6 +221,15 @@ struct OutputRow: View {
                     .frame(width: 52, height: 24)
                     .background(output.running ? Theme.live : Theme.program)
                     .clipShape(RoundedRectangle(cornerRadius: 5))
+                    .overlay {
+                        if output.config.kind == .stream && output.running && output.state != Int32(MC_STATE_RUNNING) {
+                            TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
+                                let lit = Int(ctx.date.timeIntervalSinceReferenceDate * 2) % 2 == 0
+                                RoundedRectangle(cornerRadius: 5).fill(lit ? Color.orange : Color.orange.opacity(0.35))
+                                    .overlay(Text(L("중지")).font(.system(size: 12, weight: .semibold)).foregroundColor(.white))
+                            }
+                        }
+                    }
             }
             .buttonStyle(.plain)
         }

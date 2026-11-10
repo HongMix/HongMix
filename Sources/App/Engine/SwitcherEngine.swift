@@ -7,6 +7,7 @@ import ImageIO
 import UniformTypeIdentifiers
 import QuartzCore
 import Combine
+import IOKit
 
 /// Transition effects.
 enum TransitionType: String, Codable, CaseIterable, Identifiable {
@@ -339,6 +340,12 @@ final class SwitcherEngine: ObservableObject {
     private var renderMsCount = 0
     private var renderMsMax: Double = 0
     private var droppedCount = 0
+    /// Mac sleep (lid closed …): frames missed while asleep and shortly after waking are not drops (stateLock).
+    private var systemAsleep = false
+    private var ignoreDropsUntil: Double = 0       // CACurrentMediaTime
+    private var sleepStarted: Date?
+    private var sleepByLid = false
+    private var sleepObservers: [NSObjectProtocol] = []
     func resetDrops() {
         stateLock.lock(); droppedCount = 0; stateLock.unlock()
         droppedTicks = 0
@@ -405,6 +412,7 @@ final class SwitcherEngine: ObservableObject {
             options: [.userInitiated, .latencyCritical, .idleSystemSleepDisabled],
             reason: "HongMix live production")
         startRenderThread()
+        watchSystemSleep()
         dataSources.start(engine: self)
         captions.engine = self
         midi.start(engine: self)   // MIDI: CoreMIDI client, mappings, LED tally
@@ -1323,8 +1331,13 @@ final class SwitcherEngine: ObservableObject {
             // is three frames behind. The old threshold hid short recurring PGM/audio stalls.
             if lateness > frameAbs / 2 {
                 stateLock.lock()
-                droppedCount += Int(lateness / frameAbs) + 1
+                let sleeping = systemAsleep || CACurrentMediaTime() < ignoreDropsUntil
+                if !sleeping { droppedCount += Int(lateness / frameAbs) + 1 }
                 stateLock.unlock()
+                if sleeping {                         // resume the clock without counting the gap
+                    start = now - toAbs(Double(tick) * frameNs)
+                    continue
+                }
                 if lateness > toAbs(frameNs * 3) {
                     start = now - toAbs(Double(tick) * frameNs)
                     continue
@@ -1332,6 +1345,42 @@ final class SwitcherEngine: ObservableObject {
             }
             mach_wait_until(target)
         }
+    }
+
+    /// Lid closed / system sleep: macOS stops everything (programme, outputs, recording). Not counted as
+    /// renderer drops; on wake a warning says how long the Mac slept and the Black Box records it.
+    private func watchSystemSleep() {
+        let nc = NSWorkspace.shared.notificationCenter
+        sleepObservers.append(nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.stateLock.lock(); self.systemAsleep = true; self.stateLock.unlock()
+            self.sleepStarted = Date()
+            self.sleepByLid = SwitcherEngine.lidClosed()
+        })
+        sleepObservers.append(nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.stateLock.lock()
+            self.systemAsleep = false
+            self.ignoreDropsUntil = CACurrentMediaTime() + 5      // devices and displays settle after wake
+            self.stateLock.unlock()
+            let secs = Int(Date().timeIntervalSince(self.sleepStarted ?? Date()).rounded())
+            self.sleepStarted = nil
+            let lid = self.sleepByLid
+            let msg = lid ? Lf("⚠︎ 맥이 잠자기에 들어갔다 깨어났습니다 (덮개 닫힘) — %@초 동안 방송·녹화가 멈췄습니다", "\(secs)")
+                          : Lf("⚠︎ 맥이 잠자기에 들어갔다 깨어났습니다 — %@초 동안 방송·녹화가 멈췄습니다", "\(secs)")
+            self.lastMessage = msg
+            self.blackbox.record(.systemSleep, msg)
+            NSSound(named: "Funk")?.play()
+        })
+    }
+
+    /// MacBook lid closed (IOPMrootDomain AppleClamshellState).
+    static func lidClosed() -> Bool {
+        let root = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
+        guard root != 0 else { return false }
+        defer { IOObjectRelease(root) }
+        let v = IORegistryEntryCreateCFProperty(root, "AppleClamshellState" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+        return (v as? Bool) ?? false
     }
 
     private func layer(_ input: InputSource?, mixAlpha: Float = 1) -> LayerInput {
@@ -1421,7 +1470,7 @@ final class SwitcherEngine: ObservableObject {
                 p.panX = 0; p.panY = 0
                 p.cropL = l.cropL; p.cropT = l.cropT; p.cropR = l.cropR; p.cropB = l.cropB
                 let rect = CGRect(x: CGFloat(l.x) * W, y: CGFloat(l.y) * H, width: CGFloat(l.w) * W, height: CGFloat(l.h) * H)
-                p.zoom = 1
+                p.zoom = 1; p.zoomX = 1; p.zoomY = 1; p.fitMode = 0
                 if l.fill, let b = buf {
                     // crop-to-fill: zoom so the (cropped) source covers the box
                     let sw = CGFloat(CVPixelBufferGetWidth(b)) * CGFloat(1 - l.cropL - l.cropR)

@@ -10,18 +10,19 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.0.9</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.0</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
-### Latest update · 2.0.9
-- **AI background removal:** keeps people without a green screen; transparent, blurred or image backgrounds with three quality levels.
-- **Replay clip export:** horizontal, vertical or square highlights; single/all angles, handles, H.264/HEVC/ProRes and normal/slow-motion output.
-- **Long-form captions on macOS 26+:** one continuous on-device session, word-by-word updates, spoken-time SRT, reading pace and Korean glossary/corrections. Older macOS uses the classic engine.
-- **Caption design:** right column, cinema, band and custom layouts with typography, background and “AI captions” label controls.
-- **UI and monitoring reliability:** consistent number fields, clearer empty states and preview monitors that follow the window’s display.
-- Verified with generated media and synthetic Korean speech on an M1 Max. Real meetings, live-camera background removal, physical PTZ/DeckLink/MIDI hardware and a second physical monitor remain unverified. See the [English release notes](docs/RELEASE-NOTES-2.0.9.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.0.9.ko.md).
+> **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
+
+### Latest update · 2.1.0
+- New video inputs no longer loop by default; change this in Settings › General.
+- Fit, Fill and Stretch modes plus separate horizontal/vertical zoom support wide LED walls and non-16:9 sources.
+- HongMix now quits correctly even while a settings sheet is open.
+- Mac sleep is reported as a warning instead of dropped frames, and STREAM blinks orange while disconnected.
+- Verified: loop defaults, fit modes, X/Y zoom and quit paths. Physical lid sleep and the orange disconnected indicator were not directly tested. See the [English release notes](docs/RELEASE-NOTES-2.1.0.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.0.ko.md).
 
 <table>
   <tr>

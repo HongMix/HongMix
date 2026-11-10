@@ -49,6 +49,7 @@ enum FileDrop {
         }
         if isMedia(u) {
             var c = InputConfig(kind: .media, name: u.lastPathComponent)
+            c.loop = InputConfig.newVideoLoop
             c.url = u.path
             return c
         }
@@ -63,6 +64,7 @@ enum FileDrop {
         var rest = urls
         if asList && media.count > 1 {
             var c = InputConfig(kind: .media, name: "List (\(media.count))")
+            c.loop = InputConfig.newVideoLoop
             c.playlist = media.map(\.path)
             c.url = media[0].path
             out.append(c)

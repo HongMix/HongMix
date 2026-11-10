@@ -244,6 +244,19 @@ enum APIProcessor {
         case "setzoom":
             guard let i = input, let v = float(value) else { return "Input/Value required" }
             i.adjust.zoom = max(0.01, min(5, v))
+            i.adjust.zoomX = 1; i.adjust.zoomY = 1
+        case "setzoomx", "setzoomy":       // vMix: horizontal / vertical zoom (1 = 100 %)
+            guard let i = input, let v = float(value) else { return "Input/Value required" }
+            let z = max(0.01, i.adjust.zoom)
+            if fn == "setzoomx" { i.adjust.zoomX = max(0.01, min(5, v)) / z } else { i.adjust.zoomY = max(0.01, min(5, v)) / z }
+        case "setpositionfit", "setfitmode":   // HongMix: Value=fit|fill|stretch
+            guard let i = input else { return needInput() }
+            switch value.lowercased() {
+            case "fit", "letterbox": i.adjust.fitMode = 0
+            case "fill", "crop": i.adjust.fitMode = 1
+            case "stretch": i.adjust.fitMode = 2
+            default: return "Value=fit|fill|stretch"
+            }
         case "setpanx":
             guard let i = input, let v = float(value) else { return "Input/Value required" }
             i.adjust.panX = max(-2, min(2, v))
@@ -978,6 +991,7 @@ enum APIProcessor {
         switch type {
         case "video", "audiofile", "media":
             c = InputConfig(kind: .media, name: (arg as NSString).lastPathComponent)
+            c.loop = InputConfig.newVideoLoop
             c.url = arg
         case "photos" where isDirectory(arg):  // vMix Photos: a folder as a slideshow
             c = InputConfig(kind: .photos, name: (arg as NSString).lastPathComponent)
@@ -1145,7 +1159,7 @@ enum APIProcessor {
             let a = i.adjust
             if a != VideoAdjust() {
                 x += String(format: "<position panX=\"%.3f\" panY=\"%.3f\" zoomX=\"%.3f\" zoomY=\"%.3f\" />",
-                            a.panX, a.panY, a.zoom, a.zoom)
+                            a.panX, a.panY, a.zoom * a.zoomX, a.zoom * a.zoomY)
             }
             x += "</input>"
         }

@@ -6,6 +6,7 @@ struct GeneralSettings: View {
     @AppStorage(AppLanguage.defaultsKey) private var language = AppLanguage.current.rawValue
     @AppStorage(FFmpegInput.rateConformKey) private var rateConform = true
     @AppStorage(AppSkin.defaultsKey) private var appSkin = AppSkin.current.rawValue
+    @AppStorage(InputConfig.newVideoLoopKey) private var newVideoLoop = false
 
     var body: some View {
         Form {
@@ -33,6 +34,9 @@ struct GeneralSettings: View {
                     NotificationCenter.default.post(name: .hongMixRateConformChanged, object: nil)
                 }))
                 Text(L("60.00fps 파일을 59.94 프로그램에서 0.1% 느리게 재생해 약 17초마다 생기던 프레임 드랍을 없앱니다. 오디오도 같이 맞춰져 음정 차이는 들리지 않습니다."))
+                    .font(.caption).foregroundColor(.secondary)
+                Toggle(L("새 영상 입력 기본 루프"), isOn: $newVideoLoop)
+                Text(L("새로 추가하는 영상(Add Input · Finder 드래그 · API)에 적용됩니다. 이미 있는 입력은 각 타일의 Loop 버튼으로 바꿉니다."))
                     .font(.caption).foregroundColor(.secondary)
             }
         }

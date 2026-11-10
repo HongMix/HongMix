@@ -29,6 +29,7 @@ struct HongMixApp: App {
                 .preferredColorScheme(.dark)
                 .onAppear {
                     appDelegate.engine = engine
+                    ProjectIO.engineRef = engine
                     mc_ndi_set_extra_ips(UserDefaults.standard.string(forKey: "ndiExtraIPs") ?? "")
                     engine.startEngine()
                     ProjectIO.restoreLastSession(into: engine)
@@ -46,6 +47,10 @@ struct HongMixApp: App {
             CommandGroup(replacing: .saveItem) {
                 Button(L("프로젝트 저장…")) { ProjectIO.save(engine) }
                     .keyboardShortcut("s")
+            }
+            CommandGroup(replacing: .appTermination) {
+                Button(L("HongMix 종료")) { ProjectIO.requestQuit() }
+                    .keyboardShortcut("q")
             }
         }
 
@@ -109,15 +114,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleQuitEvent(_:withReplyEvent:)),
                                                      forEventClass: AEEventClass(kCoreEventClass),
                                                      andEventID: AEEventID(kAEQuitApplication))
+        // ⌘Q while a sheet has a focused text field never reaches the menu — catch it here.
+        quitKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
+            let mods = e.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if mods == .command, e.charactersIgnoringModifiers?.lowercased() == "q",
+               NSApp.windows.contains(where: { $0.attachedSheet != nil }) {
+                ProjectIO.requestQuit()
+                return nil
+            }
+            return e
+        }
     }
+    private var quitKeyMonitor: Any?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     /// Quit Apple Event (Dock › Quit, scripts, logout): close open sheets first, then quit normally
     /// (still asks when outputs are running).
     @objc func handleQuitEvent(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
-        ProjectIO.closeSheets()
-        DispatchQueue.main.async { NSApp.terminate(nil) }
+        ProjectIO.requestQuit()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -174,8 +189,7 @@ enum ProjectIO {
         let src = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
         src.setEventHandler {
             terminatingFromSignal = true
-            closeSheets()
-            NSApp.terminate(nil)
+            requestQuit()
         }
         src.resume()
         termSource = src
@@ -186,6 +200,28 @@ enum ProjectIO {
         for w in NSApp.windows {
             while let sheet = w.attachedSheet { w.endSheet(sheet); sheet.orderOut(nil) }
         }
+    }
+
+    weak static var engineRef: SwitcherEngine?
+
+    /// Quit (menu ⌘Q, Dock, AppleScript, SIGTERM). A SwiftUI sheet that is open makes AppKit ignore
+    /// NSApp.terminate, so with a sheet open the app saves and shuts down itself, the same way
+    /// applicationWillTerminate does, after the usual "outputs running" question.
+    static func requestQuit() {
+        let hasSheet = NSApp.windows.contains { $0.attachedSheet != nil } || NSApp.modalWindow != nil
+        guard hasSheet, let engine = engineRef else { NSApp.terminate(nil); return }
+        if !terminatingFromSignal && engine.outputs.contains(where: { $0.running }) {
+            let alert = NSAlert()
+            alert.messageText = L("송출/녹화가 진행 중입니다")
+            alert.informativeText = L("종료하면 모든 출력이 중지되고 녹화 파일이 마무리됩니다.")
+            alert.addButton(withTitle: L("종료"))
+            alert.addButton(withTitle: L("취소"))
+            if alert.runModal() != .alertFirstButtonReturn { return }
+        }
+        autosave(engine)
+        engine.shutdown()
+        mc_web_shutdown()
+        exit(0)
     }
 
     static func restoreLastSession(into engine: SwitcherEngine) {

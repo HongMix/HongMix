@@ -728,6 +728,10 @@ struct OutputBarButton: View {
         let configured = engine.outputs.contains { kinds.contains($0.config.kind) }
         let on = kinds.contains { engine.anyRunning(kind: $0) }
         let error = engine.outputs.contains { kinds.contains($0.config.kind) && $0.running && $0.state == Int32(MC_STATE_ERROR) }
+        // stream: running but not connected (failed / reconnecting) → blinking orange instead of red
+        let disconnected = kind == .stream && engine.outputs.contains {
+            kinds.contains($0.config.kind) && $0.running && $0.state != Int32(MC_STATE_RUNNING)
+        }
         HStack(spacing: 0) {
             Button {
                 if !configured {
@@ -738,7 +742,9 @@ struct OutputBarButton: View {
                     for k in kinds { engine.setOutputs(kind: k, running: !on) }
                 }
             } label: {
-                if AppSkin.isMono {
+                if disconnected {
+                    BlinkingOrangeLabel(text: AppSkin.isMono ? "● STREAM" : title, mono: AppSkin.isMono)
+                } else if AppSkin.isMono {
                     monoLabel(on: on, error: error)
                 } else {
                     Text(title)
@@ -776,7 +782,8 @@ struct OutputBarButton: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: AppSkin.isMono ? 15 : 3, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: AppSkin.isMono ? 15 : 3, style: .continuous)
-            .stroke(AppSkin.isMono ? (on ? Theme.program.opacity(0.55) : Color.white.opacity(0.10)) : .clear, lineWidth: 1))
+            .stroke(AppSkin.isMono ? (disconnected ? Color.orange.opacity(0.8) : on ? Theme.program.opacity(0.55) : Color.white.opacity(0.10)) : .clear, lineWidth: 1))
+        .help(disconnected ? L("송출 연결 안 됨 — 다시 연결하는 중 (설정에서 상태 확인)") : "")
         .sheet(isPresented: $preflight) {
             PreflightSheet(proceedTitle: L("그래도 송출 시작"), onProceed: {
                 for k in kinds { engine.setOutputs(kind: k, running: true) }
@@ -1134,6 +1141,28 @@ private struct DelayChip: View {
                         Button(L("DUMP — 지금 실시간으로"), role: .destructive) { output.dumpDelay() }
                     }
             }
+        }
+    }
+}
+
+/// STREAM button while a stream is on but not connected: orange, blinking once a second.
+struct BlinkingOrangeLabel: View {
+    let text: String
+    let mono: Bool
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
+            let lit = Int(ctx.date.timeIntervalSinceReferenceDate * 2) % 2 == 0
+            HStack(spacing: 6) {
+                Text(text)
+                Text(L("연결 안 됨")).font(.system(size: 10, weight: .semibold))
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(lit ? .white : .orange)
+            .lineLimit(1)
+            .padding(.horizontal, 14)
+            .frame(height: 30)
+            .background(lit ? Color.orange : Color.orange.opacity(0.18))
         }
     }
 }

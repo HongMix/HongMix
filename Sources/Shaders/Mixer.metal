@@ -23,6 +23,8 @@ struct LayerParams {
     float keyR, keyG, keyB;
     float keyTol, keySoft, keySpill;
     int yuv;      // 0 = BGRA texture; 1..4 = NV12 planes (luma tex + CbCr tex): 1 709 video, 2 601 video, 3 709 full, 4 601 full
+    float zoomX, zoomY;   // extra horizontal / vertical scale (1 = proportional)
+    int fitMode;          // 0 fit (letterbox), 1 fill (crop), 2 stretch
 };
 
 /// One source = luma (or BGRA) texture + optional CbCr texture. Decoder frames stay in NV12:
@@ -68,6 +70,19 @@ static float2 fitUV(float2 uv, float sw, float sh, float dw, float dh, thread bo
     return s;
 }
 
+/// fitUV with a mode: 0 fit inside, 1 fill (cover, crops), 2 stretch to the whole frame.
+static float2 fitUVMode(float2 uv, float sw, float sh, float dw, float dh, int mode, thread bool &inside) {
+    float sa = sw / max(sh, 1.0);
+    float da = dw / max(dh, 1.0);
+    float2 scale = mode == 2 ? float2(1.0)
+                 : mode == 1 ? (sa > da ? float2(sa / da, 1.0) : float2(1.0, da / sa))
+                             : (sa > da ? float2(1.0, da / sa) : float2(sa / da, 1.0));
+    float2 off = (1.0 - scale) * 0.5;
+    float2 s = (uv - off) / scale;
+    inside = s.x >= 0.0 && s.y >= 0.0 && s.x <= 1.0 && s.y <= 1.0;
+    return s;
+}
+
 static float3 colorCorrect(float3 c, constant LayerParams &L) {
     float3 lift = float3(L.liftR, L.liftG, L.liftB);
     float3 gain = float3(L.gainR, L.gainG, L.gainB);
@@ -95,10 +110,10 @@ static float3 colorCorrect(float3 c, constant LayerParams &L) {
 static float4 sampleLayer(texture2d<float> tex, texture2d<float> texC, sampler smp, float2 uv, constant LayerParams &L,
                           float dw, float dh) {
     if (L.has == 0) return float4(0.0);
-    float z = max(L.zoom, 0.01);
+    float2 z = max(float2(L.zoom * L.zoomX, L.zoom * L.zoomY), float2(0.01));
     float2 p = (uv - 0.5 - float2(L.panX, -L.panY) * 0.5) / z + 0.5;
     bool inside = false;
-    float2 s = fitUV(p, L.srcW, L.srcH, dw, dh, inside);
+    float2 s = fitUVMode(p, L.srcW, L.srcH, dw, dh, L.fitMode, inside);
     if (!inside) return float4(0.0);
     if (s.x < L.cropL || s.x > 1.0 - L.cropR || s.y < L.cropT || s.y > 1.0 - L.cropB) return float4(0.0);
     if (L.mirror != 0) s.x = 1.0 - s.x;
