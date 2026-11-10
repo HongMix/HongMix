@@ -10,6 +10,16 @@
 
 검증: 루프 기본값, 화면 맞춤·X/Y 줌, 종료 경로, Metal 빌드와 SRT 코어 테스트. 실제 덮개 닫힘과 주황 송출 미연결 표시는 직접 확인하지 못했습니다.
 
+### 실제 화면
+
+새 영상의 기본 루프 설정(꺼짐):
+
+![새 영상 기본 루프 설정](https://raw.githubusercontent.com/HongMix/HongMix/main/docs/screenshots/2.1.0/2.1.0-loop-default-ko.png)
+
+화면 맞춤·꽉 채우기·늘리기와 가로/세로 개별 줌:
+
+![화면 맞춤과 가로 세로 줌](https://raw.githubusercontent.com/HongMix/HongMix/main/docs/screenshots/2.1.0/2.1.0-fit-fill-axis-zoom-ko.png)
+
 처음 실행이 막히면 **시스템 설정 › 개인정보 보호 및 보안 › 그래도 열기**를 누르세요. [한국어 전체 내용](https://github.com/HongMix/HongMix/blob/main/docs/RELEASE-NOTES-2.1.0.ko.md)
 
 ---
@@ -23,5 +33,15 @@
 - STREAM blinks orange while a destination is not connected.
 
 Verified: loop defaults, fit modes, X/Y zoom, quit paths, Metal build and the SRT core test. A real lid-close cycle and the orange disconnected-stream indicator were not directly tested.
+
+### Actual UI
+
+Default loop setting for newly added video inputs (off):
+
+![Default loop setting for new videos](https://raw.githubusercontent.com/HongMix/HongMix/main/docs/screenshots/2.1.0/2.1.0-loop-default-en.png)
+
+Fit, Fill, Stretch and separate horizontal/vertical zoom:
+
+![Fit fill and axis zoom controls](https://raw.githubusercontent.com/HongMix/HongMix/main/docs/screenshots/2.1.0/2.1.0-fit-fill-axis-zoom-en.png)
 
 If macOS blocks the first launch, use **System Settings › Privacy & Security › Open Anyway**. [Full English notes](https://github.com/HongMix/HongMix/blob/main/docs/RELEASE-NOTES-2.1.0.md)

@@ -1,5 +1,13 @@
 # HongMix 2.1.0 screenshot plan
 
+## Captured
+
+- Korean/English: new-video loop default in General Settings.
+- Korean/English: Fit / Fill / Stretch and separate horizontal/vertical zoom in Input Properties, using a generated 4:3 test grid.
+- Stored under `docs/screenshots/2.1.0/` and linked from the GitHub release notes.
+
+The quit-with-sheet and orange disconnected-stream items remain planned. A still image would not prove either behaviour, so they are not presented as completed evidence.
+
 Public screenshots must use generated test media only. Do not show real people, third-party programme footage, stream keys, IP addresses or personal project names. Produce matching Korean and English captions.
 
 | # | Feature | Capture | Safe test method | Public caption |
