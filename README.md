@@ -26,6 +26,16 @@
 
 <table>
   <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.0/2.1.0-loop-default-en.png" alt="HongMix 2.1.0 default loop setting for new videos" width="100%"><br><sub>New videos play once by default · looping is optional</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.0/2.1.0-fit-fill-axis-zoom-en.png" alt="HongMix 2.1.0 Fit Fill Stretch and separate axis zoom" width="100%"><br><sub>Fit · Fill · Stretch · separate horizontal/vertical zoom</sub></td>
+  </tr>
+</table>
+
+<details>
+<summary>More HongMix interface screenshots</summary>
+
+<table>
+  <tr>
     <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-main-switcher-test-patterns.png" alt="HongMix 2.0.5 main switcher with generated test patterns" width="100%"><br><sub>Main switcher · generated test patterns</sub></td>
     <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-ptz-control-test-patterns.png" alt="HongMix 2.0.5 PTZ control window" width="100%"><br><sub>Independent multi-camera PTZ control</sub></td>
   </tr>
@@ -38,6 +48,8 @@
     <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-midi-settings.png" alt="HongMix 2.0.5 MIDI settings" width="100%"><br><sub>MIDI learn, templates and LED tally</sub></td>
   </tr>
 </table>
+
+</details>
 
 ### 1.4.2
 - **Display output fixed for macOS Spaces:** Output Window and borderless Display Fullscreen stay on the active desktop. The green button fills the current display without creating a stranded black full-screen Space; Esc, double-click or right-click returns to a window.

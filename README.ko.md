@@ -26,6 +26,16 @@
 
 <table>
   <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.0/2.1.0-loop-default-ko.png" alt="HongMix 2.1.0 새 영상 기본 반복 설정" width="100%"><br><sub>새 영상은 기본 한 번 재생 · 반복은 선택</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.0/2.1.0-fit-fill-axis-zoom-ko.png" alt="HongMix 2.1.0 맞추기 꽉 채우기 늘리기 가로 세로 줌" width="100%"><br><sub>맞추기 · 꽉 채우기 · 늘리기 · 가로/세로 개별 줌</sub></td>
+  </tr>
+</table>
+
+<details>
+<summary>HongMix의 다른 화면 캡처 보기</summary>
+
+<table>
+  <tr>
     <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-main-switcher-test-patterns.png" alt="생성한 테스트 패턴을 사용한 HongMix 2.0.5 메인 스위처" width="100%"><br><sub>메인 스위처 · 생성한 테스트 패턴</sub></td>
     <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-ptz-control-test-patterns.png" alt="HongMix 2.0.5 PTZ 제어 창" width="100%"><br><sub>독립된 다중 카메라 PTZ 제어</sub></td>
   </tr>
@@ -38,6 +48,8 @@
     <td width="50%" align="center"><img src="docs/screenshots/2.0.5/2.0.5-midi-settings.png" alt="HongMix 2.0.5 MIDI 설정" width="100%"><br><sub>MIDI 학습·템플릿·LED 탤리</sub></td>
   </tr>
 </table>
+
+</details>
 
 ### 1.4.2
 - **macOS Space에 맞춘 Display 출력:** Output Window와 디스플레이 채우기가 현재 데스크톱에 그대로 열립니다. 초록 버튼은 검은 전체화면 Space를 남기지 않으며 Esc·더블클릭·우클릭으로 일반 창에 복귀합니다.
