@@ -1,4 +1,4 @@
-HongMix 2.1.0 — User Manual (English)
+HongMix 2.1.1 — User Manual (English)
 ================================================================
 A live production switcher for Apple Silicon Macs, with a vMix-style layout, shortcuts and API.
 Made by Hong Seunghoon (홍승훈) · 2026-10-28 · Korea
@@ -9,20 +9,29 @@ Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)
 Requirements: an Apple Silicon Mac (M1 and later), macOS 14 or later.
 Everything (FFmpeg, SRT, NDI runtime, Chromium web engine) is bundled inside the app — nothing else to install.
 
-[Option A — recommended] Double-click HongMix-2.1.0.pkg
+[Option A — recommended] Double-click HongMix-2.1.1.pkg
   1) If macOS says "unidentified developer": right-click the file → Open → Open
      (or System Settings → Privacy & Security → "Open Anyway").
   2) Continue → Install. HongMix is installed in Applications.
   3) First launch: if macOS warns, right-click HongMix in Applications → Open → Open (once).
      (HongMix is not notarized by Apple yet, so macOS asks once.)
 
-[Option B] Open HongMix-2.1.0.dmg → drag HongMix into Applications
+[Option B] Open HongMix-2.1.1.dmg → drag HongMix into Applications
   - If warned on first launch, right-click the app → Open (once).
 
 On first use macOS asks for permissions:
   - Camera / Microphone — allow when using camera or mic inputs
   - Screen Recording — only for Screen/Window capture inputs
   - Local Network — allow so NDI and SRT devices can be found
+
+New in 2.1.1
+  - Optional Do Not Disturb automation while HongMix is running. Import the bundled
+    "HongMix Focus" shortcut when prompted; the original Focus state is restored on quit.
+  - Pre-show check window for input signals, audio, recording storage, network and outputs.
+  - Independent monitor outputs: assign Program, Preview, Clean, MultiView or an input to
+    each secondary display. Desktop pinning and reconnect are available per display.
+  - Display sleep prevention during production and a warning if HongMix loses keyboard control.
+  - Live-caption translation now follows the selected source and target languages correctly.
 
 
 2. Layout (same as vMix)

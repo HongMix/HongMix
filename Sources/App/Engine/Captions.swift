@@ -43,7 +43,7 @@ final class CaptionEngine: ObservableObject {
         didSet {
             save(); busIndex = settings.bus
             if settings.style != oldValue.style { revealedUpTo = (currentBase + 1) * 1000; rebuildRows() }
-            if settings.translateTo != oldValue.translateTo { translationBroken = false; translationText = "" }
+            if settings.translateTo != oldValue.translateTo { translationBroken = false; translationText = ""; translateGen += 1; pendingTranslation = nil }
             if settings.correctionsPath != oldValue.correctionsPath || settings.useGlossary != oldValue.useGlossary {
                 loadCorrections()
             }
@@ -428,13 +428,32 @@ final class CaptionEngine: ObservableObject {
         let t = CaptionEngine.tail(text)
         publish(t, lastTranslation)
         guard !translateTarget.isEmpty, !translationBroken else { return }
-        translateGen += 1
+        // A translation takes ~1–2 s and the recogniser revises its text several times a second. Cancelling the
+        // running one for every revision meant nothing was ever shown while someone kept talking — so let it
+        // finish, show it, then translate the newest text.
+        if translating { pendingTranslation = t; return }
+        startTranslation(t)
+    }
+
+    private var translating = false
+    private var translationSession: Any?       // TranslationSession (macOS 26+)
+    private var translationPair = ""
+    private var pendingTranslation: String?
+    private func startTranslation(_ t: String) {
+        translating = true
         let gen = translateGen
         translate(t) { [weak self] tr in
-            guard let self = self, gen == self.translateGen, let tr = tr else { return }
-            self.translationText = tr
-            self.rebuildRows()
-            self.publish(self.lastText, tr)
+            guard let self = self else { return }
+            self.translating = false
+            if gen == self.translateGen, let tr = tr {
+                self.translationText = tr
+                self.rebuildRows()
+                self.publish(self.lastText, tr)
+            }
+            if let next = self.pendingTranslation, !self.translationBroken {
+                self.pendingTranslation = nil
+                self.startTranslation(next)
+            }
         }
     }
 
@@ -477,6 +496,8 @@ final class CaptionEngine: ObservableObject {
         currentBase += 1
         committedChars = CaptionEngine.nonSpace(taskText)
         translationText = ""
+        translateGen += 1           // a translation still running belongs to the cleared text
+        pendingTranslation = nil
         rebuildRows()
     }
 
@@ -589,8 +610,16 @@ final class CaptionEngine: ObservableObject {
         if #available(macOS 26.0, *) {
             let src = Locale.Language(identifier: String(settings.language.prefix(2)))
             let dst = Locale.Language(identifier: settings.translateTo)
+            // one session per language pair (making one for every line added most of the delay)
+            let pair = "\(settings.language.prefix(2))>\(settings.translateTo)"
+            let session: TranslationSession
+            if pair == translationPair, let s = translationSession as? TranslationSession { session = s }
+            else {
+                session = TranslationSession(installedSource: src, target: dst)
+                translationSession = session
+                translationPair = pair
+            }
             Task {
-                let session = TranslationSession(installedSource: src, target: dst)
                 do {
                     let r = try await session.translate(text)
                     await MainActor.run { done(r.targetText) }

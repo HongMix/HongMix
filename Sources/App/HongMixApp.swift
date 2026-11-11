@@ -34,6 +34,7 @@ struct HongMixApp: App {
                     engine.startEngine()
                     ProjectIO.restoreLastSession(into: engine)
                     ProjectIO.startAutosave(engine)
+                    LaunchModel.shared.onFinished = { [engine] in AfterLaunch.run(engine) }
                     LaunchModel.shared.run(engine: engine)
                 }
         }
@@ -47,6 +48,9 @@ struct HongMixApp: App {
             CommandGroup(replacing: .saveItem) {
                 Button(L("프로젝트 저장…")) { ProjectIO.save(engine) }
                     .keyboardShortcut("s")
+            }
+            CommandGroup(after: .appInfo) {
+                Button(L("시작 전 점검…")) { StartupCheckWindow.show(engine: engine) }
             }
             CommandGroup(replacing: .appTermination) {
                 Button(L("HongMix 종료")) { ProjectIO.requestQuit() }
@@ -152,8 +156,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         guard let engine = engine else { return }
         ProjectIO.autosave(engine)
+        DisplayMap.shared.closeAll()
         engine.shutdown()
         mc_web_shutdown()       // embedded Chromium: close browsers and stop its helper processes
+        FocusGuard.shared.appWillQuit()
+    }
+}
+
+/// After the launch screen: monitor outputs come back, Do Not Disturb (or its approval request),
+/// then the pre-show check.
+enum AfterLaunch {
+    static func run(_ engine: SwitcherEngine) {
+        DisplayMap.shared.start(engine: engine)
+        FocusGuard.shared.launch {
+            if SystemCheck.showAtLaunch { StartupCheckWindow.show(engine: engine) }
+        }
     }
 }
 
@@ -219,8 +236,10 @@ enum ProjectIO {
             if alert.runModal() != .alertFirstButtonReturn { return }
         }
         autosave(engine)
+        DisplayMap.shared.closeAll()
         engine.shutdown()
         mc_web_shutdown()
+        FocusGuard.shared.appWillQuit()
         exit(0)
     }
 

@@ -752,6 +752,38 @@ enum APIProcessor {
             FullscreenOutput.shared.testToggleSystemFullScreen()
         case "outputwindowexit":       // Esc on the output window
             FullscreenOutput.shared.testExit()
+        // ===== Monitor outputs (HongMix): Value = monitor number[,source]; source Output|Preview|Clean|MultiView|Off|input
+        case "setmonitoroutput", "monitoroutput":
+            let p = value.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            guard let n = p.first.flatMap({ Int($0) }) else { return "Value=monitor[,Output|Preview|Clean|MultiView|Off|input]" }
+            var src: BusSource?
+            if p.count > 1 {
+                if p[1].lowercased() == "off" { src = nil }
+                else if let b = busNumber(p[1]), b >= 2 { src = e.busSources[b - 2] }
+                else if let s = busSource(p[1], input: resolveInput(p[1], e)) { src = s }
+                else { return "Unknown source \(p[1])" }
+            } else if let i = input { src = .input(i.id) } else { src = .program }
+            return DisplayMap.shared.set(source: src, monitor: n) ? nil : "Monitor \(n) not connected (or it is the switcher's screen)"
+        case "monitoroutputoff":
+            guard let n = Int(value) else { return "Value=monitor" }
+            return DisplayMap.shared.set(source: nil, monitor: n) ? nil : "Monitor \(n) not connected"
+        case "identifymonitors":
+            DisplayMap.shared.identify()
+        // ===== Do Not Disturb (HongMix)
+        case "donotdisturbon": FocusGuard.shared.set(on: true)
+        case "donotdisturboff": FocusGuard.shared.set(on: false)
+        case "donotdisturbonoff": FocusGuard.shared.toggle()
+        case "showfocusapproval": FocusGuard.shared.askApproval()   // HongMix test hook (screenshots): the approval sheet
+        case "startupcheck", "showstartupcheck": StartupCheckWindow.show(engine: e)
+        case "dismisssheet":         // HongMix test hook: Value=1|2 — answers the sheet on the main window (button 1 / 2)
+            guard let w = FullscreenOutput.switcherWindow, let sh = w.attachedSheet else { return "No sheet" }
+            w.endSheet(sh, returnCode: value == "2" ? .alertSecondButtonReturn : .alertFirstButtonReturn)
+        case "snapshotallwindows":   // HongMix test hook: Value=folder — PNG of every visible HongMix window
+            return snapshotAllWindows(value) ? nil : "Snapshot failed"
+        case "snapshotview":         // HongMix test hook: Value=name,path — offscreen render (works on a locked screen)
+            let p = value.split(separator: ",", maxSplits: 1).map { String($0) }
+            guard p.count == 2 else { return "Value=startup|display|general|topbar|banner|focusapproval|focusinfo,path" }
+            return UISnapshots.render(p[0], to: (p[1] as NSString).expandingTildeInPath, engine: e)
         case "snapshotwindow":   // HongMix extension: PNG of the main window (UI layout check)
             return snapshotWindow(value) ? nil : "Snapshot failed"
         case "resizewindow":     // HongMix extension: Value=width,height
@@ -1037,6 +1069,21 @@ enum APIProcessor {
     private static func isDirectory(_ path: String) -> Bool {
         var dir: ObjCBool = false
         return FileManager.default.fileExists(atPath: (path as NSString).expandingTildeInPath, isDirectory: &dir) && dir.boolValue
+    }
+
+    private static func snapshotAllWindows(_ folder: String) -> Bool {
+        let dir = (folder as NSString).expandingTildeInPath
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        var n = 0
+        for w in NSApp.windows where w.isVisible {
+            guard let v = w.contentView ?? nil, v.bounds.width > 20, v.bounds.height > 20,
+                  let rep = v.bitmapImageRepForCachingDisplay(in: v.bounds) else { continue }
+            v.cacheDisplay(in: v.bounds, to: rep)
+            n += 1
+            let name = w.title.isEmpty ? "window" : w.title.replacingOccurrences(of: "/", with: "-")
+            try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "\(dir)/\(n)-\(name).png"))
+        }
+        return n > 0
     }
 
     private static func snapshotWindow(_ path: String) -> Bool {

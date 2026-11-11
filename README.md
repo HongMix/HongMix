@@ -10,24 +10,25 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.0</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.1</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.1.0
-- New video inputs no longer loop by default; change this in Settings › General.
-- Fit, Fill and Stretch modes plus separate horizontal/vertical zoom support wide LED walls and non-16:9 sources.
-- HongMix now quits correctly even while a settings sheet is open.
-- Mac sleep is reported as a warning instead of dropped frames, and STREAM blinks orange while disconnected.
-- Verified: loop defaults, fit modes, X/Y zoom and quit paths. Physical lid sleep and the orange disconnected indicator were not directly tested. See the [English release notes](docs/RELEASE-NOTES-2.1.0.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.0.ko.md).
+### Latest update · 2.1.1
+- Do Not Disturb can follow HongMix automatically and can be toggled from the top bar after one Shortcut approval.
+- A pre-show check shows Mac health, network speed, remote-control addresses and connected devices.
+- Assign a different source to every monitor; assignments and fullscreen output return after reconnecting a display.
+- Choose whether display output stays on every desktop or only the desktop where it was opened.
+- An orange bar warns when another app owns the keyboard during a live output.
+- Display-sleep prevention, first-launch language and live-caption translation were improved. See the [English release notes](docs/RELEASE-NOTES-2.1.1.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.1.ko.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.0/2.1.0-loop-default-en.png" alt="HongMix 2.1.0 default loop setting for new videos" width="100%"><br><sub>New videos play once by default · looping is optional</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.0/2.1.0-fit-fill-axis-zoom-en.png" alt="HongMix 2.1.0 Fit Fill Stretch and separate axis zoom" width="100%"><br><sub>Fit · Fill · Stretch · separate horizontal/vertical zoom</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.1/en-03-preshow-check.png" alt="HongMix 2.1.1 pre-show system check" width="100%"><br><sub>Mac, network, remote control and device readiness</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.1/en-04-display-monitor-outputs.png" alt="HongMix 2.1.1 per-monitor display output" width="100%"><br><sub>Desktop pinning and per-monitor output</sub></td>
   </tr>
 </table>
 

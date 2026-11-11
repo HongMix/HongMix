@@ -10,24 +10,25 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.1.0 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.1.1 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.1.0
-- 새 영상 입력은 기본으로 반복 재생하지 않습니다. 설정 › 일반에서 바꿀 수 있습니다.
-- 맞추기·꽉 채우기·늘리기와 가로·세로 개별 줌으로 LED 와이드 화면과 비표준 비율 소스를 맞춥니다.
-- 설정 창이 열려 있어도 HongMix가 정상 종료됩니다.
-- 맥 잠자기는 프레임 드롭 대신 경고로 기록하며, 송출 미연결 중에는 STREAM 버튼이 주황으로 깜빡입니다.
-- 검증 완료: 루프 기본값, 화면 맞춤, X/Y 줌, 종료 경로. 실제 덮개 닫힘과 송출 미연결 주황 표시는 직접 확인하지 못했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.0.ko.md) · [English release notes](docs/RELEASE-NOTES-2.1.0.md)
+### 최신 업데이트 · 2.1.1
+- 처음 한 번 단축어를 승인하면 HongMix 실행·종료에 맞춰 방해 금지를 켜고 끄며 상단 버튼으로 전환합니다.
+- 시작 전 점검에서 맥 상태, 네트워크 속도, 원격 제어 주소와 연결 장비를 확인합니다.
+- 모니터마다 다른 소스를 지정하며 화면을 다시 연결하면 전체화면 출력과 할당이 자동 복구됩니다.
+- 디스플레이 출력을 모든 데스크톱에 고정하거나 현재 데스크톱에서만 보이게 할 수 있습니다.
+- 방송 출력 중 다른 앱이 키보드를 가져가면 주황 경고 줄이 나타납니다.
+- 화면 꺼짐 방지, 첫 실행 언어와 실시간 자막 번역을 개선했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.1.ko.md) · [English release notes](docs/RELEASE-NOTES-2.1.1.md)
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.0/2.1.0-loop-default-ko.png" alt="HongMix 2.1.0 새 영상 기본 반복 설정" width="100%"><br><sub>새 영상은 기본 한 번 재생 · 반복은 선택</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.0/2.1.0-fit-fill-axis-zoom-ko.png" alt="HongMix 2.1.0 맞추기 꽉 채우기 늘리기 가로 세로 줌" width="100%"><br><sub>맞추기 · 꽉 채우기 · 늘리기 · 가로/세로 개별 줌</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.1/ko-03-preshow-check.png" alt="HongMix 2.1.1 시작 전 시스템 점검" width="100%"><br><sub>맥·네트워크·원격 제어·장비 준비 상태</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.1/ko-04-display-monitor-outputs.png" alt="HongMix 2.1.1 모니터별 디스플레이 출력" width="100%"><br><sub>데스크톱 고정과 모니터별 출력</sub></td>
   </tr>
 </table>
 

@@ -66,6 +66,9 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `SetOutputFullscreen / SetOutputFullscreen2` | Value=Output|Output2|Output3|Output4 | 풀스크린 출력에 보낼 Output을 정합니다. |
 | `SetOutputExternal2` | Value=Output|Output2… | 두 번째 NDI/DeckLink 출력의 소스를 정합니다. |
 | `Fullscreen / FullscreenOn / FullscreenOff` |  | 보조 모니터 풀스크린 출력을 켜고 끕니다. |
+| `SetMonitorOutput / MonitorOutput` | Value=모니터번호[,Output\|Preview\|Clean\|MultiView\|Off\|입력] | 보조 모니터별 출력 소스를 지정합니다. 스위처가 표시된 모니터에는 열지 않습니다. |
+| `MonitorOutputOff` | Value=모니터번호 | 해당 모니터의 독립 출력을 닫습니다. |
+| `IdentifyMonitors` |  | 연결된 화면에 모니터 번호를 잠시 표시합니다. |
 | `Snapshot` | [Value=파일 경로] | Output을 PNG로 저장합니다 (기본 위치 ~/Pictures/HongMix). |
 | `SnapshotInput` | Input [Value=경로] | 입력 화면을 PNG로 저장합니다. |
 
@@ -105,6 +108,13 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `SetCaptionLayout` | Value=right\|bottom\|band | 자막 레이아웃 프리셋을 정합니다. |
 | `SetCaptionLines / SetCaptionSize / SetCaptionLetterSpacing / SetCaptionLineSpacing / SetCaptionChars` | Value=숫자 | 자막 줄 수·크기·간격·줄당 글자 수를 설정합니다. |
 | `CaptionLabelOn / CaptionLabelOff / CaptionLabelOnOff` |  | AI 자막 라벨을 제어합니다. |
+
+## 방송 안전·시스템
+
+| 함수 | 파라미터 | 동작 |
+|---|---|---|
+| `DoNotDisturbOn / DoNotDisturbOff / DoNotDisturbOnOff` |  | HongMix용 방해금지 자동화를 켜고 끄거나 토글합니다. 최초 사용 시 포함된 단축어 가져오기가 필요할 수 있습니다. |
+| `StartupCheck / ShowStartupCheck` |  | 입력 신호·오디오·저장 공간·네트워크·출력의 송출 전 점검 창을 엽니다. |
 
 ## 타이틀 (GT)
 

@@ -30,6 +30,8 @@ final class LaunchModel: ObservableObject {
     @Published var visible = true
     @Published var fading = false
     private var started = false
+    /// Runs once the launch screen is gone (Do Not Disturb, monitor outputs, pre-show check).
+    var onFinished: (() -> Void)?
 
     private func set(_ i: Int, _ state: StepState, _ detail: String = "") {
         steps[i].state = state
@@ -107,7 +109,12 @@ final class LaunchModel: ObservableObject {
     func dismiss() {
         guard visible, !fading else { return }
         withAnimation(.easeInOut(duration: 0.45)) { fading = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.visible = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.visible = false
+            let f = self.onFinished
+            self.onFinished = nil
+            f?()
+        }
     }
 }
 

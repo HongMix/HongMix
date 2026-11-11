@@ -164,6 +164,8 @@ private struct RenderState {
     var stinger: StingerState? = nil
     var busSources: [BusSource] = [.preview, .multiview, .clean]   // Output 2, 3, 4
     var fullscreenSource: BusSource? = nil                         // nil = fullscreen off
+    /// Per-monitor display outputs (DisplayMap), slot index → source; nil = slot unused.
+    var displaySources = [BusSource?](repeating: nil, count: SwitcherEngine.displaySlotCount)
     var isoMasterAudio = false
 }
 
@@ -317,6 +319,9 @@ final class SwitcherEngine: ObservableObject {
     let busSlots = [VideoSlot(), VideoSlot(), VideoSlot(), VideoSlot()]
     /// Latest frame of the Fullscreen output.
     let fullscreenSlot = VideoSlot()
+    /// Latest frames of the per-monitor display outputs (DisplayMap).
+    static let displaySlotCount = 8
+    let displaySlots = (0..<SwitcherEngine.displaySlotCount).map { _ in VideoSlot() }
 
     /// Fired on the main thread whenever program/preview/overlay/output state changes (TCP subscriptions).
     let switchEvents = PassthroughSubject<Void, Never>()
@@ -407,9 +412,10 @@ final class SwitcherEngine: ObservableObject {
         let hp = audioOutputRoutes[8]
         audioMixer.setMonitoringDevice(uid: hp.deviceUID, firstChannel: hp.firstChannel)
         // No App Nap / timer coalescing while HongMix runs — even minimised or behind other windows.
-        // (macOS otherwise slows background apps, which shows up as dropped frames.)
+        // (macOS otherwise slows background apps, which shows up as dropped frames.) The display never sleeps
+        // either: an idle screen-off would also blank HDMI outputs (LED walls, stage monitors).
         appActivity = ProcessInfo.processInfo.beginActivity(
-            options: [.userInitiated, .latencyCritical, .idleSystemSleepDisabled],
+            options: [.userInitiated, .latencyCritical, .idleSystemSleepDisabled, .idleDisplaySleepDisabled],
             reason: "HongMix live production")
         startRenderThread()
         watchSystemSleep()
@@ -898,6 +904,12 @@ final class SwitcherEngine: ObservableObject {
 
     func setFullscreenSource(_ src: BusSource?) {
         withState { $0.fullscreenSource = src }
+    }
+
+    func setDisplaySource(_ index: Int, _ src: BusSource?) {
+        guard (0..<SwitcherEngine.displaySlotCount).contains(index) else { return }
+        withState { $0.displaySources[index] = src }
+        if src == nil { displaySlots[index].clear() }
     }
 
     func busSlot(_ bus: Int) -> VideoSlot {
@@ -1653,6 +1665,9 @@ final class SwitcherEngine: ObservableObject {
         }
         if let fsrc = st.fullscreenSource, let f = frame(for: fsrc) {
             fullscreenSlot.store(f)
+        }
+        for (k, dsrc) in st.displaySources.enumerated() {
+            if let dsrc = dsrc, let f = frame(for: dsrc) { displaySlots[k].store(f) }
         }
 
         tickMarks.append(("buses", CACurrentMediaTime()))

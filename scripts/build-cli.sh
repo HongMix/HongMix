@@ -127,6 +127,7 @@ sed -e 's/$(EXECUTABLE_NAME)/HongMix/' -e 's/$(PRODUCT_BUNDLE_IDENTIFIER)/com.ho
 cp Sources/Shaders/Mixer.metal "$APP/Contents/Resources/"
 [ -f Resources/en.json ] && cp Resources/en.json "$APP/Contents/Resources/"
 cp Resources/caption-terms-ko.txt Resources/caption-corrections-ko.csv "$APP/Contents/Resources/" 2>/dev/null
+cp "Resources/HongMix Focus.shortcut" "$APP/Contents/Resources/" 2>/dev/null
 [ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 if [ "$HAVE_CEF" = 1 ]; then
   mkdir -p "$APP/Contents/Frameworks"

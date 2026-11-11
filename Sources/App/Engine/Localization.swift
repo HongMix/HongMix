@@ -12,7 +12,8 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     /// Current language (UserDefaults; first launch follows the Mac's language).
     static var current: AppLanguage = {
         if let s = UserDefaults.standard.string(forKey: defaultsKey), let l = AppLanguage(rawValue: s) { return l }
-        return (Locale.preferredLanguages.first ?? "ko").hasPrefix("ko") ? .ko : .en
+        // First launch: Korean if Korean is anywhere in the Mac's language list, otherwise English.
+        return Locale.preferredLanguages.contains { $0.hasPrefix("ko") } ? .ko : .en
     }()
 
     static func set(_ l: AppLanguage) {

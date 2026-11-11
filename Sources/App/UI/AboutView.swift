@@ -7,6 +7,8 @@ struct GeneralSettings: View {
     @AppStorage(FFmpegInput.rateConformKey) private var rateConform = true
     @AppStorage(AppSkin.defaultsKey) private var appSkin = AppSkin.current.rawValue
     @AppStorage(InputConfig.newVideoLoopKey) private var newVideoLoop = false
+    @ObservedObject private var focus = FocusGuard.shared
+    @ViewState private var showCheck = SystemCheck.showAtLaunch
 
     var body: some View {
         Form {
@@ -37,6 +39,23 @@ struct GeneralSettings: View {
                     .font(.caption).foregroundColor(.secondary)
                 Toggle(L("새 영상 입력 기본 루프"), isOn: $newVideoLoop)
                 Text(L("새로 추가하는 영상(Add Input · Finder 드래그 · API)에 적용됩니다. 이미 있는 입력은 각 타일의 Loop 버튼으로 바꿉니다."))
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            Section(L("방송 안전")) {
+                Toggle(L("HongMix를 켜면 방해 금지 켜기"), isOn: Binding(get: { focus.autoOn }, set: { focus.autoOn = $0 }))
+                Toggle(L("HongMix를 끄면 방해 금지 끄기"), isOn: Binding(get: { focus.offOnQuit }, set: { focus.offOnQuit = $0 }))
+                HStack {
+                    Text(focus.installed ? L("방해 금지 단축어: 승인됨") : L("방해 금지 단축어: 승인 필요"))
+                        .foregroundColor(focus.installed ? .secondary : .orange)
+                    Spacer()
+                    if !focus.installed { Button(L("승인…")) { focus.askApproval() } }
+                }
+                Text(L("방송 중 전화·문자·알림 창이 키보드, 마우스, Companion 제어를 가져가지 않게 합니다. 끄는 방법: 위쪽 '방해 금지' 버튼, 또는 제어 센터 › 집중 모드."))
+                    .font(.caption).foregroundColor(.secondary)
+                Toggle(L("실행할 때 시작 전 점검 보기"), isOn: Binding(get: { showCheck }, set: { showCheck = $0; SystemCheck.showAtLaunch = $0 }))
+                Toggle(L("시작 전 점검에서 인터넷 속도 측정"), isOn: Binding(get: { SystemCheck.shared.internetCheck },
+                                                               set: { SystemCheck.shared.internetCheck = $0; showCheck = showCheck }))
+                Text(L("속도 측정과 외부 IP 확인은 Cloudflare 속도 측정 서버에 접속합니다. 핫스팟 연결은 측정하지 않습니다."))
                     .font(.caption).foregroundColor(.secondary)
             }
         }

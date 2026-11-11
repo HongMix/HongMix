@@ -77,6 +77,25 @@ final class FullscreenOutput: NSObject {
     }
 
     var isShowing: Bool { window != nil }
+    /// Monitor the output is on right now.
+    var currentScreen: NSScreen? { window?.screen }
+
+    /// Fullscreen on a monitor other than the switcher's: every desktop (default) or only the current one.
+    var pin: DesktopPin {
+        get { DesktopPin(rawValue: UserDefaults.standard.string(forKey: "fullscreenPin") ?? "") ?? .allDesktops }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: "fullscreenPin")
+            if let e = engine, isShowing, activeMode == .fullscreen { hide(); show(engine: e) }
+        }
+    }
+    /// The chosen monitor by what it is (MonitorIdentity) — survives replugging, unlike displayID.
+    private var displayKey: String {
+        get { UserDefaults.standard.string(forKey: "fullscreenDisplayKey") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "fullscreenDisplayKey") }
+    }
+    /// The chosen monitor was unplugged while showing: reopen when it comes back.
+    private var reopenWhenBack = false
+    private var reconnectObserver: NSObjectProtocol?
 
     static func displayID(of s: NSScreen) -> CGDirectDisplayID {
         (s.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0
@@ -104,7 +123,15 @@ final class FullscreenOutput: NSObject {
     private func targetScreen() -> NSScreen? {
         let screens = NSScreen.screens
         guard !screens.isEmpty else { return nil }
-        if displayID != 0, let s = screens.first(where: { FullscreenOutput.displayID(of: $0) == displayID }) { return s }
+        if displayID != 0 {
+            if !displayKey.isEmpty, let s = MonitorIdentity.screen(forKey: displayKey) {
+                // replugged monitors get a new display ID: follow it, so the Display picker shows the monitor again
+                let id = FullscreenOutput.displayID(of: s)
+                if id != displayID { displayID = id }
+                return s
+            }
+            if let s = screens.first(where: { FullscreenOutput.displayID(of: $0) == displayID }) { return s }
+        }
         // automatic: any screen that is not the switcher's
         let appScreen = FullscreenOutput.switcherWindow?.screen
         return screens.first(where: { $0 != appScreen }) ?? screens[0]
@@ -112,6 +139,8 @@ final class FullscreenOutput: NSObject {
 
     func setDisplay(_ id: CGDirectDisplayID, engine: SwitcherEngine) {
         displayID = id
+        displayKey = NSScreen.screens.first { FullscreenOutput.displayID(of: $0) == id }.map { MonitorIdentity.of($0).key } ?? ""
+        reopenWhenBack = false
         if isShowing {
             hide()
             show(engine: engine)
@@ -179,6 +208,9 @@ final class FullscreenOutput: NSObject {
         w.title = L("출력 창")
         w.titlebarAppearsTransparent = mode == .window
         w.exitOnEscape = mode == .fullscreen
+        let pinned = pin == .allDesktops
+        // Another monitor: above its menu bar and Dock for both desktop options — "this desktop only" is set by the
+        // collection behaviour below (which Spaces), not by the level (at .normal that monitor's menu bar covered the top).
         w.level = mode == .window ? (alwaysOnTop ? .floating : .normal) : (coversAppScreen ? .normal : .screenSaver)
         w.backgroundColor = .black
         w.isOpaque = true
@@ -193,8 +225,10 @@ final class FullscreenOutput: NSObject {
             w.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace, .fullScreenNone]
         } else if coversAppScreen {
             w.collectionBehavior = [.fullScreenAuxiliary, .moveToActiveSpace, .ignoresCycle]
-        } else {
+        } else if pinned {
             w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        } else {
+            w.collectionBehavior = [.managed, .fullScreenAuxiliary, .ignoresCycle]
         }
         let switcherInFullScreen = NSApp.windows.contains { $0.isVisible && $0.styleMask.contains(.fullScreen) }
         if mode == .window {
@@ -236,15 +270,40 @@ final class FullscreenOutput: NSObject {
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             self?.screensChanged()
         }
+        reopenWhenBack = false
+        if displayKey.isEmpty, displayID != 0 { displayKey = MonitorIdentity.of(screen).key }
+        if reconnectObserver == nil {
+            reconnectObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self?.reopenIfBack() }
+            }
+        }
         engine.objectWillChange.send()
+    }
+
+    /// The unplugged monitor is back (same vendor/model/serial): show the output on it again.
+    private func reopenIfBack() {
+        guard reopenWhenBack, window == nil, let engine = engine, !displayKey.isEmpty,
+              MonitorIdentity.screen(forKey: displayKey) != nil else { return }
+        reopenWhenBack = false
+        show(engine: engine)
+        engine.lastMessage = L("풀스크린 디스플레이가 다시 연결되어 출력을 다시 열었습니다")
     }
 
     private func screensChanged() {
         guard let w = window, let engine = engine else { return }
-        if displayID != 0, !NSScreen.screens.contains(where: { FullscreenOutput.displayID(of: $0) == displayID }) {
+        let chosenGone = !displayKey.isEmpty ? MonitorIdentity.screen(forKey: displayKey) == nil
+            : !NSScreen.screens.contains(where: { FullscreenOutput.displayID(of: $0) == displayID })
+        if displayID != 0, chosenGone {
+            let reopen = activeMode == .fullscreen && fillDisplayID == nil
             hide()          // the chosen display was unplugged
-            engine.lastMessage = L("풀스크린 디스플레이가 분리되어 풀스크린을 닫았습니다")
+            reopenWhenBack = reopen
+            engine.lastMessage = reopen ? L("풀스크린 디스플레이가 분리되었습니다 — 다시 연결되면 자동으로 다시 엽니다")
+                                        : L("풀스크린 디스플레이가 분리되어 풀스크린을 닫았습니다")
             return
+        }
+        if let s = targetScreen(), activeMode == .fullscreen, fillDisplayID == nil, s != w.screen {
+            w.setFrame(s.frame, display: true)
         }
         let fillScreen = fillDisplayID.flatMap { id in NSScreen.screens.first { FullscreenOutput.displayID(of: $0) == id } }
         if fillDisplayID != nil && fillScreen == nil {
@@ -288,6 +347,7 @@ final class FullscreenOutput: NSObject {
     /// Closes the display output completely (also forgets a pending return-from-fill).
     func hide() {
         fillReturnFrame = nil
+        reopenWhenBack = false
         closeWindow()
     }
 

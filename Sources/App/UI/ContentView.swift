@@ -148,6 +148,7 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             TopBar()
+            ControlFocusBanner()
             GeometryReader { geo in
                 let activeAudioInputs = engine.inputs.filter { $0.hasAudio && $0.audioFX.visibleInMixer }
                 let lay = SwitcherLayout(size: geo.size, mixerVisible: engine.mixerVisible,
@@ -346,6 +347,7 @@ struct TopBar: View {
                     .background(Theme.live)
                     .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
             }
+            FocusChip()
             SettingsLink {
                 Image(systemName: "gearshape")
             }
@@ -812,6 +814,11 @@ struct FullscreenBarButton: View {
                     if mono && on {
                         Text(output.source.label).foregroundColor(Color(white: 0.72)).lineLimit(1)
                     }
+                    if DisplayMap.shared.showingCount > 0 {
+                        Text("+\(DisplayMap.shared.showingCount)")
+                            .foregroundColor(Color(white: 0.85))
+                            .help(Lf("모니터별 출력 %@개 켜짐", "\(DisplayMap.shared.showingCount)"))
+                    }
                 }
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white)
@@ -876,6 +883,11 @@ struct DisplaySettingsPanel: View {
                 Text(L("출력 창의 초록 버튼을 누르면 그 창이 있는 디스플레이를 꽉 채웁니다. Esc · 더블클릭 · 우클릭으로 창으로 돌아옵니다."))
                     .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
+                Picker(L("데스크탑"), selection: Binding(get: { output.pin },
+                                                     set: { output.pin = $0; engine.objectWillChange.send() })) {
+                    ForEach(DesktopPin.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .help(DesktopPin.help)
                 Text(L("지정한 디스플레이를 방송 화면으로 채웁니다. 스위처와 같은 화면이면 Esc · 더블클릭 · 우클릭으로 닫습니다."))
                     .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             }
@@ -894,9 +906,13 @@ struct DisplaySettingsPanel: View {
                     Button(L("전체화면 열기")) { output.open(.fullscreen, engine: engine) }
                 }
             }
+            if NSScreen.screens.count > 1 || !DisplayMap.shared.waiting.isEmpty {
+                Divider()
+                MonitorOutputsSection(sources: sources, title: sourceTitle)
+            }
         }
         .padding(16)
-        .frame(width: 380)
+        .frame(width: 460)
     }
 }
 
