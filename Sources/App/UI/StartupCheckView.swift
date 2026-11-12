@@ -56,6 +56,7 @@ struct StartupCheckView: View {
             ScrollView {
                 VStack(spacing: 10) {
                     macPanel
+                    MacCleanupPanel()
                     networkPanel
                     HStack(alignment: .top, spacing: 10) {
                         remotePanel
@@ -312,9 +313,70 @@ struct StartupCheckView: View {
     }
 }
 
+// MARK: - Mac cleanup (SystemHealth)
+
+/// What else is using the Mac, one-click restart of macOS widget helpers, auto cleanup for unattended
+/// shows, and a one-time setup guide for a broadcast Mac (each item opens the matching System Settings pane;
+/// HongMix never changes them itself).
+struct MacCleanupPanel: View {
+    @ObservedObject var health = SystemHealth.shared
+
+    private static let guide: [(String, String, String)] = [
+        (L("iPhone 실시간 현황 끄기"), L("배달·스포츠 같은 실시간 현황을 그리는 위젯이 화면을 멈추게 할 수 있어요"),
+         "x-apple.systempreferences:com.apple.Notifications-Settings.extension"),
+        (L("바탕화면 위젯 빼기"), L("바탕화면 위젯도 계속 다시 그려집니다"),
+         "x-apple.systempreferences:com.apple.Desktop-Settings.extension"),
+        (L("영상·녹화 폴더를 Spotlight에서 빼기"), L("큰 파일이 생길 때마다 색인이 돕니다 (Spotlight › 검색 개인정보)"),
+         "x-apple.systempreferences:com.apple.Spotlight-Settings.extension"),
+        (L("자동 업데이트 끄기"), L("방송 중 백그라운드 설치를 막습니다 (Adobe 등 다른 앱은 각 앱 설정에서)"),
+         "x-apple.systempreferences:com.apple.Software-Update-Settings.extension"),
+    ]
+
+    var body: some View {
+        Panel(title: L("맥 정리")) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    let heavy = health.lastScan.prefix(4)
+                    Image(systemName: heavy.isEmpty ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundColor(heavy.isEmpty ? .green : .orange)
+                    Text(heavy.isEmpty ? L("CPU를 많이 쓰는 다른 프로그램 없음")
+                         : heavy.map { "\(SystemHealth.friendly($0)) \(Int($0.cpu))%" }.joined(separator: " · "))
+                        .font(.system(size: 12)).lineLimit(1).truncationMode(.tail)
+                    Spacer(minLength: 6)
+                    Button(L("다시 확인")) { health.scan { _ in } }
+                    Button(health.cleaning ? L("정리 중…") : L("정리하기")) { health.cleanup() }
+                        .disabled(health.cleaning)
+                        .help(L("맥 위젯 도우미만 재시작합니다. 맥이 바로 다시 띄우고 설정은 바뀌지 않습니다. 다른 앱은 끄지 않습니다."))
+                }
+                if let r = health.result {
+                    Text(r).font(.system(size: 11)).foregroundColor(.orange)
+                }
+                Toggle(L("자동 정리 — 화면이 자주 멈추면 맥 위젯을 알아서 재시작 (24시간 무인 방송용, 같은 위젯은 30분에 한 번)"),
+                       isOn: $health.autoCleanup)
+                    .toggleStyle(.checkbox).font(.system(size: 12))
+                Divider().padding(.vertical, 2)
+                Text(L("방송용 맥 세팅 (한 번만)")).font(.system(size: 11)).foregroundColor(.secondary)
+                ForEach(Self.guide, id: \.0) { item in
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(item.0).font(.system(size: 12))
+                            Text(item.1).font(.system(size: 10)).foregroundColor(.secondary).lineLimit(1)
+                        }
+                        Spacer(minLength: 6)
+                        Button(L("설정 열기")) {
+                            if let u = URL(string: item.2) { NSWorkspace.shared.open(u) }
+                        }
+                    }
+                }
+            }
+            .onAppear { health.scan { _ in } }
+        }
+    }
+}
+
 // MARK: - Pieces
 
-private struct Panel<Content: View>: View {
+struct Panel<Content: View>: View {
     let title: String
     @ViewBuilder let content: Content
 

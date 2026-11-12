@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import CoreVideo
+import QuartzCore
 import CoreGraphics
 import AppKit
 import CoreAudio
@@ -173,7 +174,21 @@ final class FFmpegInput: CallbackInput {
         handleLock.unlock()
     }
 
+    /// After a restart request the C thread still reports "finished" until it wakes up; ignore it briefly
+    /// so the poll doesn't pause the clip again (that left a finished clip frozen on air).
+    private var restartGraceUntil: CFTimeInterval = 0
+
     override func applyTransport() {
+        // vMix: Play (or Auto Play on a cut) on a clip that already reached its end starts it over. The C
+        // thread waits at the end for a restart/seek, so un-pausing alone would never resume it.
+        if playing, supportsTransport, CACurrentMediaTime() > restartGraceUntil {
+            var pos: Int64 = 0, dur: Int64 = 0, fin: Int32 = 0
+            withHandle { h in mc_input_get_position(h, &pos, &dur, &fin) }
+            if fin != 0 {
+                restartGraceUntil = CACurrentMediaTime() + 1.0
+                withHandle { h in mc_input_restart(h) }
+            }
+        }
         let paused = !playing, loop = looping && !isList, rate = self.rate * conformFactor
         let mi = markIn >= 0 ? Int64(markIn * 1_000_000) : -1
         let mo = markOut > 0 ? Int64(markOut * 1_000_000) : -1
@@ -244,7 +259,7 @@ final class FFmpegInput: CallbackInput {
         }
         if abs(position - p) > 0.05 { position = p }
         if duration != d { duration = d }
-        if finished != 0 && playing && queuedListIndex == nil {
+        if finished != 0 && playing && queuedListIndex == nil && CACurrentMediaTime() > restartGraceUntil {
             if isList && (playlistIndex + 1 < playlist.count || looping) {
                 nextItem()            // List input: next file
             } else {
@@ -296,6 +311,7 @@ final class FFmpegInput: CallbackInput {
     }
 
     override func restart() {
+        restartGraceUntil = CACurrentMediaTime() + 1.0
         withHandle { h in mc_input_restart(h) }
         if supportsTransport && !playing { playing = true }
     }

@@ -149,6 +149,9 @@ typedef struct {
                                   // (no lost frames). NULL/"" = off.
     int64_t spill_reserve_bytes;  // with spill_dir: switch over (seamless split) as soon as the main volume
                                   // has less than this free; 0 = only when a write actually fails
+    int cbr;                      // streams: constant bitrate (VideoToolbox constant_bit_rate / x264 nal-hrd cbr;
+                                  // MPEG-TS/SRT also padded to a fixed muxrate). 0 = capped VBR (default).
+                                  // Falls back to capped VBR with a warning when the encoder can't do CBR.
 } mc_output_config;
 
 #define MC_MAX_XTRACKS 8

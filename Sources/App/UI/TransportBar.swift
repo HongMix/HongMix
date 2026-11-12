@@ -10,7 +10,9 @@ struct TransportBar: View {
     var body: some View {
         Group {
             if let i = input, i.supportsTransport {
-                TransportControls(input: i)
+                // Own hosting view: the playhead/timecode change ~20×/s, and in the main window's
+                // SwiftUI graph every change re-ran layout for the whole switcher (main-thread stalls).
+                IsolatedHost(id: i.id) { TransportControls(input: i) }
             } else {
                 Color.clear
             }
@@ -149,5 +151,34 @@ private struct PositionBar: View {
         }
         .frame(height: 20)
         .help(L("클릭·드래그로 위치 이동. 우클릭 → Mark In / Mark Out (재생 바를 원하는 위치로 옮긴 뒤 설정)"))
+    }
+}
+
+/// Hosts a SwiftUI subtree in its own NSHostingView inside a fixed frame, so frequent updates in it
+/// re-layout only that subtree instead of the surrounding window. `id` rebuilds it for a new input.
+struct IsolatedHost<Content: View>: NSViewRepresentable {
+    let id: AnyHashable
+    let content: () -> Content
+
+    init(id: AnyHashable, @ViewBuilder content: @escaping () -> Content) {
+        self.id = id
+        self.content = content
+    }
+
+    final class Coordinator { var id: AnyHashable? }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSHostingView<Content> {
+        let v = NSHostingView(rootView: content())
+        v.sizingOptions = []          // never push size changes up to the parent layout
+        context.coordinator.id = id
+        return v
+    }
+
+    func updateNSView(_ v: NSHostingView<Content>, context: Context) {
+        // Only a different input replaces the content; the subtree updates itself from its own observers.
+        guard context.coordinator.id != id else { return }
+        context.coordinator.id = id
+        v.rootView = content()
     }
 }

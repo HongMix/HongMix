@@ -463,6 +463,17 @@ struct OutputEditor: View {
             }
             if output.config.videoCodec != "prores" {
                 NumberField(L("비디오 비트레이트"), value: $output.config.videoKbps, in: 500...100000, unit: "kbps")
+                if output.config.kind == .stream {
+                    Picker(L("비트레이트 방식"), selection: $output.config.cbr) {
+                        Text("VBR").tag(false)
+                        Text(L("CBR (고정)")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    Text(output.config.cbr
+                         ? L("항상 설정한 비트레이트로 보냅니다. SRT는 빈 데이터를 채워 전송량을 일정하게 맞춥니다.")
+                         : L("설정한 비트레이트를 넘지 않게 보냅니다. 단순한 화면에서는 더 적게 나갑니다."))
+                        .font(.caption).foregroundColor(.secondary)
+                }
                 DecimalField(L("키프레임 간격"), value: $output.config.keyintSeconds, in: 1...10, unit: L("초"), step: 1)
             }
             Picker(L("오디오 비트레이트 (AAC)"), selection: $output.config.audioKbps) {

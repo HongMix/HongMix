@@ -814,10 +814,22 @@ struct InputBox: View {
     /// make the picture look vertically offset or undersized in only some tiles.
     private var inputMonitor: some View {
         ZStack(alignment: .center) {
-            MonitorView(fps: 6, onActiveChange: { input.setInputTileVisible($0) }) { input.monitorFrame() }
+            MonitorView(fps: 6, onActiveChange: { input.setInputTileVisible($0) },
+                        placement: { [weak input] in input?.videoAdjust }) { input.monitorFrame() }
                 .background(Color.black)
             Color.clear.contentShape(Rectangle())
                 .onTapGesture { engine.setPreview(input.id) }
+            if input.adjust.fitMode != 0 {
+                // the tile is shown as placed in Program; say so when it differs from the raw source
+                Text(input.adjust.fitMode == 1 ? "FILL" : "STRETCH")
+                    .font(.system(size: 8, weight: .bold))
+                    .padding(.horizontal, 3).padding(.vertical, 1)
+                    .background(Color.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 2))
+                    .foregroundColor(.white.opacity(0.9))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(3)
+                    .allowsHitTesting(false)
+            }
             if input.signalLost {
                 SignalLostBadge(input: input)
             } else if input.state == Int32(MC_STATE_ERROR) || input.state == Int32(MC_STATE_CONNECTING) {
@@ -876,6 +888,7 @@ struct InputBox: View {
                 }
                 .disabled(!transport)
                 .opacity(transport ? 1 : 0.35)
+                tileIcon("display", help: L("크게 보기 (별도 창)")) { InputMonitorWindow.show(input, engine: engine) }
             }
             .padding(.horizontal, 3)
 

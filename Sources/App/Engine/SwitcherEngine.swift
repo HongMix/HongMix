@@ -519,6 +519,7 @@ final class SwitcherEngine: ObservableObject {
     }
 
     func removeInput(_ input: InputSource) {
+        InputMonitorWindow.close(input.id)
         inputs.removeAll { $0.id == input.id }
         unwatch(input.id)
         stopISO(input.id)
@@ -595,16 +596,155 @@ final class SwitcherEngine: ObservableObject {
         id == programID || (0..<SwitcherEngine.overlayCount).contains { overlayOn[$0] && overlayIDs[$0] == id }
     }
 
+    /// Inputs shown through visible layers of `id` (recursively, cycle-safe, `id` itself excluded).
+    private func layerSources(of id: UUID?) -> [InputSource] {
+        guard let root = input(withID: id) else { return [] }
+        var seen: Set<UUID> = [root.id], out: [InputSource] = [], stack = [root]
+        while let cur = stack.popLast() {
+            for l in cur.layers where l.visible {
+                guard let cid = l.inputID, !seen.contains(cid), let child = input(withID: cid) else { continue }
+                seen.insert(cid); out.append(child); stack.append(child)
+            }
+        }
+        return out
+    }
+
+    /// Live directly, or visible inside a layer of something that is live.
+    private func isOnAir(_ id: UUID) -> Bool {
+        if isLive(id) { return true }
+        var roots: [UUID?] = [programID]
+        for i in 0..<SwitcherEngine.overlayCount where overlayOn[i] { roots.append(overlayIDs[i]) }
+        return roots.contains { r in layerSources(of: r).contains { $0.id == id } }
+    }
+
+    /// Layer media currently shown on air, so a child already running (e.g. the same loop on every
+    /// camera) is not restarted or re-animated when the parent changes.
+    private var onAirLayerIDs: Set<UUID> = []
+
+    private func layerEnteredAir(_ child: InputSource) {
+        if let t = child as? TitleInput { t.setOffAir(false) }
+        guard onAirLayerIDs.insert(child.id).inserted, !isLive(child.id) else { return }
+        startTransportIfAuto(child)
+        child.didGoLive()
+    }
+
+    /// Main thread: tell titles whether anything shows them at full rate (outputs, preview, overlays,
+    /// layers of those, Output 2–4, MultiCorder ISO, monitor windows). Unused titles redraw tickers at 6 fps.
+    private func syncTitleUse() {
+        var used: Set<UUID> = []
+        var roots: [UUID?] = [programID, previewID]
+        for i in 0..<SwitcherEngine.overlayCount where overlayOn[i] { roots.append(overlayIDs[i]) }
+        for r in roots {
+            guard let r else { continue }
+            used.insert(r)
+            for c in layerSources(of: r) { used.insert(c.id) }
+        }
+        var everything = false
+        for (n, src) in busSources.enumerated() {
+            let bus = n + 2
+            guard outputs.contains(where: { $0.running && $0.config.bus == bus }) else { continue }
+            switch src {
+            case .input(let id): used.insert(id); for c in layerSources(of: id) { used.insert(c.id) }
+            case .multiview: everything = true
+            default: break
+            }
+        }
+        if multiCorderOn { everything = true }
+        for id in InputMonitorWindow.openIDs {
+            used.insert(id); for c in layerSources(of: id) { used.insert(c.id) }
+        }
+        for case let t as TitleInput in inputs { t.setOffAir(!everything && !used.contains(t.id)) }
+    }
+
+    /// Main thread, every media tick: catches layers switched on or added while their parent is on air.
+    private func syncOnAirLayers() {
+        var roots: [UUID?] = [programID]
+        for i in 0..<SwitcherEngine.overlayCount where overlayOn[i] { roots.append(overlayIDs[i]) }
+        if transitioning || (tbar > 0.001 && tbar < 0.999) { roots.append(previewID) }
+        var now: Set<UUID> = []
+        for r in roots { for c in layerSources(of: r) where !now.contains(c.id) {
+            now.insert(c.id)
+            layerEnteredAir(c)
+        } }
+        onAirLayerIDs = now
+    }
+
+    private func startTransportIfAuto(_ i: InputSource) {
+        guard i.supportsTransport && i.autoPlay else { return }
+        if i.duration > 0 && i.position >= i.duration - 0.1 && !i.looping { i.restart() }
+        if !i.playing { i.playing = true }
+        autoPlayExpect[i.id] = CACurrentMediaTime()
+        lastMove[i.id] = (i.position, CACurrentMediaTime() + 1.0)   // 2.5 s for the decoder to start
+    }
+
+    // MARK: On-air freeze watchdog
+    // A clip that should be moving on air but isn't: (1) Auto Play was requested when it went live but it is
+    // paused again 0.5 s later, (2) it is playing but its position hasn't moved for 1.5 s (stuck decoder).
+    // Both are recovered automatically, shown in the message bar and kept in the incident recorder.
+    // A clip the operator paused, or one that simply reached its end without Loop, is left alone.
+    private var autoPlayExpect: [UUID: CFTimeInterval] = [:]
+    private var lastMove: [UUID: (pos: Double, time: CFTimeInterval)] = [:]
+    private var freezeFixes: [UUID: CFTimeInterval] = [:]
+
+    private func onAirMedia() -> [InputSource] {
+        var roots: [UUID?] = [programID]
+        for i in 0..<SwitcherEngine.overlayCount where overlayOn[i] { roots.append(overlayIDs[i]) }
+        var seen: Set<UUID> = [], out: [InputSource] = []
+        for r in roots {
+            guard let i = input(withID: r) else { continue }
+            for x in [i] + layerSources(of: i.id) where x.supportsTransport && seen.insert(x.id).inserted { out.append(x) }
+        }
+        return out
+    }
+
+    private func checkOnAirFreeze() {
+        let now = CACurrentMediaTime()
+        let live = onAirMedia()
+        let liveIDs = Set(live.map(\.id))
+        autoPlayExpect = autoPlayExpect.filter { liveIDs.contains($0.key) && now - $0.value < 3 }
+        lastMove = lastMove.filter { liveIDs.contains($0.key) }
+        for i in live {
+            // (1) Auto Play didn't take
+            if let t = autoPlayExpect[i.id], now - t > 0.5 {
+                autoPlayExpect[i.id] = nil
+                if !i.playing, (freezeFixes[i.id].map { now - $0 > 5 } ?? true) {
+                    freezeFixes[i.id] = now
+                    i.restart()
+                    reportFreeze(i, L("자동 재생이 안 돼서 처음부터 다시 재생"))
+                }
+            }
+            // (2) playing but not moving
+            guard i.playing, i.duration > 0 else { lastMove[i.id] = nil; continue }
+            let atEnd = !i.looping && i.position >= i.duration - 0.2
+            if let m = lastMove[i.id], abs(m.pos - i.position) < 0.001 {
+                if !atEnd, now - m.time > 1.5, (freezeFixes[i.id].map { now - $0 > 5 } ?? true) {
+                    freezeFixes[i.id] = now
+                    lastMove[i.id] = (i.position, now)
+                    i.seek(seconds: i.position)
+                    reportFreeze(i, Lf("재생 위치가 %@초 동안 멈춰서 다시 재생", "1.5"))
+                }
+            } else {
+                lastMove[i.id] = (i.position, now)
+            }
+        }
+    }
+
+    private func reportFreeze(_ i: InputSource, _ what: String) {
+        let msg = Lf("⚠︎ 출력 영상 멈춤 감지: %@. %@ — %@", "\(number(of: i))", i.name, what)
+        lastMessage = msg
+        blackbox.record(.frameDrop, msg)
+    }
+
     // MARK: Auto Play / Auto Pause / Auto Restart
 
     private func goLive(_ id: UUID?, overlay: Bool = false) {
         guard let i = input(withID: id) else { return }
         fireTriggers(i, overlay ? .overlayIn : .transitionIn)
-        if i.supportsTransport && i.autoPlay {
-            if i.duration > 0 && i.position >= i.duration - 0.1 && !i.looping { i.restart() }
-            if !i.playing { i.playing = true }
-        }
+        startTransportIfAuto(i)
+        if let t = i as? TitleInput { t.setOffAir(false) }   // full rate before the first on-air frame
         i.didGoLive()
+        // vMix behaviour: media placed in a layer follows its parent onto Program/overlay.
+        for child in layerSources(of: i.id) { layerEnteredAir(child) }
     }
 
     private func leftLive(_ id: UUID?, overlay: Bool = false) {
@@ -613,7 +753,15 @@ final class SwitcherEngine: ObservableObject {
                                      : id == programID
             if !stillThere { fireTriggers(i, overlay ? .overlayOut : .transitionOut) }
         }
-        guard let id = id, !isLive(id), let i = input(withID: id), i.supportsTransport else { return }
+        guard let id = id else { return }
+        // Layer media leaves with its parent unless it is still on air elsewhere.
+        for child in layerSources(of: id) where !isOnAir(child.id) {
+            onAirLayerIDs.remove(child.id)
+            guard child.supportsTransport else { continue }
+            if child.autoRestart { child.restart() }
+            if child.autoPause { child.playing = false }
+        }
+        guard !isOnAir(id), let i = input(withID: id), i.supportsTransport else { return }
         if i.autoRestart { i.restart() }
         if i.autoPause { i.playing = false }
     }
@@ -652,6 +800,7 @@ final class SwitcherEngine: ObservableObject {
     // MARK: Switching (main thread)
 
     func setPreview(_ id: UUID?) {
+        if let t = input(withID: id) as? TitleInput { t.setOffAir(false) }
         withState { $0.previewID = id }
         previewID = id
         switchEvents.send()
@@ -1229,6 +1378,9 @@ final class SwitcherEngine: ObservableObject {
 
     private func mediaTick() {
         checkSignals()
+        syncOnAirLayers()
+        syncTitleUse()
+        checkOnAirFreeze()
         for i in inputs where i.supportsTransport { i.pollPosition() }
         for case let f as FFmpegInput in inputs { f.pollNominalRate() }
         if let slot = stingerActive {
@@ -1789,6 +1941,8 @@ final class SwitcherEngine: ObservableObject {
         renderMsPeak = peak
         uiStallMs = max(0, uiMaxGap)
         uiMaxGap = 0
+        SystemHealth.shared.engine = self
+        SystemHealth.shared.feed(stallMs: uiStallMs)
         MonitorRenderer.publishDrawStats()
         droppedTicks = dropped
         for o in outputs { o.refreshStats() }

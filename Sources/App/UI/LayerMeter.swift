@@ -109,6 +109,10 @@ final class MeterClock {
     func remove(_ v: LayerMeterView) { views.remove(v) }
 
     private func tick() {
+        // One Core Animation commit for all meters: each meter's own begin/commit is nested in this one,
+        // so the window server gets one message per tick instead of one per meter (was ~10 % main thread).
+        CATransaction.begin(); CATransaction.setDisableActions(true)
         for v in views.allObjects where v.window != nil && !v.isHiddenOrHasHiddenAncestor { v.refresh() }
+        CATransaction.commit()
     }
 }

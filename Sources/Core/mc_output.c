@@ -104,6 +104,7 @@ struct mc_output {
     char *mirror_dir, *spill_dir;   // owned copies of cfg.mirror_dir / cfg.spill_dir (NULL = off)
     char *backup_path;        // mirror file being written now (lock)
     char warning[256];        // last safety warning (lock)
+    int cbr_fallback;         // CBR was requested but the encoder refused it (capped VBR instead)
     int spill_split;          // the pending split is a "disk full" spill (output thread)
     int spill_warned;         // "low space, nowhere to continue" already reported (output thread)
 };
@@ -285,17 +286,21 @@ static AVCodecContext *try_open_video(mc_output *o, const char *name, const enum
             c->bit_rate = br;
             c->rc_max_rate = br;
             c->rc_buffer_size = (int)(br * (o->is_network ? 1 : 2));
+            if (o->cfg.cbr && !o->cbr_fallback) c->rc_min_rate = br;
         }
+        int want_cbr = o->cfg.cbr && !o->cbr_fallback && cq == 0 && !is_prores;
         if (global_header) c->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
         if (strstr(name, "videotoolbox")) {
             av_dict_set(&opts, "realtime", "1", 0);
             av_dict_set(&opts, "allow_sw", "1", 0);
             if (strstr(name, "h264")) av_dict_set(&opts, "profile", "high", 0);
             if (is_prores) av_dict_set(&opts, "profile", prores_profile(o->vcodec), 0);
+            if (want_cbr) av_dict_set(&opts, "constant_bit_rate", "1", 0);
         } else if (strcmp(name, "libx264") == 0) {
             av_dict_set(&opts, "preset", "veryfast", 0);
             if (o->is_network) av_dict_set(&opts, "tune", "zerolatency", 0);
             av_dict_set(&opts, "profile", "high", 0);
+            if (want_cbr) av_dict_set(&opts, "nal-hrd", "cbr", 0);
         } else if (strcmp(name, "libx265") == 0) {
             av_dict_set(&opts, "preset", "veryfast", 0);
         } else if (strcmp(name, "prores_ks") == 0) {
@@ -304,6 +309,12 @@ static AVCodecContext *try_open_video(mc_output *o, const char *name, const enum
         int ret = avcodec_open2(c, codec, &opts);
         av_dict_free(&opts);
         if (ret >= 0) return c;
+        if (want_cbr) {
+            // This Mac/encoder can't do hardware CBR: same encoder as capped VBR (reported once opened).
+            avcodec_free_context(&c);
+            o->cbr_fallback = 1;
+            return try_open_video(o, name, fmts, global_header);
+        }
         if (cq > 0) {
             // Constant quality unsupported (older macOS / Intel): same encoder, fixed bitrate.
             avcodec_free_context(&c);
@@ -467,6 +478,14 @@ static void file_mux_opts(mc_output *o, AVFormatContext *oc, AVDictionary **mopt
         // Fragments are cut explicitly by the ~1 s checkpoints at video keyframes (file_write), which
         // also tell exactly what is safely on disk (needed to continue on another disk without a gap).
         av_dict_set(mopts, "movflags", "+frag_custom+empty_moov+default_base_moof", 0);
+    }
+    if (o->is_network && o->cfg.cbr && strcmp(muxname, "mpegts") == 0) {
+        // CBR transport stream: null-pad to a fixed rate (video + audio + ~12 % TS/PES overhead).
+        int64_t vk = o->cfg.video_kbps > 0 ? o->cfg.video_kbps : 6000;
+        int64_t ak = o->cfg.audio_kbps > 0 ? o->cfg.audio_kbps : 160;
+        char rate[32];
+        snprintf(rate, sizeof(rate), "%lld", (long long)((vk + ak) * 1000 * 112 / 100));
+        av_dict_set(mopts, "muxrate", rate, 0);
     }
 }
 
@@ -850,6 +869,10 @@ static int osession_open(mc_output *o, osession *s, char *err, int errlen) {
     if (!s->venc) {
         snprintf(err, errlen, "비디오 인코더를 열 수 없음 (%s)", o->vcodec ? o->vcodec : "h264");
         return -1;
+    }
+    if (o->cfg.cbr && o->cbr_fallback == 1) {   // once per output, not on every reconnect
+        o->cbr_fallback = 2;
+        owarn(o, "CBR 미지원 인코더 — VBR(최대값 고정)로 송출 중");
     }
     int pcm = is_prores_name(o->vcodec) &&
               (strcmp(s->oc->oformat->name, "mov") == 0);

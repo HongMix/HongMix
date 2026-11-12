@@ -342,6 +342,19 @@ fragment float4 displayFragment(VOut in [[stage_in]],
 }
 
 
+/// Input-grid tile drawn exactly as the input sits in Program (fit/fill/stretch, zoom, pan, crop),
+/// over black. The tile has the output's aspect, so its uv is the output uv.
+fragment float4 tileFragment(VOut in [[stage_in]],
+                             texture2d<float> tex [[texture(0)]],
+                             texture2d<float> texC [[texture(1)]],
+                             constant float4 &fit [[buffer(0)]],
+                             constant LayerParams &L [[buffer(1)]]) {
+    constexpr sampler smp(coord::normalized, address::clamp_to_edge, filter::linear);
+    float4 c = sampleLayer(tex, texC, smp, in.uv, L, fit.z, fit.w);
+    float a = clamp(c.a * L.mixAlpha, 0.0, 1.0);
+    return float4(c.rgb * a, 1.0);
+}
+
 /// Draws one layer into the current viewport (the layer's rectangle). Output is premultiplied; the
 /// pipeline blends src + dst * (1 - srcAlpha), so layers stack with transparency.
 fragment float4 composeFragment(VOut in [[stage_in]],

@@ -149,6 +149,7 @@ struct ContentView: View {
         VStack(spacing: 0) {
             TopBar()
             ControlFocusBanner()
+            SystemHealthBanner()
             GeometryReader { geo in
                 let activeAudioInputs = engine.inputs.filter { $0.hasAudio && $0.audioFX.visibleInMixer }
                 let lay = SwitcherLayout(size: geo.size, mixerVisible: engine.mixerVisible,

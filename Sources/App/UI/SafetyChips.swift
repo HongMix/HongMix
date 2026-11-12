@@ -79,3 +79,41 @@ struct ControlFocusBanner: View {
         }
     }
 }
+
+/// Orange line when macOS itself makes the HongMix window stall (see SystemHealth): names the cause and
+/// offers to restart the macOS widget helpers. Output is not affected, and the line says so.
+struct SystemHealthBanner: View {
+    @ObservedObject var health = SystemHealth.shared
+    var preview: SystemHealth.Alert? = nil      // screenshots
+
+    var body: some View {
+        let a = preview ?? health.alert
+        if preview != nil || (a != nil && !health.dismissed) || health.cleaning || health.result != nil {
+            HStack(spacing: 8) {
+                Image(systemName: "gauge.with.dots.needle.67percent")
+                Text(message(a)).lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: 0)
+                if health.cleaning { ProgressView().controlSize(.small) }
+                if let a, !a.restartable.isEmpty, !health.cleaning, health.result == nil {
+                    Button(L("정리하기")) { health.cleanup() }
+                        .help(L("맥 위젯 도우미만 재시작합니다. 맥이 바로 다시 띄우고 설정은 바뀌지 않습니다."))
+                }
+                Button(L("닫기")) { health.dismissed = true; health.clearResult() }
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.black)
+            .padding(.horizontal, 12).frame(height: 24)
+            .background(Color.orange)
+        }
+    }
+
+    private func message(_ a: SystemHealth.Alert?) -> String {
+        if preview == nil, let r = health.result { return r }
+        if preview == nil, health.cleaning { return L("정리 중…") }
+        guard let a else { return "" }
+        let cause = a.culprits.prefix(2).map { "\(SystemHealth.friendly($0)) \(Int($0.cpu))%" }.joined(separator: ", ")
+        return cause.isEmpty
+            ? L("맥 화면이 느려졌어요 — HongMix 화면이 끊길 수 있어요 (출력에는 영향 없음)")
+            : Lf("맥 화면이 느려졌어요 — 원인: %@ (출력에는 영향 없음)", cause)
+    }
+}

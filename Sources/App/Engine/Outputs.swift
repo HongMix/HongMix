@@ -58,6 +58,8 @@ struct OutputConfig: Codable, Identifiable, Equatable {
     var audioKbps: Int = 160
     var keyintSeconds: Double = 2
     var hardwareEncoder: Bool = true
+    /// Streams: constant bitrate instead of capped VBR (SRT/MPEG-TS also padded to a fixed rate).
+    var cbr: Bool = false
 
     // recording
     var recordFolder: String = "~/Movies/HongMix"
@@ -183,6 +185,7 @@ extension OutputConfig {
         d.backupFolder = c.value(.backupFolder, d.backupFolder)
         d.spillToBackupWhenFull = c.value(.spillToBackupWhenFull, d.spillToBackupWhenFull)
         d.spillFolder = c.value(.spillFolder, d.spillFolder)
+        d.cbr = c.value(.cbr, d.cbr)
         self = d
     }
 }
@@ -531,6 +534,7 @@ final class OutputChannel: ObservableObject, Identifiable {
             cfg.keyint_frames = Int32(max(1.0, (c.keyintSeconds * format.fps).rounded()))
             cfg.reconnect = c.kind == .stream ? 1 : 0
             cfg.hardware = c.hardwareEncoder ? 1 : 0
+            cfg.cbr = c.kind == .stream && c.cbr ? 1 : 0
             cfg.pixelbuffer_input = 1
             cfg.delay_ms = Int32(c.effectiveDelaySeconds * 1000)
             var delayDir: UnsafeMutablePointer<CChar>? = nil
@@ -786,6 +790,8 @@ final class OutputChannel: ObservableObject, Identifiable {
                 mc_output_current_file(f, &cur, Int32(cur.count))
                 mc_output_backup_file(f, &bak, Int32(bak.count))
                 if st.warning_seq != lastWarningSeq { mc_output_last_warning(f, &warn, Int32(warn.count)) }
+            } else if config.kind == .stream, st.warning_seq != lastWarningSeq {
+                mc_output_last_warning(f, &warn, Int32(warn.count))   // e.g. "CBR not supported"
             }
         }
         let conns = n.map { mc_ndi_send_connections($0) } ?? 0
@@ -813,6 +819,11 @@ final class OutputChannel: ObservableObject, Identifiable {
                                    warning: st.warning_seq != lastWarningSeq ? String(cString: warn) : nil)
             } else if config.kind == .stream {
                 appendStreamSample(st)
+                if st.warning_seq != lastWarningSeq {
+                    lastWarningSeq = st.warning_seq
+                    let w = String(cString: warn)
+                    if !w.isEmpty { pendingSafetyMessages.append(L(w)) }
+                }
             }
         } else if n != nil {
             statsText = Lf("연결된 수신기 %@", "\(conns)")

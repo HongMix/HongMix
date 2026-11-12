@@ -9,6 +9,7 @@ import CoreVideo
 /// web pages and buttons never make the monitors stutter (and vice versa).
 final class MonitorRenderer {
     private static var sharedPipeline: MTLRenderPipelineState?
+    private static var tilePipeline: MTLRenderPipelineState?
     private static var drawCount = 0
     private(set) static var drawsPerSecond = 0
     static func publishDrawStats() {
@@ -23,6 +24,13 @@ final class MonitorRenderer {
     var fps: Int
     private let lock = NSLock()
     private var _source: () -> CVPixelBuffer?
+    /// Optional: place the frame like Program does (input tiles). nil = plain fit.
+    private var _placement: (() -> VideoAdjust?)?
+    private var lastPlacement: VideoAdjust?
+    var placement: (() -> VideoAdjust?)? {
+        get { lock.lock(); defer { lock.unlock() }; return _placement }
+        set { lock.lock(); _placement = newValue; lock.unlock() }
+    }
     private var _size: CGSize = .zero
     private var lastFrame: CVPixelBuffer?
     private var lastSize: CGSize = .zero
@@ -52,6 +60,13 @@ final class MonitorRenderer {
             desc.colorAttachments[0].pixelFormat = .bgra8Unorm
             MonitorRenderer.sharedPipeline = try? ctx.device.makeRenderPipelineState(descriptor: desc)
         }
+        if MonitorRenderer.tilePipeline == nil, let f = ctx.library.makeFunction(name: "tileFragment") {
+            let desc = MTLRenderPipelineDescriptor()
+            desc.vertexFunction = ctx.library.makeFunction(name: "displayVertex")
+            desc.fragmentFunction = f
+            desc.colorAttachments[0].pixelFormat = .bgra8Unorm
+            MonitorRenderer.tilePipeline = try? ctx.device.makeRenderPipelineState(descriptor: desc)
+        }
     }
 
     /// Display thread. Encodes into `cmd` if there is something new to show.
@@ -59,11 +74,13 @@ final class MonitorRenderer {
         lock.lock()
         let size = _size
         let src = _source
+        let placementSource = _placement
         lock.unlock()
         guard size.width >= 2, size.height >= 2, let pipeline = MonitorRenderer.sharedPipeline else { return nil }
         if fps < 50 && now - lastDraw < 1.0 / Double(max(1, fps)) - 0.002 { return nil }
         let frame = src()
-        if let f = frame, f === lastFrame, size == lastSize { return nil }   // nothing new
+        let placement = placementSource?().flatMap { $0.isIdentityPlacement ? nil : $0 }
+        if let f = frame, f === lastFrame, size == lastSize, placement == lastPlacement { return nil }   // nothing new
         if frame == nil && lastFrame == nil && size == lastSize { return nil }
         if layer.drawableSize != size { layer.drawableSize = size }
         guard let drawable = layer.nextDrawable() else { return nil }
@@ -75,12 +92,23 @@ final class MonitorRenderer {
         guard let enc = cmd.makeRenderCommandEncoder(descriptor: rpd) else { return nil }
         if let pb = frame, let tex = MetalContext.sourceTextures(for: pb, cache: cache) {
             keep.append(contentsOf: tex.keep)
-            enc.setRenderPipelineState(pipeline)
+            var lp: LayerParams
+            if let a = placement, let tile = MonitorRenderer.tilePipeline {
+                // Same placement maths as Program; colour/key stay off so the tile is quick and readable.
+                var pa = a
+                pa.resetColor(); pa.keyOn = false; pa.alpha = 1
+                lp = pa.layerParams(premultiplied: false)
+                lp.has = 1
+                lp.srcW = Float(tex.width); lp.srcH = Float(tex.height)
+                enc.setRenderPipelineState(tile)
+            } else {
+                lp = LayerParams()
+                enc.setRenderPipelineState(pipeline)
+            }
             enc.setFragmentTexture(tex.luma, index: 0)
             enc.setFragmentTexture(tex.chroma ?? tex.luma, index: 1)
             var fit = SIMD4<Float>(Float(tex.width), Float(tex.height), Float(size.width), Float(size.height))
             enc.setFragmentBytes(&fit, length: MemoryLayout<SIMD4<Float>>.stride, index: 0)
-            var lp = LayerParams()
             lp.yuv = tex.yuv
             enc.setFragmentBytes(&lp, length: MemoryLayout<LayerParams>.stride, index: 1)
             enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
@@ -88,6 +116,7 @@ final class MonitorRenderer {
         enc.endEncoding()
         lastFrame = frame
         lastSize = size
+        lastPlacement = placement
         lastDraw = now
         if countDraws {
             MonitorDisplayLoop.shared.lock.lock()
@@ -281,12 +310,15 @@ struct MonitorView: NSViewRepresentable {
     let fps: Int
     var countDraws = false
     var onActiveChange: ((Bool) -> Void)? = nil
+    /// Input tiles: show the input placed as in Program (fill/stretch, zoom, crop).
+    var placement: (() -> VideoAdjust?)? = nil
     let source: () -> CVPixelBuffer?
 
     func makeNSView(context: Context) -> MonitorLayerView {
         let v = MonitorLayerView(frame: .zero)
         let r = MonitorRenderer(layer: v.metalLayer, fps: fps, source: source)
         r.countDraws = countDraws
+        r.placement = placement
         v.renderer = r
         v.visibilityChange = onActiveChange
         return v
@@ -294,6 +326,7 @@ struct MonitorView: NSViewRepresentable {
 
     func updateNSView(_ v: MonitorLayerView, context: Context) {
         v.renderer?.source = source
+        v.renderer?.placement = placement
         v.renderer?.fps = fps
         v.visibilityChange = onActiveChange
     }

@@ -116,6 +116,16 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `DoNotDisturbOn / DoNotDisturbOff / DoNotDisturbOnOff` |  | HongMix용 방해금지 자동화를 켜고 끄거나 토글합니다. 최초 사용 시 포함된 단축어 가져오기가 필요할 수 있습니다. |
 | `StartupCheck / ShowStartupCheck` |  | 입력 신호·오디오·저장 공간·네트워크·출력의 송출 전 점검 창을 엽니다. |
 
+### 2.1.2 화면 전용 운영 기능
+
+아래 기능은 현재 HongMix 화면에서 설정하며 별도 공개 API 함수는 아직 없습니다.
+
+- 송출 출력별 VBR 또는 CBR 선택
+- 입력의 독립 모니터 창 열기 및 다른 모니터·macOS 데스크톱으로 이동
+- 레이어 미디어의 부모 입력 추종과 썸네일 맞춤·꽉 채우기·늘이기 표시
+- 꼬인 macOS 실시간 현황 도우미 감지 및 해당 도우미만 재시작하는 **맥 정리**
+- 영상 종료·온에어 멈춤 감시 및 자동 복구
+
 ## 타이틀 (GT)
 
 | 함수 | 파라미터 | 동작 |

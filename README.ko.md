@@ -10,25 +10,24 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.1.1 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.1.2 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.1.1
-- 처음 한 번 단축어를 승인하면 HongMix 실행·종료에 맞춰 방해 금지를 켜고 끄며 상단 버튼으로 전환합니다.
-- 시작 전 점검에서 맥 상태, 네트워크 속도, 원격 제어 주소와 연결 장비를 확인합니다.
-- 모니터마다 다른 소스를 지정하며 화면을 다시 연결하면 전체화면 출력과 할당이 자동 복구됩니다.
-- 디스플레이 출력을 모든 데스크톱에 고정하거나 현재 데스크톱에서만 보이게 할 수 있습니다.
-- 방송 출력 중 다른 앱이 키보드를 가져가면 주황 경고 줄이 나타납니다.
-- 화면 꺼짐 방지, 첫 실행 언어와 실시간 자막 번역을 개선했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.1.ko.md) · [English release notes](docs/RELEASE-NOTES-2.1.1.md)
+### 최신 업데이트 · 2.1.2
+- 레이어 미디어가 부모 입력을 따라가며, 입력 썸네일에도 맞춤·꽉 채우기·늘이기가 정확히 보입니다.
+- 입력을 독립 모니터 창으로 열어 다른 모니터나 macOS 데스크톱으로 옮길 수 있습니다.
+- 송출에 VBR·CBR을 선택할 수 있습니다. CBR 전송 안정성은 실제 SRT 종단 측정이 더 필요합니다.
+- 맥을 며칠씩 켜 두었을 때 꼬인 macOS 실시간 현황 도우미 때문에 Preview/Output이 0.5~2초 멈춰 보이는 현상을 감지합니다. **맥 정리**는 재부팅하거나 다른 앱을 끄지 않고 해당 도우미만 재시작합니다.
+- 영상 종료·온에어 멈춤 복구와 백그라운드 CPU/UI 사용량을 개선했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.2.ko.md) · [English release notes](docs/RELEASE-NOTES-2.1.2.md)
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.1/ko-03-preshow-check.png" alt="HongMix 2.1.1 시작 전 시스템 점검" width="100%"><br><sub>맥·네트워크·원격 제어·장비 준비 상태</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.1/ko-04-display-monitor-outputs.png" alt="HongMix 2.1.1 모니터별 디스플레이 출력" width="100%"><br><sub>데스크톱 고정과 모니터별 출력</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.2/ko-01-mac-cleanup.png" alt="HongMix 2.1.2 맥 정리 진단" width="100%"><br><sub>꼬인 macOS 실시간 현황 도우미만 감지·재시작</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.2/ko-05-input-monitor-window.png" alt="HongMix 2.1.2 독립 입력 모니터" width="100%"><br><sub>다른 모니터·데스크톱으로 옮기는 독립 입력 모니터</sub></td>
   </tr>
 </table>
 

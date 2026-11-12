@@ -129,6 +129,17 @@ final class TitleInput: InputSource {
     private let width = 1920, height = 1080
     private let stateLock = NSLock()
     private var dirty = true
+    /// Not used by any output/preview/overlay/layer: a scrolling ticker only feeds the 6 fps input tile,
+    /// so it is redrawn at 6 fps instead of 30 (stateLock). Changes, animations and clocks still draw at once.
+    private var offAir = false
+    private var lastTickerDraw: CFTimeInterval = 0
+    func setOffAir(_ v: Bool) {
+        stateLock.lock()
+        let wasOff = offAir
+        offAir = v
+        if wasOff && !v { dirty = true }   // back in use: redraw on the very next tick
+        stateLock.unlock()
+    }
     // countdown state (stateLock)
     private var cdRemaining: Double = 300
     private var cdEndTime: CFTimeInterval = 0
@@ -224,6 +235,7 @@ final class TitleInput: InputSource {
         let capAnimating = capStart > 0 && now - capStart < (capFrame?.style.animationMs ?? 0) / 1000 + 0.05
         let needs = dirty || animating || capAnimating
         dirty = false
+        let throttled = offAir
         stateLock.unlock()
         if renderPaused { return }
         // Tickers move every frame; clocks/countdowns only when the shown text changes (once a second) —
@@ -241,7 +253,11 @@ final class TitleInput: InputSource {
         }
         let changed = key != lastLiveKey
         lastLiveKey = key
-        if needs || ticker || changed { render(doc, now: now) }
+        let tickerDue = ticker && (!throttled || now - lastTickerDraw >= 1.0 / 6.0 - 0.005)
+        if needs || tickerDue || changed {
+            render(doc, now: now)
+            lastTickerDraw = now
+        }
     }
     private var lastLiveKey = ""
 

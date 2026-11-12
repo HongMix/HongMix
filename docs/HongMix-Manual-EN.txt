@@ -1,4 +1,4 @@
-HongMix 2.1.1 — User Manual (English)
+HongMix 2.1.2 — User Manual (English)
 ================================================================
 A live production switcher for Apple Silicon Macs, with a vMix-style layout, shortcuts and API.
 Made by Hong Seunghoon (홍승훈) · 2026-10-28 · Korea
@@ -9,14 +9,14 @@ Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)
 Requirements: an Apple Silicon Mac (M1 and later), macOS 14 or later.
 Everything (FFmpeg, SRT, NDI runtime, Chromium web engine) is bundled inside the app — nothing else to install.
 
-[Option A — recommended] Double-click HongMix-2.1.1.pkg
+[Option A — recommended] Double-click HongMix-2.1.2.pkg
   1) If macOS says "unidentified developer": right-click the file → Open → Open
      (or System Settings → Privacy & Security → "Open Anyway").
   2) Continue → Install. HongMix is installed in Applications.
   3) First launch: if macOS warns, right-click HongMix in Applications → Open → Open (once).
      (HongMix is not notarized by Apple yet, so macOS asks once.)
 
-[Option B] Open HongMix-2.1.1.dmg → drag HongMix into Applications
+[Option B] Open HongMix-2.1.2.dmg → drag HongMix into Applications
   - If warned on first launch, right-click the app → Open (once).
 
 On first use macOS asks for permissions:
@@ -24,14 +24,15 @@ On first use macOS asks for permissions:
   - Screen Recording — only for Screen/Window capture inputs
   - Local Network — allow so NDI and SRT devices can be found
 
-New in 2.1.1
-  - Optional Do Not Disturb automation while HongMix is running. Import the bundled
-    "HongMix Focus" shortcut when prompted; the original Focus state is restored on quit.
-  - Pre-show check window for input signals, audio, recording storage, network and outputs.
-  - Independent monitor outputs: assign Program, Preview, Clean, MultiView or an input to
-    each secondary display. Desktop pinning and reconnect are available per display.
-  - Display sleep prevention during production and a warning if HongMix loses keyboard control.
-  - Live-caption translation now follows the selected source and target languages correctly.
+New in 2.1.2
+  - Layer media follows its parent input; input thumbnails reflect Fit, Fill and Stretch.
+  - Open an input in an independent monitor window and move it to another display or Space.
+  - Choose VBR or CBR for streaming. End-to-end SRT CBR stability still needs measurement.
+  - After a Mac has run for days, a stuck macOS Live Activities helper may block screen
+    composition every few seconds. The stream can remain smooth while HongMix Preview/Output
+    appears frozen for 0.5–2 seconds. Clean Up Mac restarts only that helper: no reboot and
+    no other apps are closed.
+  - Clip-end/on-air freeze recovery and background CPU/UI work were improved.
 
 
 2. Layout (same as vMix)

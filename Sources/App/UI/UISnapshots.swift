@@ -21,7 +21,34 @@ enum UISnapshots {
             return view(VStack(spacing: 0) { TopBar(); ControlFocusBanner(forceShow: true) }
                             .environmentObject(engine).padding(4).background(Color(white: 0.09)),
                         size: NSSize(width: 1500, height: 72), to: path)
-        default: return "Unknown view \(name)"
+        // 2.1.2
+        case "lang-en", "lang-ko":          // switch the UI language (same as Settings › General)
+            let l: AppLanguage = name.lowercased() == "lang-en" ? .en : .ko
+            AppLanguage.set(l)
+            UserDefaults.standard.set(l.rawValue, forKey: AppLanguage.defaultsKey)
+            return nil
+        case "cleanup":
+            return view(MacCleanupPanel().padding(10).frame(width: 800), size: nil, to: path)
+        case "healthbanner":
+            let fake = SystemHealth.Alert(time: Date(), culprits: [
+                SystemHealth.Culprit(pid: 0, name: "WidgetRenderer_Activities",
+                                     path: "/System/Library/CoreServices/WidgetRenderer_Activities.app/Contents/MacOS/WidgetRenderer_Activities", cpu: 196)])
+            return view(VStack(spacing: 0) { TopBar(); SystemHealthBanner(preview: fake) }
+                            .environmentObject(engine).padding(4).background(Color(white: 0.09)),
+                        size: NSSize(width: 1500, height: 72), to: path)
+        case "encoding":
+            var c = OutputConfig.defaultConfig(kind: .stream)
+            c.proto = .srt; c.srtHost = "203.0.113.10"; c.cbr = true
+            return view(OutputEditor(output: OutputChannel(config: c)).environmentObject(engine).frame(width: 620, height: 1000),
+                        size: NSSize(width: 620, height: 1000), to: path)
+        default:
+            // "inputmonitor-<n>": open the monitor window of input n (captured from the screen — it shows video)
+            if name.lowercased().hasPrefix("inputmonitor-"), let n = Int(name.dropFirst(13)),
+               n >= 1, n <= engine.inputs.count {
+                InputMonitorWindow.show(engine.inputs[n - 1], engine: engine)
+                return nil
+            }
+            return "Unknown view \(name)"
         }
     }
 

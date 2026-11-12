@@ -10,25 +10,24 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.1</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.2</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.1.1
-- Do Not Disturb can follow HongMix automatically and can be toggled from the top bar after one Shortcut approval.
-- A pre-show check shows Mac health, network speed, remote-control addresses and connected devices.
-- Assign a different source to every monitor; assignments and fullscreen output return after reconnecting a display.
-- Choose whether display output stays on every desktop or only the desktop where it was opened.
-- An orange bar warns when another app owns the keyboard during a live output.
-- Display-sleep prevention, first-launch language and live-caption translation were improved. See the [English release notes](docs/RELEASE-NOTES-2.1.1.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.1.ko.md).
+### Latest update · 2.1.2
+- Layer media now follows its parent input, and input thumbnails reflect Fit, Fill and Stretch accurately.
+- Open any input in an independent monitor window and move it to another display or macOS Space.
+- Choose VBR or CBR for streaming. CBR transport stability still needs an end-to-end SRT measurement.
+- HongMix detects a stuck macOS Live Activities helper that can make Preview/Output appear frozen for 0.5–2 seconds after a Mac has been running for days. **Clean Up Mac** restarts only that helper—no reboot and no other apps are closed.
+- Clip-end/on-air freeze recovery and background CPU/UI work were improved. See the [English release notes](docs/RELEASE-NOTES-2.1.2.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.2.ko.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.1/en-03-preshow-check.png" alt="HongMix 2.1.1 pre-show system check" width="100%"><br><sub>Mac, network, remote control and device readiness</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.1/en-04-display-monitor-outputs.png" alt="HongMix 2.1.1 per-monitor display output" width="100%"><br><sub>Desktop pinning and per-monitor output</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.2/en-01-mac-cleanup.png" alt="HongMix 2.1.2 Mac cleanup diagnostics" width="100%"><br><sub>Detect and restart only a stuck macOS Live Activities helper</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.2/en-05-input-monitor-window.png" alt="HongMix 2.1.2 independent input monitor" width="100%"><br><sub>Independent input monitor for another display or Space</sub></td>
   </tr>
 </table>
 
