@@ -8,7 +8,7 @@ struct DataSourcesButton: View {
 
     var body: some View {
         Button { show = true } label: {
-            Text("Data")
+            Text(L("데이터"))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white)
                 .padding(.horizontal, 12)
@@ -37,7 +37,7 @@ struct DataSourcesSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Data Sources").font(.headline)
+                Text(L("데이터 소스")).font(.headline)
                 Spacer()
                 Text(L("Google Sheets는 공유 → '링크가 있는 모든 사용자'로 설정한 뒤 주소를 붙여 넣으세요."))
                     .font(.caption).foregroundColor(.secondary)

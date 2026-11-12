@@ -8,7 +8,7 @@ struct SchedulerButton: View {
         Button { show = true } label: {
             HStack(spacing: 4) {
                 Image(systemName: "alarm")
-                Text("Schedule")
+                Text(L("스케줄"))
             }
             .font(.system(size: 12, weight: .semibold))
             .foregroundColor(.white)
@@ -35,7 +35,7 @@ struct SchedulerSheet: View {
         "OverlayInput2In", "OverlayInput2Out", "Play", "Pause", "Restart", "SetVolume", "AudioOn", "AudioOff",
         "SetText", "FadeToBlack",
     ]
-    static let dayNames = [L("일"), L("월"), L("화"), L("수"), L("목"), L("금"), L("토")]
+    static var dayNames: [String] { [L("일"), L("월"), L("화"), L("수"), L("목"), L("금"), L("토")] }
 
     var body: some View {
         VStack(spacing: 0) {

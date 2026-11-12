@@ -88,7 +88,11 @@ struct SystemHealthBanner: View {
 
     var body: some View {
         let a = preview ?? health.alert
-        if preview != nil || (a != nil && !health.dismissed) || health.cleaning || health.result != nil {
+        // The orange bar only when one click can fix it (a stuck macOS widget) — anything else is the
+        // small grey "Display lag" chip in the top bar. Auto cleanup runs without any bar.
+        let manualCleaning = health.cleaning && !health.cleaningAuto
+        let actionable = a?.actionable == true && !health.dismissed && !(health.autoCleanup && preview == nil)
+        if preview != nil || actionable || manualCleaning || health.result != nil {
             HStack(spacing: 8) {
                 Image(systemName: "gauge.with.dots.needle.67percent")
                 Text(message(a)).lineLimit(1).truncationMode(.tail)
@@ -111,9 +115,37 @@ struct SystemHealthBanner: View {
         if preview == nil, let r = health.result { return r }
         if preview == nil, health.cleaning { return L("정리 중…") }
         guard let a else { return "" }
-        let cause = a.culprits.prefix(2).map { "\(SystemHealth.friendly($0)) \(Int($0.cpu))%" }.joined(separator: ", ")
-        return cause.isEmpty
-            ? L("맥 화면이 느려졌어요 — HongMix 화면이 끊길 수 있어요 (출력에는 영향 없음)")
-            : Lf("맥 화면이 느려졌어요 — 원인: %@ (출력에는 영향 없음)", cause)
+        let names = a.restartable.prefix(2).map { SystemHealth.friendly($0) }.joined(separator: ", ")
+        return Lf("맥 화면이 느려졌어요 — %@ 때문이에요. 정리하기로 바로 고칠 수 있어요 (출력에는 영향 없음)", names)
+    }
+}
+
+/// Top bar: small grey "Display lag" while the Mac keeps stalling HongMix's window for a reason one click
+/// can't fix (another app busy …). Output is unaffected; it disappears after a calm minute. Click → pre-show
+/// check (Mac cleanup).
+struct SystemLagChip: View {
+    @EnvironmentObject var engine: SwitcherEngine
+    @ObservedObject var health = SystemHealth.shared
+
+    var body: some View {
+        if let a = health.alert, !(a.actionable && !health.dismissed && !health.autoCleanup) || health.cleaningAuto {
+            HStack(spacing: 4) {
+                Image(systemName: "gauge.with.dots.needle.33percent")
+                Text(L("화면 지연"))
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Capsule().fill(Color.white.opacity(0.08)))
+            .onTapGesture { StartupCheckWindow.show(engine: engine) }
+            .help(help(a))
+        }
+    }
+
+    private func help(_ a: SystemHealth.Alert) -> String {
+        let busy = a.culprits.prefix(3).map { "\(SystemHealth.friendly($0)) \(Int($0.cpu))%" }.joined(separator: ", ")
+        return busy.isEmpty
+            ? L("맥이 HongMix 화면을 잠깐씩 늦게 그리고 있어요. 출력에는 영향 없음. 1분 동안 괜찮으면 사라져요. 눌러서 맥 정리 보기")
+            : Lf("맥이 HongMix 화면을 잠깐씩 늦게 그리고 있어요. 출력에는 영향 없음. CPU를 많이 쓰는 앱: %@. 1분 동안 괜찮으면 사라져요. 눌러서 맥 정리 보기", busy)
     }
 }

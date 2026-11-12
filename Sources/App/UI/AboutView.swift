@@ -7,6 +7,7 @@ struct GeneralSettings: View {
     @AppStorage(FFmpegInput.rateConformKey) private var rateConform = true
     @AppStorage(AppSkin.defaultsKey) private var appSkin = AppSkin.current.rawValue
     @AppStorage(InputConfig.newVideoLoopKey) private var newVideoLoop = false
+    @AppStorage(InputTileRate.key) private var tileFPS = 6
     @ObservedObject private var focus = FocusGuard.shared
     @ViewState private var showCheck = SystemCheck.showAtLaunch
 
@@ -30,12 +31,21 @@ struct GeneralSettings: View {
                 Text(L("Monochrome: 흑백 화면에 색은 의미에만 (Program 빨강 · Preview 초록), 상단·하단 바는 유리 재질. 기본: 기존 HongMix 화면 (Output 초록 · Preview 주황)."))
                     .font(.caption).foregroundColor(.secondary)
             }
-            Section(L("재생")) {
+            Section(L("재생 설정")) {
                 Toggle(L("파일 프레임레이트 맞춤 (60 ↔ 59.94)"), isOn: Binding(get: { rateConform }, set: { v in
                     rateConform = v
                     NotificationCenter.default.post(name: .hongMixRateConformChanged, object: nil)
                 }))
                 Text(L("60.00fps 파일을 59.94 프로그램에서 0.1% 느리게 재생해 약 17초마다 생기던 프레임 드랍을 없앱니다. 오디오도 같이 맞춰져 음정 차이는 들리지 않습니다."))
+                    .font(.caption).foregroundColor(.secondary)
+                Picker(L("입력 썸네일 부드럽게"), selection: Binding(get: { tileFPS }, set: { v in
+                    tileFPS = v
+                    InputTileRate.set(v)
+                })) {
+                    ForEach(InputTileRate.choices, id: \.self) { Text("\($0) fps").tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Text(L("입력 칸의 작은 화면만 해당합니다. 6 fps는 CPU를 아끼려고 일부러 끊어 그리는 것이고, Program·Preview·송출·녹화는 항상 원래 속도(예: 59.94)로 나갑니다. 사양이 넉넉한 맥은 30 fps로 두면 부드럽게 보입니다."))
                     .font(.caption).foregroundColor(.secondary)
                 Toggle(L("새 영상 입력 기본 루프"), isOn: $newVideoLoop)
                 Text(L("새로 추가하는 영상(Add Input · Finder 드래그 · API)에 적용됩니다. 이미 있는 입력은 각 타일의 Loop 버튼으로 바꿉니다."))

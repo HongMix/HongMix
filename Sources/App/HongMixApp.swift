@@ -48,6 +48,10 @@ struct HongMixApp: App {
             CommandGroup(replacing: .saveItem) {
                 Button(L("프로젝트 저장…")) { ProjectIO.save(engine) }
                     .keyboardShortcut("s")
+                Divider()
+                // ⌘W itself is handled in AppDelegate's key monitor (also reaches sheets with a focused text field).
+                Button(L("창 닫기")) { WindowCloser.closeFront() }
+                    .keyboardShortcut("w")
             }
             CommandGroup(after: .appInfo) {
                 Button(L("시작 전 점검…")) { StartupCheckWindow.show(engine: engine) }
@@ -121,6 +125,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // ⌘Q while a sheet has a focused text field never reaches the menu — catch it here.
         quitKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
             let mods = e.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if mods == .command, e.charactersIgnoringModifiers?.lowercased() == "w" {
+                WindowCloser.closeFront()
+                return nil
+            }
             if mods == .command, e.charactersIgnoringModifiers?.lowercased() == "q",
                NSApp.windows.contains(where: { $0.attachedSheet != nil }) {
                 ProjectIO.requestQuit()
@@ -321,5 +329,28 @@ enum DefaultsMigration {
     static func modernize(_ path: String) -> String {
         let legacy = "~/Movies/" + legacyName
         return path.hasPrefix(legacy) ? "~/Movies/HongMix" + path.dropFirst(legacy.count) : path
+    }
+}
+
+/// ⌘W: closes the front helper window (Scopes, Rundown, Replay, PTZ, Statistics, input monitor, pre-show
+/// check, Settings …) or the open sheet (same as its Cancel / Close). Never the switcher window — closing
+/// it would quit HongMix mid-show — and never the Display output window: those only beep.
+enum WindowCloser {
+    static func closeFront() {
+        guard let w = NSApp.keyWindow else { NSSound.beep(); return }
+        if let parent = w.sheetParent {             // a sheet (input editor, scheduler, outputs …)
+            // Only HongMix's own SwiftUI sheets (= Cancel/Close). A question (NSAlert "Stop the stream?")
+            // must be answered with a button: ending it here could count as an answer.
+            // (alerts, open/save panels are NSPanels).
+            let question = w is NSPanel || String(describing: type(of: w)).contains("Alert")
+            if question { NSSound.beep() } else { parent.endSheet(w) }
+            return
+        }
+        if w.attachedSheet != nil { NSSound.beep(); return }     // its sheet is waiting for an answer
+        let isSwitcher = w === FullscreenOutput.switcherWindow || (w.identifier?.rawValue.hasPrefix("main") ?? false)
+        guard !isSwitcher, !FullscreenOutput.isOutputWindow(w), w.styleMask.contains(.closable) else {
+            NSSound.beep(); return
+        }
+        w.performClose(nil)
     }
 }

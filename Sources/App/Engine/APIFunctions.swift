@@ -15,7 +15,7 @@ enum APIProcessor {
                                       "busbaudioplugin", "busxaudioplugin", "masteraudioplugin", "ndicommand",
                                       "ndistartrecording", "ndistoprecording", "previewoverlayinput",
                                       "setdynamicinput", "selectcategory", "setpictureeffect", "setpicturetransition",
-                                      "videodelay", "savevideodelay", "createvirtualinput", "autoplayfirst",
+                                      "videodelay", "savevideodelay", "autoplayfirst",
                                       "autoplaynext", "audiochannelmatrix", "setvolumechannelmixer",
                                       "colourcorrectionauto", "inputpreview", "waitforcompletion", "livepause",
                                       "liveplaypause", "keypress", "lastpreset", "openpreset", "savepreset",
@@ -228,6 +228,9 @@ enum APIProcessor {
         case "moveinput":
             guard let i = input, let to = Int(value) else { return "Input/Value required" }
             e.moveInput(from: e.number(of: i) - 1, to: max(0, min(e.inputs.count - 1, to - 1)))
+        case "createvirtualinput":     // vMix: Input = the original → a virtual copy (same picture, no 2nd decoder)
+            guard let i = input else { return needInput() }
+            return e.createVirtualInput(of: i) == nil ? "This input can't have a virtual copy" : nil
         case "addinput":
             return addInput(value, e)
         case "resetinput":

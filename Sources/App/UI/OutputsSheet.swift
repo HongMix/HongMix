@@ -157,7 +157,7 @@ struct BusSourcesBar: View {
                             Button(L("Overlay 알파 (Premultiplied)")) { engine.setBusSource(b, .overlaysAlpha) }
                             Button(L("Overlay 알파 (Straight)")) { engine.setBusSource(b, .overlaysAlphaStraight) }
                         }
-                        Button("Preview") { engine.setBusSource(b, .preview) }
+                        Button(L("미리보기")) { engine.setBusSource(b, .preview) }
                         Button("MultiView") { engine.setBusSource(b, .multiview) }
                         Section(L("입력")) {
                             ForEach(engine.inputs) { i in
@@ -542,9 +542,6 @@ struct OutputEditor: View {
 struct SettingsView: View {
     @EnvironmentObject var engine: SwitcherEngine
     @AppStorage("ndiExtraIPs") private var ndiExtraIPs = ""
-    @AppStorage(APIAccess.modeKey) private var apiMode = "lan"
-    @AppStorage(APIAccess.passwordKey) private var apiPassword = ""
-    @AppStorage(APIAccess.allowKey) private var apiAllowed = ""
     @ViewState private var formatMessage = ""
 
     var body: some View {
@@ -580,19 +577,7 @@ struct SettingsView: View {
                 LabeledContent(L("웹 브라우저 엔진"), value: mc_web_available() != 0 ? String(cString: mc_web_version()) : L("Safari/WebKit (내장 엔진 없음)"))
                 LabeledContent("DeckLink", value: mc_decklink_available() != 0 ? L("사용 가능") : L("없음"))
                 LabeledContent(L("웹 리모트 / API"), value: engine.apiStatus)
-                Section(L("원격 제어 보안 (API 8088 / 8099)")) {
-                    Picker(L("허용"), selection: $apiMode) {
-                        Text(L("같은 네트워크의 장비 (Companion·Stream Deck·휴대폰)")).tag("lan")
-                        Text(L("이 맥에서만")).tag("local")
-                        Text(L("끄기")).tag("off")
-                    }
-                    if apiMode == "lan" {
-                        TextField(L("허용할 IP만 (쉼표로 구분, 비우면 모두)"), text: $apiAllowed)
-                    }
-                    SecureField(L("웹/HTTP 비밀번호 (비우면 없음)"), text: $apiPassword)
-                    Text(L("다른 웹사이트가 브라우저를 통해 명령을 보내는 것은 항상 차단됩니다. 비밀번호를 정하면 웹 리모트·HTTP API 접속 때 묻습니다(사용자 이름은 아무거나). TCP 8099(Companion vMix 모듈)는 IP 제한만 적용됩니다. 바꾼 설정은 바로 적용됩니다."))
-                        .font(.caption).foregroundColor(.secondary)
-                }
+                RemoteControlSection()
             }
             .formStyle(.grouped)
             .textFieldStyle(.roundedBorder)
@@ -611,5 +596,40 @@ struct SettingsView: View {
                 .tabItem { Label("MIDI", systemImage: "pianokeys") }
         }
         .frame(width: 860, height: 520)
+    }
+}
+
+/// Settings › Network › Remote control: off by default — ports 8088/8099 open only when turned on.
+struct RemoteControlSection: View {
+    @EnvironmentObject var engine: SwitcherEngine
+    @AppStorage(APIAccess.modeKey) private var apiMode = "lan"
+    @AppStorage(APIAccess.passwordKey) private var apiPassword = ""
+    @AppStorage(APIAccess.allowKey) private var apiAllowed = ""
+    @ViewState private var apiEnabled = APIAccess.enabled
+
+    var body: some View {
+        Section(L("원격 제어 (웹 리모트 · API 8088 · Companion 8099)")) {
+            Toggle(L("원격 제어 켜기"), isOn: Binding(get: { apiEnabled }, set: { on in
+                apiEnabled = on
+                UserDefaults.standard.set(on, forKey: APIAccess.enabledKey)
+                if on && apiMode == "off" { apiMode = "lan" }
+                engine.applyRemoteControl()
+            }))
+            Text(L("Companion·Stream Deck·웹 리모트·휴대폰으로 조작할 때만 켜세요. 끄면 8088·8099 포트를 아예 열지 않아 같은 네트워크의 다른 기기가 HongMix를 조작할 수 없습니다."))
+                .font(.caption).foregroundColor(.secondary)
+            if apiEnabled {
+                Picker(L("허용"), selection: $apiMode) {
+                    Text(L("같은 네트워크의 장비 (Companion·Stream Deck·휴대폰)")).tag("lan")
+                    Text(L("이 맥에서만")).tag("local")
+                }
+                if apiMode != "local" {
+                    TextField(L("허용할 IP만 (쉼표로 구분, 비우면 모두)"), text: $apiAllowed)
+                }
+                SecureField(L("웹/HTTP 비밀번호 (비우면 없음)"), text: $apiPassword)
+                Text(L("다른 웹사이트가 브라우저를 통해 명령을 보내는 것은 항상 차단됩니다. 비밀번호를 정하면 웹 리모트·HTTP API 접속 때 묻습니다(사용자 이름은 아무거나). TCP 8099(Companion vMix 모듈)는 IP 제한만 적용됩니다. 바꾼 설정은 바로 적용됩니다."))
+                    .font(.caption).foregroundColor(.secondary)
+                LabeledContent(L("상태"), value: engine.apiStatus)
+            }
+        }
     }
 }

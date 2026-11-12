@@ -662,7 +662,7 @@ struct ReplaySettingsSheet: View {
                     Text(L("CAM 마다 그 입력의 오디오(페이더 전)를 따로 녹화합니다. 오디오가 없는 소스는 무음, 그 CAM 오디오가 없는 구간은 프로그램 오디오로 재생합니다."))
                         .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                Section(L("재생")) {
+                Section(L("재생 설정")) {
                     Toggle(L("REPLAY → 프로그램: 이벤트가 끝나면 원래 화면으로 돌아가기"), isOn: $replay.settings.autoReturn)
                     HStack {
                         Text(L("프리롤"))

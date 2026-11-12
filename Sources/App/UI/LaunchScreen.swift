@@ -55,26 +55,27 @@ final class LaunchModel: ObservableObject {
             self.set(1, .running)
             after(pace) {
                 let n = engine.inputs.count
-                self.set(1, .done, n == 0 ? "New session" : "\(n) input\(n == 1 ? "" : "s") restored")
+                self.set(1, .done, n == 0 ? L("새 세션") : Lf("입력 %@개 복원", "\(n)"))
                 self.set(2, .running)
                 self.waitForInputs(engine: engine, since: CACurrentMediaTime()) {
                     self.set(3, .running)
                     after(pace) {
                         self.set(3, mc_ndi_available() != 0 ? .done : .warning,
-                                 mc_ndi_available() != 0 ? "NDI® runtime loaded" : "NDI® runtime not installed (optional)")
+                                 mc_ndi_available() != 0 ? L("NDI® 런타임 로드됨") : L("NDI® 런타임 없음 (선택 사항)"))
                         self.set(4, .running)
                         after(pace) {
-                            let ok = engine.apiStatus.contains("8088")
+                            let off = !APIAccess.enabled
+                            let ok = off || engine.apiStatus.contains("8088")
                             let tcp = engine.apiStatus.contains("TCP 8099") && !engine.apiStatus.contains("8099 사용")
                                 && !engine.apiStatus.contains("8099 unavailable")
                             self.set(4, ok ? .done : .warning,
-                                     ok ? (tcp ? "HTTP 8088 · TCP 8099 listening" : "HTTP 8088 listening · TCP 8099 unavailable")
-                                        : "HTTP 8088 unavailable")
+                                     off ? L("원격 제어 꺼짐 (설정 › 네트워크)") : ok ? (tcp ? L("HTTP 8088 · TCP 8099 대기 중") : L("HTTP 8088 대기 중 · TCP 8099 사용 불가"))
+                                        : L("HTTP 8088 사용 불가"))
                             self.set(5, .running)
                             let minTotal = 5.0
                             let wait = max(pace, minTotal - (CACurrentMediaTime() - t0))
                             after(wait) {
-                                self.set(5, .done, String(format: "%.2f fps · render %.1f ms", engine.format.fps, max(engine.renderMs, 0.1)))
+                                self.set(5, .done, String(format: L("%.2f fps · 렌더 %.1f ms"), engine.format.fps, max(engine.renderMs, 0.1)))
                                 after(0.55) { self.dismiss() }
                             }
                         }
@@ -91,12 +92,12 @@ final class LaunchModel: ObservableObject {
         let failed = live.filter { $0.state == Int32(MC_STATE_ERROR) }.count
         let elapsed = CACurrentMediaTime() - since
         if live.isEmpty {
-            set(2, .done, "No live sources")
+            set(2, .done, L("라이브 소스 없음"))
             done()
         } else if online + failed >= live.count || elapsed > 5 {
             let ok = online == live.count
             set(2, ok ? .done : .warning,
-                "\(online) / \(live.count) live sources online" + (ok ? "" : " · continuing"))
+                Lf("라이브 소스 %@ / %@ 연결", "\(online)", "\(live.count)") + (ok ? "" : L(" · 계속 진행")))
             done()
         } else {
             steps[2].detail = "\(online) / \(live.count) live sources online…"
@@ -281,7 +282,7 @@ struct LaunchScreen: View {
 
     private var footer: some View {
         VStack(spacing: 4) {
-            Text("Built for broadcast engineers around the world")
+            Text(L("전 세계 방송 엔지니어를 위해 만들었습니다"))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(Color(white: 0.50))
             Text("© 2026 Hong Seunghoon · github.com/HongMix/HongMix")

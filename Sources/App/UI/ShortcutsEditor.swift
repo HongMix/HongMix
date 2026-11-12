@@ -35,7 +35,7 @@ struct ShortcutsEditor: View {
                         }
                         .labelsHidden()
                         .frame(width: 200)
-                        TextField("Value", text: $sc.value).textFieldStyle(.roundedBorder).frame(width: 120)
+                        TextField(L("값"), text: $sc.value).textFieldStyle(.roundedBorder).frame(width: 120)
                         Spacer()
                         Button(role: .destructive) { manager.items.removeAll { $0.id == sc.id } } label: {
                             Image(systemName: "trash")

@@ -44,6 +44,9 @@ final class FullscreenOutput: NSObject {
     /// Display the output window is filling (green button), followed on screen changes.
     private var fillDisplayID: CGDirectDisplayID?
 
+    /// The Display output window (on air — never closed by ⌘W).
+    static func isOutputWindow(_ w: NSWindow) -> Bool { w is FullscreenWindow }
+
     /// The switcher's own window — not the output window, which can also become "main".
     static var switcherWindow: NSWindow? {
         let candidates = NSApp.windows.filter { !($0 is FullscreenWindow) && $0.isVisible && $0.styleMask.contains(.titled) }

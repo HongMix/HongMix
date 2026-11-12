@@ -399,7 +399,7 @@ final class AudioMixer: ObservableObject {
             if offAir && !live {
                 // Off air: no DSP, but still show the input level (dimmed in the UI) so the operator
                 // can see the source has sound before taking it.
-                let got = ring.read(into: tmpBuf, frames: n)
+                let got = ring.read(into: tmpBuf, frames: n, diagnose: false)
                 if got > 0 {
                     let pk = peaks(tmpBuf, got)
                     let g = params.gain

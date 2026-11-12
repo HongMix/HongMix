@@ -32,6 +32,8 @@ fi
 # @State is avoided in the sources (see UI/ViewState.swift), so the default SDK works without Xcode.
 SDK="$(xcrun --show-sdk-path 2>/dev/null)"
 echo "SDK: $SDK"
+# English UI: every Korean L("…") key must have a translation (build fails otherwise)
+python3 -I scripts/check-i18n.py || { echo "BUILD FAILED — 영문 번역 누락 (scripts/check-i18n.py 결과 참고)"; exit 1; }
 echo "FFmpeg: $FF"
 [ "$FF" = "$PWD/build/ffmpeg-lgpl" ] || echo "  ⚠︎ 개발용 FFmpeg($FF) 사용 중 — 배포용은 scripts/build-ffmpeg-lgpl.sh 로 LGPL 빌드를 쓰세요 (make-dmg.sh는 GPL이면 중단)"
 # Swift macro plugins (SwiftUI's @State etc. are macros in recent SDKs)

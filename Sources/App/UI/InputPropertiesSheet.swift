@@ -28,7 +28,7 @@ struct InputPropertiesSheet: View {
                     .lineLimit(1).truncationMode(.middle)
                 InputFormatLabel(slot: input.video, size: 11)
                 Spacer()
-                MonitorView(fps: 12) { input.monitorFrame() }
+                MonitorView(fps: 12, placement: { [weak input] in input?.videoAdjust }) { input.monitorFrame() }
                     .frame(width: 160, height: 90)
                     .background(Color.black)
             }
@@ -98,41 +98,41 @@ struct InputPropertiesSheet: View {
 
     private var propertyTabs: [(id: Int, title: String, icon: String)] {
         var tabs: [(Int, String, String)] = [
-            (0, "General", "slider.horizontal.3"),
-            (1, "Colour Adjust", "sun.max"),
+            (0, L("일반"), "slider.horizontal.3"),
+            (1, L("색 보정"), "sun.max"),
             (2, L("Key / Fill & Key"), "viewfinder"),
-            (3, "Position", "rectangle.dashed"),
-            (6, "Layers", "square.3.layers.3d"),
-            (4, "Audio Settings", "speaker.wave.2"),
+            (3, L("위치"), "rectangle.dashed"),
+            (6, L("레이어"), "square.3.layers.3d"),
+            (4, L("오디오 설정"), "speaker.wave.2"),
         ]
-        if input.supportsTransport { tabs.append((5, "Playback", "play.rectangle")) }
-        if input.supportsTransport, input is FFmpegInput { tabs.append((8, "List", "list.number")) }
-        tabs.append((7, "Triggers", "bolt"))
+        if input.supportsTransport { tabs.append((5, L("재생 설정"), "play.rectangle")) }
+        if input.supportsTransport, input is FFmpegInput { tabs.append((8, L("목록"), "list.number")) }
+        tabs.append((7, L("트리거"), "bolt"))
         if input.isLiveSource { tabs.append((9, "PTZ", "camera.metering.center.weighted")) }
         return tabs.map { (id: $0.0, title: $0.1, icon: $0.2) }
     }
 
     private var generalTab: some View {
         Form {
-            Section("General") {
-                TextField("Name", text: $input.name)
-                LabeledContent("Type", value: input.kind.label)
-                LabeledContent("Status", value: input.status)
+            Section(L("일반")) {
+                TextField(L("이름"), text: $input.name)
+                LabeledContent(L("종류"), value: input.kind.label)
+                LabeledContent(L("상태"), value: input.status)
                 if let change = onChangeSource {
                     Button(L("Change… (소스 바꾸기, 설정 유지)")) { change() }
                 }
             }
-            Section("Video") {
-                Toggle("Deinterlace (Blend)", isOn: $input.adjust.deinterlace)
-                Toggle("Sharpen", isOn: $input.adjust.sharpen)
-                Toggle("Mirror", isOn: $input.adjust.mirror)
+            Section(L("비디오")) {
+                Toggle(L("디인터레이스 (블렌드)"), isOn: $input.adjust.deinterlace)
+                Toggle(L("샤픈"), isOn: $input.adjust.sharpen)
+                Toggle(L("좌우 반전"), isOn: $input.adjust.mirror)
             }
             Section(L("Audio / 전환")) {
-                Toggle("Automatically mix audio (Audio Auto)", isOn: $input.audioFollowsVideo)
+                Toggle(L("오디오 자동 믹스 (Audio Auto)"), isOn: $input.audioFollowsVideo)
                 if input.supportsTransport {
-                    Toggle("Automatically Play with transition", isOn: $input.autoPlay)
-                    Toggle("Automatically Pause with transition", isOn: $input.autoPause)
-                    Toggle("Automatically Restart with transition", isOn: $input.autoRestart)
+                    Toggle(L("전환할 때 자동 재생"), isOn: $input.autoPlay)
+                    Toggle(L("전환할 때 자동 일시정지"), isOn: $input.autoPause)
+                    Toggle(L("전환할 때 자동으로 처음부터"), isOn: $input.autoRestart)
                 }
             }
             Section("MultiCorder") {
@@ -158,11 +158,11 @@ struct InputPropertiesSheet: View {
                 }
             }
             if let b = input as? BrowserInput {
-                Section("Web Browser") {
+                Section(L("웹 브라우저")) {
                     HStack {
-                        Button("Back") { b.goBack() }
-                        Button("Forward") { b.goForward() }
-                        Button("Reload") { b.reload() }
+                        Button(L("뒤로")) { b.goBack() }
+                        Button(L("앞으로")) { b.goForward() }
+                        Button(L("새로 고침")) { b.reload() }
                         Button(L("브라우저 창 열기 (조작)")) { b.showInteractive(true) }
                     }
                 }
@@ -176,7 +176,7 @@ struct InputPropertiesSheet: View {
         Form {
             AlphaKeySection(input: input)
             BGRemovalSection(input: input)
-            Section("Colour Key / Chroma Key") {
+            Section(L("컬러 키 / 크로마 키")) {
                 Toggle(L("Colour Key 사용"), isOn: $input.adjust.keyOn)
                 HStack {
                     Text(L("Key 색상"))
@@ -184,8 +184,8 @@ struct InputPropertiesSheet: View {
                         .frame(width: 100)
                         .font(.system(size: 12).monospaced())
                     ColorSwatch(hex: input.adjust.keyColor)
-                    Button("Green") { input.adjust.keyColor = "#00B140" }
-                    Button("Blue") { input.adjust.keyColor = "#0047BB" }
+                    Button(L("초록")) { input.adjust.keyColor = "#00B140" }
+                    Button(L("파랑")) { input.adjust.keyColor = "#0047BB" }
                 }
                 slider("Tolerance", $input.adjust.keyTolerance, 0...0.5, reset: 0.12)
                 slider("Softness", $input.adjust.keySoftness, 0...0.3, reset: 0.08)
@@ -229,6 +229,17 @@ struct InputPropertiesSheet: View {
 
     private var positionTab: some View {
         Form {
+            // Live result while dragging the sliders — crop/zoom/pan in one go, no need to watch Preview.
+            Section(L("미리보기 (출력과 같은 배치)")) {
+                HStack {
+                    Spacer()
+                    MonitorView(fps: 30, placement: { [weak input] in input?.videoAdjust }) { input.monitorFrame() }
+                        .frame(width: 384, height: 216)
+                        .background(Color.black)
+                        .overlay(Rectangle().stroke(Color.white.opacity(0.25), lineWidth: 1))
+                    Spacer()
+                }
+            }
             Section(L("위치 (SetZoom / SetPanX / SetPanY)")) {
                 Picker(L("화면 맞춤"), selection: $input.adjust.fitMode) {
                     Text(L("맞추기")).tag(0)
@@ -309,15 +320,15 @@ struct InputPropertiesSheet: View {
                 slider(L("채널 1 (L)"), $input.channel1, 0...1, reset: 1)
                 slider(L("채널 2 (R)"), $input.channel2, 0...1, reset: 1)
             }
-            Section("Audio Settings") {
-                Picker("Channel", selection: $input.audioFX.channelMode) {
-                    Text("Stereo").tag(0)
-                    Text("Mono (Left)").tag(1)
-                    Text("Mono (Right)").tag(2)
-                    Text("Swap L/R").tag(3)
+            Section(L("오디오 설정")) {
+                Picker(L("채널"), selection: $input.audioFX.channelMode) {
+                    Text(L("스테레오")).tag(0)
+                    Text(L("모노 (왼쪽)")).tag(1)
+                    Text(L("모노 (오른쪽)")).tag(2)
+                    Text(L("좌우 바꾸기")).tag(3)
                 }
                 NumberField("Delay", value: $input.audioFX.delayMs, in: 0...1000, unit: "ms", step: 10)
-                Toggle("Visible in Mixer", isOn: $input.audioFX.visibleInMixer)
+                Toggle(L("믹서에 표시"), isOn: $input.audioFX.visibleInMixer)
             }
             Section("EQ") {
                 Toggle(L("EQ 사용"), isOn: $input.audioFX.eqOn)
@@ -325,11 +336,11 @@ struct InputPropertiesSheet: View {
                 slider("Mid (1kHz) dB", $input.audioFX.eqMid, -15...15, format: "%.1f", reset: 0)
                 slider("High (8kHz) dB", $input.audioFX.eqHigh, -15...15, format: "%.1f", reset: 0)
             }
-            Section("Compressor / Noise Gate") {
-                Toggle("Compressor", isOn: $input.audioFX.compOn)
+            Section(L("컴프레서 / 노이즈 게이트")) {
+                Toggle(L("컴프레서"), isOn: $input.audioFX.compOn)
                 slider("Threshold dB", $input.audioFX.compThreshold, -60...0, format: "%.0f", reset: -18)
                 slider("Ratio", $input.audioFX.compRatio, 1...20, format: "%.1f:1", reset: 4)
-                Toggle("Noise Gate", isOn: $input.audioFX.gateOn)
+                Toggle(L("노이즈 게이트"), isOn: $input.audioFX.gateOn)
                 slider("Gate Threshold dB", $input.audioFX.gateThreshold, (-90)...(-10), format: "%.0f", reset: -50)
             }
             DuckingSection(input: input)
@@ -351,7 +362,7 @@ struct InputPropertiesSheet: View {
 
     private var playbackTab: some View {
         Form {
-            Section(L("재생")) {
+            Section(L("재생 설정")) {
                 HStack {
                     Button(input.playing ? L("일시정지") : L("재생")) { input.playing.toggle() }
                     Button(L("처음부터")) { input.restart() }
@@ -379,7 +390,7 @@ struct InputPropertiesSheet: View {
                     Spacer()
                     Button(L("Mark Out (현재)")) { input.markOut = transport.position }
                     Text(input.markOut > 0 ? String(format: L("%.2f초"), input.markOut) : L("없음"))
-                    Button("Reset") {
+                    Button(L("초기화")) {
                         input.markIn = -1
                         input.markOut = -1
                     }

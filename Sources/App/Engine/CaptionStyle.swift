@@ -23,7 +23,7 @@ struct CaptionStyle: Codable, Equatable {
     var textColor = "#FFFFFF"
     var outline = false
     var labelShow = true
-    var labelText = "AI 자막"
+    var labelText = L("AI 자막")
     var labelSize = 22.0
     var labelPos = "rows"            // rows (just above the captions) | box (top-left of the area) | custom
     var labelX = 8.0, labelY = 68.0  // % (custom)

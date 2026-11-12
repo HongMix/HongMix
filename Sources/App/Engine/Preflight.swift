@@ -88,8 +88,12 @@ extension SwitcherEngine {
 
         // 8. renderer
         let budget = 1000 / max(1, format.fps)
-        if droppedTicks > 0 || renderMsPeak > budget {
-            add(.warn, L("렌더러"), String(format: L("최대 %.1f ms / 예산 %.1f ms · 드롭 %d"), renderMsPeak, budget, droppedTicks))
+        // Recent drops only: one hiccup while the project loads at launch is not a problem now.
+        let recent = recentDrops(within: 300)
+        if recent > 0 || renderMsPeak > budget {
+            add(.warn, L("렌더러"), String(format: L("최대 %.1f ms / 예산 %.1f ms · 최근 5분 드롭 %d"), renderMsPeak, budget, recent))
+        } else if droppedTicks > 0 {
+            add(.ok, L("렌더러"), String(format: L("평균 %.1f ms · 최대 %.1f ms · 최근 5분 드롭 없음 (전체 %d)"), renderMs, renderMsPeak, droppedTicks))
         } else {
             add(.ok, L("렌더러"), String(format: L("평균 %.1f ms · 최대 %.1f ms"), renderMs, renderMsPeak))
         }

@@ -284,9 +284,13 @@ struct StartupCheckView: View {
         let http = engine.apiStatus.contains("8088")
         return Panel(title: L("원격 제어 연결 주소")) {
             VStack(spacing: 0) {
-                Row(L("웹 API · 웹 리모트"), http ? "http://\(ip):8088" : L("사용 안 됨"), mono: true)
-                Row("Companion (vMix TCP)", "\(ip) : 8099", mono: true)
-                Row(L("상태"), engine.apiStatus.isEmpty ? "—" : engine.apiStatus, tint: http ? .green : .orange)
+                if APIAccess.enabled {
+                    Row(L("웹 API · 웹 리모트"), http ? "http://\(ip):8088" : L("사용 안 됨"), mono: true)
+                    Row("Companion (vMix TCP)", "\(ip) : 8099", mono: true)
+                    Row(L("상태"), engine.apiStatus.isEmpty ? "—" : engine.apiStatus, tint: http ? .green : .orange)
+                } else {
+                    Row(L("상태"), L("꺼짐 — 설정 › 네트워크 › 원격 제어에서 켜기"))
+                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -321,7 +325,7 @@ struct StartupCheckView: View {
 struct MacCleanupPanel: View {
     @ObservedObject var health = SystemHealth.shared
 
-    private static let guide: [(String, String, String)] = [
+    private static var guide: [(String, String, String)] { [   // computed: follows a language switch
         (L("iPhone 실시간 현황 끄기"), L("배달·스포츠 같은 실시간 현황을 그리는 위젯이 화면을 멈추게 할 수 있어요"),
          "x-apple.systempreferences:com.apple.Notifications-Settings.extension"),
         (L("바탕화면 위젯 빼기"), L("바탕화면 위젯도 계속 다시 그려집니다"),
@@ -330,7 +334,7 @@ struct MacCleanupPanel: View {
          "x-apple.systempreferences:com.apple.Spotlight-Settings.extension"),
         (L("자동 업데이트 끄기"), L("방송 중 백그라운드 설치를 막습니다 (Adobe 등 다른 앱은 각 앱 설정에서)"),
          "x-apple.systempreferences:com.apple.Software-Update-Settings.extension"),
-    ]
+    ] }
 
     var body: some View {
         Panel(title: L("맥 정리")) {

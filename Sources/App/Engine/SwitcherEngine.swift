@@ -252,6 +252,14 @@ final class SwitcherEngine: ObservableObject {
     let dataSources = DataSourceManager()
     private(set) var renderMs: Double = 0
     private(set) var droppedTicks: Int = 0
+    /// When renderer drops happened (last 10 min) — the pre-show check judges the recent ones, not the
+    /// launch hiccup counted since start.
+    private var dropTimes: [(t: Date, n: Int)] = []
+    private let launchedAt = Date()
+    func recentDrops(within seconds: TimeInterval) -> Int {
+        let from = max(Date().addingTimeInterval(-seconds), launchedAt.addingTimeInterval(60))
+        return dropTimes.filter { $0.t >= from }.reduce(0) { $0 + $1.n }
+    }
     /// Slowest frame in the last stats window (ms).
     private(set) var renderMsPeak: Double = 0
     /// Longest main-thread (UI) stall in the last second — monitors and buttons stutter when this is high.
@@ -354,6 +362,7 @@ final class SwitcherEngine: ObservableObject {
     func resetDrops() {
         stateLock.lock(); droppedCount = 0; stateLock.unlock()
         droppedTicks = 0
+        dropTimes.removeAll()
         lastDropForBlackbox = 0
         lastDroppedForHistory = 0
     }
@@ -442,12 +451,24 @@ final class SwitcherEngine: ObservableObject {
         }
         // keep failover, scheduler and stats running while a menu is open or a window is being resized
         for t in [statsTimer, mediaTimer].compactMap({ $0 }) { RunLoop.main.add(t, forMode: .common) }
+        applyRemoteControl()
+    }
+
+    /// Settings › Network › Remote control: opens or closes HTTP 8088 / TCP 8099 (off = no open port).
+    func applyRemoteControl() {
+        guard APIAccess.enabled else {
+            api.stop(); tcpAPI.stop()
+            apiStatus = L("원격 제어 꺼짐")
+            return
+        }
         let ip = HTTPAPIServer.localIPAddress() ?? "localhost"
-        let httpOK = api.start(port: 8088)
-        let tcpOK = tcpAPI.start(port: 8099)
+        let httpOK = api.isRunning || api.start(port: 8088)
+        let tcpOK = tcpAPI.isRunning || tcpAPI.start(port: 8099)
         apiStatus = (httpOK ? "Web/API http://\(ip):8088" : L("HTTP 8088 사용 불가")) +
             (tcpOK ? " · TCP 8099" : L(" · TCP 8099 사용 불가"))
     }
+
+    var remoteControlOn: Bool { api.isRunning || tcpAPI.isRunning }
 
     private func startRenderThread() {
         VideoSlot.programFPS = format.fps
@@ -508,6 +529,7 @@ final class SwitcherEngine: ObservableObject {
         watch(input.id, input.objectWillChange)
         syncRenderLists()
         input.start()
+        linkVirtualInputs()
         if programID == nil {
             withState { $0.programID = input.id }
             programID = input.id
@@ -521,6 +543,8 @@ final class SwitcherEngine: ObservableObject {
     func removeInput(_ input: InputSource) {
         InputMonitorWindow.close(input.id)
         inputs.removeAll { $0.id == input.id }
+        (input as? VirtualInput)?.link(nil)
+        linkVirtualInputs()
         unwatch(input.id)
         stopISO(input.id)
         syncRenderLists()
@@ -597,10 +621,42 @@ final class SwitcherEngine: ObservableObject {
     }
 
     /// Inputs shown through visible layers of `id` (recursively, cycle-safe, `id` itself excluded).
+    /// Point every virtual input at its original (cheap: `link` returns at once when nothing changed).
+    /// Runs on add/remove and every media tick, so a replaced or re-added original is picked up too.
+    func linkVirtualInputs() {
+        for case let v as VirtualInput in inputs {
+            let src = v.sourceID.flatMap { id in inputs.first { $0.id == id && !($0 is VirtualInput) } }
+            v.link(src)
+        }
+    }
+
+    /// vMix CreateVirtualInput: a new input sharing `original`'s picture (no second decoder). It starts as a
+    /// copy of the original's settings (position, crop, colour, key, layers), then each can be changed alone.
+    @discardableResult
+    func createVirtualInput(of original: InputSource) -> InputSource? {
+        let root = (original as? VirtualInput)?.source ?? original
+        guard !(root is VirtualInput), root.kind != .audio else { return nil }
+        // vMix: "copies the settings and contents of this input" — position, crop, colour, key, layers …
+        var c = root.currentConfig()
+        c.id = UUID()
+        c.name = Lf("%@ (가상)", root.name)
+        c.virtualOf = root.id.uuidString
+        c.muted = true                 // sound stays with the original
+        c.triggers = []                // the original's triggers would fire twice
+        c.backupInputID = nil
+        c.multiCorder = false
+        addInput(c)
+        return inputs.last
+    }
+
     private func layerSources(of id: UUID?) -> [InputSource] {
         guard let root = input(withID: id) else { return [] }
         var seen: Set<UUID> = [root.id], out: [InputSource] = [], stack = [root]
         while let cur = stack.popLast() {
+            // a virtual input shows its original's picture: the original's media follows it like a layer
+            if let v = cur as? VirtualInput, let src = v.source, !seen.contains(src.id) {
+                seen.insert(src.id); out.append(src); stack.append(src)
+            }
             for l in cur.layers where l.visible {
                 guard let cid = l.inputID, !seen.contains(cid), let child = input(withID: cid) else { continue }
                 seen.insert(cid); out.append(child); stack.append(child)
@@ -1377,6 +1433,7 @@ final class SwitcherEngine: ObservableObject {
     }
 
     private func mediaTick() {
+        linkVirtualInputs()
         checkSignals()
         syncOnAirLayers()
         syncTitleUse()
@@ -1944,6 +2001,10 @@ final class SwitcherEngine: ObservableObject {
         SystemHealth.shared.engine = self
         SystemHealth.shared.feed(stallMs: uiStallMs)
         MonitorRenderer.publishDrawStats()
+        if dropped > droppedTicks {
+            dropTimes.append((Date(), dropped - droppedTicks))
+            dropTimes.removeAll { $0.t < Date().addingTimeInterval(-600) }
+        }
         droppedTicks = dropped
         for o in outputs { o.refreshStats() }
         recordingSafety.update(self)   // [Recording safety hook]

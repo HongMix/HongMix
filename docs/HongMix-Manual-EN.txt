@@ -1,4 +1,4 @@
-HongMix 2.1.2 — User Manual (English)
+HongMix 2.1.4 — User Manual (English)
 ================================================================
 A live production switcher for Apple Silicon Macs, with a vMix-style layout, shortcuts and API.
 Made by Hong Seunghoon (홍승훈) · 2026-10-28 · Korea
@@ -9,14 +9,14 @@ Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)
 Requirements: an Apple Silicon Mac (M1 and later), macOS 14 or later.
 Everything (FFmpeg, SRT, NDI runtime, Chromium web engine) is bundled inside the app — nothing else to install.
 
-[Option A — recommended] Double-click HongMix-2.1.2.pkg
+[Option A — recommended] Double-click HongMix-2.1.4.pkg
   1) If macOS says "unidentified developer": right-click the file → Open → Open
      (or System Settings → Privacy & Security → "Open Anyway").
   2) Continue → Install. HongMix is installed in Applications.
   3) First launch: if macOS warns, right-click HongMix in Applications → Open → Open (once).
      (HongMix is not notarized by Apple yet, so macOS asks once.)
 
-[Option B] Open HongMix-2.1.2.dmg → drag HongMix into Applications
+[Option B] Open HongMix-2.1.4.dmg → drag HongMix into Applications
   - If warned on first launch, right-click the app → Open (once).
 
 On first use macOS asks for permissions:
@@ -24,15 +24,16 @@ On first use macOS asks for permissions:
   - Screen Recording — only for Screen/Window capture inputs
   - Local Network — allow so NDI and SRT devices can be found
 
-New in 2.1.2
-  - Layer media follows its parent input; input thumbnails reflect Fit, Fill and Stretch.
-  - Open an input in an independent monitor window and move it to another display or Space.
-  - Choose VBR or CBR for streaming. End-to-end SRT CBR stability still needs measurement.
-  - After a Mac has run for days, a stuck macOS Live Activities helper may block screen
-    composition every few seconds. The stream can remain smooth while HongMix Preview/Output
-    appears frozen for 0.5–2 seconds. Clean Up Mac restarts only that helper: no reboot and
-    no other apps are closed.
-  - Clip-end/on-air freeze recovery and background CPU/UI work were improved.
+New in 2.1.4
+  - Remote control is off by default. Companion, Stream Deck and web-remote users should enable
+    it once in Settings > Network after updating.
+  - Create a Virtual Input from an input's context menu: no second decoder, with independent
+    position, crop and layers. Playback and sound follow the original.
+  - Crop individual layers with Move/Crop modes, canvas handles and per-edge sliders.
+  - Input Settings shows position and crop live; double-click an input to open its settings.
+  - Choose 6, 15 or 30 fps input thumbnails; Program, recording and outputs stay full rate.
+  - Command-W safely closes tool windows and sheets, never the switcher or Display output.
+  - Korean/English UI coverage and display-lag, renderer and audio-underrun diagnostics improved.
 
 
 2. Layout (same as vMix)
@@ -60,6 +61,7 @@ New in 2.1.2
   ⇧⌘B          FTB (Fade To Black)
   ⌘I           Add Input
   ⌘N / ⌘O / ⌘S New / Open / Save project (autosaves every 5 s)
+  ⌘W           Close the current tool window or sheet (not the switcher or Display output)
 Settings (⌘,) → Shortcuts lets you map any key to any function (vMix default set included).
 
 - Four transition buttons: button = run, ▾ = effect (Fade/Merge/Wipe/Fly …), number = duration (ms).
@@ -152,11 +154,12 @@ API: SetText Input=number SelectedName=Headline.Text Value=text
 
 10. Remote control (vMix-compatible API)
 ----------------------------------------------------------------
+- Remote control is off by default. Enable it in Settings › Network › Remote Control before using the URLs below.
 - Web remote: http://mac-ip:8088/
 - Phone tally: http://mac-ip:8088/tally
 - vMix Web API: http://mac-ip:8088/api/?Function=Cut  ·  TCP 8099 (vMix TCP API)
   Companion, Stream Deck and vMix controllers work as they are.
-- Security: Settings › Network › Remote control security — allow network / this Mac only / off, allowed IPs,
+- Security: Settings › Network › Remote Control — enable, allow network / this Mac only, allowed IPs,
   web/HTTP password. Requests from other websites through a browser are always blocked.
 
 

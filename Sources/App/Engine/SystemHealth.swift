@@ -28,11 +28,15 @@ final class SystemHealth: ObservableObject {
         let time: Date
         let culprits: [Culprit]
         var restartable: [Culprit] { culprits.filter { $0.restartable } }
+        /// A macOS widget helper is among them — "Clean up" can fix it right away.
+        var actionable: Bool { !restartable.isEmpty }
     }
 
     @Published private(set) var alert: Alert?
     @Published var dismissed = false
     @Published private(set) var cleaning = false
+    /// The running cleanup was started by auto cleanup (no banner — logged in the incident recorder only).
+    @Published private(set) var cleaningAuto = false
     @Published private(set) var result: String?
     /// Latest scan for the pre-show check window.
     @Published private(set) var lastScan: [Culprit] = []
@@ -45,6 +49,9 @@ final class SystemHealth: ObservableObject {
     weak var engine: SwitcherEngine?
     private let queue = DispatchQueue(label: "HongMix.systemHealth", qos: .utility)
     private var stalls: [CFTimeInterval] = []        // main thread
+    private var lastStall: CFTimeInterval = 0
+    /// No stall for this long → the alert (and an old result) goes away by itself.
+    static let calmSeconds = 60.0
     private var lastScanTime: CFTimeInterval = 0
     private var lastRestart: [String: Date] = [:]
     private var measuring: (start: CFTimeInterval, stalls: Int)?
@@ -65,8 +72,13 @@ final class SystemHealth: ObservableObject {
     func feed(stallMs: Double) {
         let now = CACurrentMediaTime()
         let stalled = stallMs > Self.stallThresholdMs
-        if stalled { stalls.append(now) }
+        if stalled { stalls.append(now); lastStall = now }
         stalls.removeAll { now - $0 > 60 }
+        if !cleaning, now - lastStall > Self.calmSeconds, alert != nil || result != nil {
+            alert = nil
+            result = nil
+            dismissed = false
+        }
         if var m = measuring {
             if stalled { m.stalls += 1 }
             measuring = m
@@ -79,7 +91,7 @@ final class SystemHealth: ObservableObject {
             self.alert = Alert(time: Date(), culprits: culprits)
             self.dismissed = false
             self.result = nil
-            if self.autoCleanup { self.cleanup(auto: true) }
+            if self.autoCleanup && self.alert?.actionable == true { self.cleanup(auto: true) }
         }
     }
 
@@ -145,6 +157,7 @@ final class SystemHealth: ObservableObject {
     func cleanup(auto: Bool = false) {
         guard !cleaning else { return }
         cleaning = true
+        cleaningAuto = auto
         result = nil
         let minCPU: Double = auto ? 30 : 5
         queue.async {
@@ -160,13 +173,14 @@ final class SystemHealth: ObservableObject {
                 }
                 if done.isEmpty {
                     self.cleaning = false
+                    self.cleaningAuto = false
                     self.result = auto ? nil : L("정리할 맥 위젯이 없어요 — 다른 앱이 원인이면 목록을 확인하세요.")
                     return
                 }
                 let names = done.map { Self.friendly($0) }.joined(separator: ", ")
                 let detail = auto ? Lf("자동 정리: %@ 재시작", names) : Lf("정리: %@ 재시작", names)
                 self.engine?.blackbox.record(.systemCleanup, detail)
-                self.result = Lf("%@ 재시작 — 10초 동안 확인 중…", names)
+                self.result = auto ? nil : Lf("%@ 재시작 — 10초 동안 확인 중…", names)
                 self.measuring = (CACurrentMediaTime(), 0)
             }
         }
@@ -177,6 +191,14 @@ final class SystemHealth: ObservableObject {
     private func finishMeasure(_ stallCount: Int) {
         measuring = nil
         cleaning = false
+        let auto = cleaningAuto
+        cleaningAuto = false
+        engine?.blackbox.record(.systemCleanup, stallCount == 0 ? L("정리 후 10초 동안 화면 멈춤 없음")
+                                                                : Lf("정리 후 10초 동안 %@번 멈춤", "\(stallCount)"))
+        if auto {          // silent: the alert stays only if it did not help (shown as the small top-bar chip)
+            if stallCount == 0 { alert = nil; stalls.removeAll() }
+            return
+        }
         if stallCount == 0 {
             result = L("좋아졌어요 — 10초 동안 화면 멈춤 없음")
             alert = nil

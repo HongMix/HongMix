@@ -32,8 +32,8 @@ struct OverlaySettingsSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("Overlay Settings").font(.headline).padding()
-            Picker("Number", selection: $number) {
+            Text(L("Overlay 설정")).font(.headline).padding()
+            Picker(L("번호"), selection: $number) {
                 ForEach(1...SwitcherEngine.overlayCount, id: \.self) { Text("Overlay \($0)").tag($0) }
                 Text("Stinger 1").tag(SwitcherEngine.overlayCount + 1)
             }
@@ -61,11 +61,11 @@ struct OverlaySettingsSheet: View {
 
     @ViewBuilder private func overlaySection(_ i: Int) -> some View {
         Section("Overlay \(i + 1)") {
-            Picker("Type", selection: $engine.overlaySettings[i].pip) {
-                Text("Fullscreen").tag(false)
-                Text("Picture In Picture").tag(true)
+            Picker(L("종류"), selection: $engine.overlaySettings[i].pip) {
+                Text(L("전체 화면")).tag(false)
+                Text(L("화면 속 화면 (PIP)")).tag(true)
             }
-            Picker("Transition Effect", selection: $engine.overlaySettings[i].effect) {
+            Picker(L("전환 효과"), selection: $engine.overlaySettings[i].effect) {
                 ForEach(OverlayEffect.allCases) { Text($0.label).tag($0) }
             }
             NumberField("Effect Duration", value: $engine.overlaySettings[i].durationMs, in: 0...5000, unit: "ms", step: 100)
@@ -76,17 +76,17 @@ struct OverlaySettingsSheet: View {
         if engine.overlaySettings[i].pip {
             Section(L("Picture In Picture 위치")) {
                 HStack {
-                    Text("Zoom")
+                    Text(L("줌"))
                     Slider(value: $engine.overlaySettings[i].pipZoom, in: 0.1...1)
                     Text(String(format: "%.2f", engine.overlaySettings[i].pipZoom)).frame(width: 40)
                 }
                 HStack {
-                    Text("Pan X")
+                    Text(L("가로 이동"))
                     Slider(value: $engine.overlaySettings[i].pipX, in: -2...2)
                     Text(String(format: "%.2f", engine.overlaySettings[i].pipX)).frame(width: 40)
                 }
                 HStack {
-                    Text("Pan Y")
+                    Text(L("세로 이동"))
                     Slider(value: $engine.overlaySettings[i].pipY, in: -2...2)
                     Text(String(format: "%.2f", engine.overlaySettings[i].pipY)).frame(width: 40)
                 }
@@ -107,7 +107,7 @@ struct OverlaySettingsSheet: View {
 
     @ViewBuilder private func stingerSection(_ i: Int) -> some View {
         Section("Stinger \(i + 1)") {
-            Picker("Stinger Input", selection: $engine.stingers[i].inputID) {
+            Picker(L("Stinger 입력"), selection: $engine.stingers[i].inputID) {
                 Text(L("없음")).tag(UUID?.none)
                 ForEach(engine.inputs.filter { $0.kind == .media }) { input in
                     Text("\(engine.number(of: input)). \(input.name)").tag(UUID?.some(input.id))

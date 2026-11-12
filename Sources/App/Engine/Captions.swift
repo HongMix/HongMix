@@ -56,10 +56,10 @@ final class CaptionEngine: ObservableObject {
     @Published private(set) var lastText = ""
     @Published private(set) var lastTranslation = ""
 
-    static let languages: [(String, String)] = [("ko-KR", L("한국어")), ("en-US", "English"), ("es-ES", "Español"),
-                                                ("ja-JP", "日本語"), ("zh-CN", "中文"), ("fr-FR", "Français"), ("de-DE", "Deutsch")]
-    static let targets: [(String, String)] = [("", L("번역 안 함")), ("en", "English"), ("ko", L("한국어")), ("es", "Español"),
-                                              ("ja", "日本語"), ("zh-Hans", "中文"), ("fr", "Français"), ("de", "Deutsch")]
+    static var languages: [(String, String)] { [("ko-KR", L("한국어")), ("en-US", "English"), ("es-ES", "Español"),
+                                                ("ja-JP", "日本語"), ("zh-CN", "中文"), ("fr-FR", "Français"), ("de-DE", "Deutsch")] }
+    static var targets: [(String, String)] { [("", L("번역 안 함")), ("en", "English"), ("ko", L("한국어")), ("es", "Español"),
+                                              ("ja", "日本語"), ("zh-Hans", "中文"), ("fr", "Français"), ("de", "Deutsch")] }
 
     weak var engine: SwitcherEngine?
     private var recognizer: SFSpeechRecognizer?

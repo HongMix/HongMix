@@ -310,7 +310,7 @@ struct TopBar: View {
                 Button { engine.undoClose() } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.uturn.backward")
-                        Text("Undo")
+                        Text(L("실행 취소"))
                     }
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.white)
@@ -353,7 +353,7 @@ struct TopBar: View {
                 Image(systemName: "gearshape")
             }
             .buttonStyle(.plain)
-            .help(L("설정"))
+            .help(L("설정 열기"))
         }
         .padding(.horizontal, AppSkin.isMono ? 14 : 10)
         .frame(height: AppSkin.isMono ? 30 : 26)
@@ -398,6 +398,7 @@ struct EngineStatsChips: View {
             StatusChip(label: "Drop", value: "\(engine.droppedTicks)", warn: engine.droppedTicks > 0)
                 .onTapGesture { engine.resetDrops() }
                 .help(L("렌더러가 늦어 건너뛴 프레임 수 (앱 시작 이후 누적). 클릭하면 0으로."))
+            SystemLagChip()
         }
     }
 }

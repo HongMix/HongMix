@@ -253,7 +253,7 @@ final class TitleInput: InputSource {
         }
         let changed = key != lastLiveKey
         lastLiveKey = key
-        let tickerDue = ticker && (!throttled || now - lastTickerDraw >= 1.0 / 6.0 - 0.005)
+        let tickerDue = ticker && (!throttled || now - lastTickerDraw >= 1.0 / Double(InputTileRate.fps) - 0.005)
         if needs || tickerDue || changed {
             render(doc, now: now)
             lastTickerDraw = now

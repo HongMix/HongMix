@@ -527,6 +527,8 @@ private struct FoldedInputRow: View {
             Button(L("펼치기")) { withAnimation(.easeInOut(duration: 0.15)) { input.folded = false } }
             Button(L("속성…")) { sheet = SheetRequest(kind: input.kind, editing: input, mode: .properties) }
             Button(L("입력 설정…")) { sheet = SheetRequest(kind: input.kind, editing: input) }
+            Button(L("가상 입력 복사")) { engine.createVirtualInput(of: input) }
+                .disabled(input.kind == .audio)
         }
         .draggable(input.id.uuidString) { Text("\(number). \(input.name)").padding(6).background(Theme.panel) }
         .onDrop(of: FileDrop.dropTypes, isTargeted: nil) { providers in
@@ -761,8 +763,13 @@ struct InputBox: View {
             .frame(height: 20)
             .background(AppSkin.isMono ? Theme.panelDark : headerColor)
             .contentShape(Rectangle())
-            .onTapGesture(count: 2) { sheet = SheetRequest(kind: input.kind, editing: input, mode: .properties) }
-            .onTapGesture { if input.collapsed || input.folded { engine.setPreview(input.id) } }
+            .onTapGesture {
+                if (NSApp.currentEvent?.clickCount ?? 1) >= 2 {
+                    sheet = SheetRequest(kind: input.kind, editing: input, mode: .properties)
+                } else if input.collapsed || input.folded {
+                    engine.setPreview(input.id)
+                }
+            }
             .overlay(RightClickCatcher { withAnimation(.easeInOut(duration: 0.15)) { input.folded.toggle() } })
             .help(L("더블클릭: Input Settings · 우클릭: 접기/펼치기"))
 
@@ -789,6 +796,7 @@ struct InputBox: View {
     }
 
     @ViewState private var dropTarget = false
+    @AppStorage(InputTileRate.key) private var tileFPS = 6
 
     @ViewBuilder private var fillKeyBadge: some View {
         if input.alphaKey.mode == "key",
@@ -814,11 +822,19 @@ struct InputBox: View {
     /// make the picture look vertically offset or undersized in only some tiles.
     private var inputMonitor: some View {
         ZStack(alignment: .center) {
-            MonitorView(fps: 6, onActiveChange: { input.setInputTileVisible($0) },
+            MonitorView(fps: tileFPS, onActiveChange: { input.setInputTileVisible($0) },
                         placement: { [weak input] in input?.videoAdjust }) { input.monitorFrame() }
                 .background(Color.black)
+            // vMix habit: click = Preview at once, double-click = Input Settings (the first click has
+            // already previewed it). Simultaneous so the single click never waits for a possible second one.
+            // AppKit's click count: every click fires at once (no wait for a possible second one).
             Color.clear.contentShape(Rectangle())
-                .onTapGesture { engine.setPreview(input.id) }
+                .onTapGesture {
+                    engine.setPreview(input.id)
+                    if (NSApp.currentEvent?.clickCount ?? 1) >= 2 {
+                        sheet = SheetRequest(kind: input.kind, editing: input, mode: .properties)
+                    }
+                }
             if input.adjust.fitMode != 0 {
                 // the tile is shown as placed in Program; say so when it differs from the raw source
                 Text(input.adjust.fitMode == 1 ? "FILL" : "STRETCH")
@@ -845,6 +861,15 @@ struct InputBox: View {
         .frame(maxWidth: .infinity)
         .aspectRatio(16.0 / 9.0, contentMode: .fit)
         .fixedSize(horizontal: false, vertical: true)
+        .contextMenu {
+            Button(L("미리보기로 선택")) { engine.setPreview(input.id) }
+            Button(L("속성…")) { sheet = SheetRequest(kind: input.kind, editing: input, mode: .properties) }
+            Button(L("크게 보기 (별도 창)")) { InputMonitorWindow.show(input, engine: engine) }
+            Divider()
+            Button(L("가상 입력 복사")) { engine.createVirtualInput(of: input) }
+                .disabled(input.kind == .audio)
+                .help(L("같은 화면을 다시 디코딩하지 않고 입력을 하나 더 만듭니다. 위치·자르기·레이어는 따로, 재생·소리는 원본을 따라갑니다."))
+        }
     }
 
     // One tile layout for every size and input kind (compact or expanded), so buttons never
@@ -872,7 +897,7 @@ struct InputBox: View {
     private var tileBody: some View {
         let transport = input.supportsTransport
         return VStack(spacing: 3) {
-            inputMonitor.help(L("클릭: Preview"))
+            inputMonitor.help(L("클릭: Preview · 더블클릭: Input Settings"))
 
             listNowPlaying
 
@@ -1265,7 +1290,7 @@ struct InputChannelStrip: View {
                             }
                         }
                         Divider()
-                        Button("Audio Settings…", action: openSettings)
+                        Button(L("오디오 설정…"), action: openSettings)
                     } label: {
                         Image(systemName: "gearshape.fill").font(.system(size: 9))
                     }
@@ -1424,7 +1449,7 @@ struct ChannelStrip<Accessory: View>: View {
                         .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .help("Mute")
+                .help(L("음소거"))
             }
             accessory
                 .frame(width: 58, height: 44, alignment: .top)   // same height on every strip → faders line up

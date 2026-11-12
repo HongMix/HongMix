@@ -53,7 +53,7 @@ struct MIDISettingsView: View {
                 }
             }
 
-            Section(L("연결")) {
+            Section(L("MIDI 매핑")) {
                 if shown.isEmpty {
                     Text(L("아직 연결이 없습니다. 아래에서 기능을 고르고 학습을 누른 뒤 컨트롤러를 움직이세요.")).font(.caption).foregroundColor(.secondary)
                 }

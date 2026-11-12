@@ -62,6 +62,22 @@ enum PixelBufferFactory {
 }
 
 /// Holds the most recent frame of a source ("frame sync": the mixer always takes the newest frame).
+/// Settings › General › Playback: how often input tiles redraw (6 / 15 / 30 fps). Only the grid thumbnails —
+/// Program, Preview and every output always run at the full program rate.
+enum InputTileRate {
+    static let key = "inputTileFPS"
+    static let choices = [6, 15, 30]
+    private(set) static var fps: Int = {
+        let v = UserDefaults.standard.integer(forKey: key)
+        return choices.contains(v) ? v : 6
+    }()
+    static func set(_ v: Int) {
+        guard choices.contains(v) else { return }
+        fps = v
+        UserDefaults.standard.set(v, forKey: key)
+    }
+}
+
 final class VideoSlot {
     private let lock = NSLock()
     private let monitorLock = NSLock()
@@ -132,6 +148,33 @@ final class VideoSlot {
         lastHeight = CVPixelBufferGetHeight(pb)
         lock.unlock()
         scheduleMonitorProxy(pb)
+        for m in currentMirrors() { m.store(pb, ptsUs: ptsUs) }
+    }
+
+    // MARK: Virtual inputs (vMix Virtual Input): the same decoded frame, no second decoder
+
+    private let mirrorLock = NSLock()
+    private var mirrors: [ObjectIdentifier: WeakSlot] = [:]
+    private struct WeakSlot { weak var slot: VideoSlot? }
+
+    /// `slot` receives every frame stored here (the same CVPixelBuffer — no copy, no decode).
+    func addMirror(_ slot: VideoSlot) {
+        guard slot !== self else { return }
+        mirrorLock.lock(); mirrors[ObjectIdentifier(slot)] = WeakSlot(slot: slot); mirrorLock.unlock()
+        slot.followsProgramRate = followsProgramRate
+        slot.nominalFPS = nominalFPS
+        if let pb = latest() { slot.store(pb) }
+    }
+
+    func removeMirror(_ slot: VideoSlot) {
+        mirrorLock.lock(); mirrors[ObjectIdentifier(slot)] = nil; mirrorLock.unlock()
+    }
+
+    private func currentMirrors() -> [VideoSlot] {
+        mirrorLock.lock(); defer { mirrorLock.unlock() }
+        if mirrors.isEmpty { return [] }
+        mirrors = mirrors.filter { $0.value.slot != nil }
+        return mirrors.values.compactMap { $0.slot }
     }
 
     /// Called by the program render thread for inputs actually contributing to the on-air frame.
@@ -172,7 +215,7 @@ final class VideoSlot {
         }
         let now = CACurrentMediaTime()
         monitorLock.lock()
-        guard monitorConsumers > 0, !monitorJobPending, now - monitorLastSchedule >= 1.0 / 6.0 else {
+        guard monitorConsumers > 0, !monitorJobPending, now - monitorLastSchedule >= 1.0 / Double(InputTileRate.fps) - 0.002 else {
             monitorLock.unlock(); return
         }
         monitorJobPending = true
@@ -415,6 +458,7 @@ final class VideoSlot {
         lock.lock()
         buffer = nil
         lock.unlock()
+        for m in currentMirrors() { m.clear() }
         monitorLock.lock()
         monitorGeneration &+= 1
         monitorBuffer = nil
@@ -566,10 +610,12 @@ final class AudioRing {
         lock.unlock()
     }
 
+    /// `diagnose: false` = a meter-only read of an off-air input: an empty ring there (paused clip,
+    /// file without audio) is not an underrun and must not show up in Statistics.
     @discardableResult
-    func read(into dst: UnsafeMutablePointer<Float>, frames: Int) -> Int {
+    func read(into dst: UnsafeMutablePointer<Float>, frames: Int, diagnose: Bool = true) -> Int {
         lock.lock()
-        minAvailableAtRead = min(minAvailableAtRead ?? count, count)
+        if diagnose { minAvailableAtRead = min(minAvailableAtRead ?? count, count) }
         let n = min(frames, count)
         var r = readPos
         for i in 0..<n {
@@ -581,7 +627,7 @@ final class AudioRing {
         readPos = r
         count -= n
         readFrames += Int64(n)
-        if n < frames { shortReads += 1 }
+        if n < frames && diagnose { shortReads += 1 }
         lock.unlock()
         return n
     }

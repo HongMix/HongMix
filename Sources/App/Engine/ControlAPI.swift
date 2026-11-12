@@ -7,11 +7,21 @@ import CoreVideo
 // MARK: - Access control (Settings › Network › Remote control)
 
 /// Who may use the HTTP (8088) / TCP (8099) control API.
-///  - mode "lan" (default, like vMix): any device on the network, optionally only the listed IPs
-///  - mode "local": only this Mac  ·  mode "off": nobody
+///  - enabled (Settings › Network › Remote control): off = both ports stay closed. Off by default from
+///    2.1.3 — turned on only by those who use Companion / Stream Deck / the web remote.
+///  - mode "lan" (like vMix): any device on the network, optionally only the listed IPs
+///  - mode "local": only this Mac  ·  mode "off" (older versions): nobody
 ///  - HTTP password (optional): HTTP Basic auth, any user name (like vMix's Web Controller password)
 enum APIAccess {
     static let modeKey = "apiAccessMode", passwordKey = "apiPassword", allowKey = "apiAllowedIPs"
+    static let enabledKey = "apiEnabled"
+    /// Not set yet: on only if an earlier version's mode was chosen on purpose (lan/local), else off.
+    static var enabled: Bool {
+        let d = UserDefaults.standard
+        if d.object(forKey: enabledKey) != nil { return d.bool(forKey: enabledKey) }
+        if let m = d.string(forKey: modeKey) { return m != "off" }
+        return false
+    }
     static var mode: String { UserDefaults.standard.string(forKey: modeKey) ?? "lan" }
     static var password: String { UserDefaults.standard.string(forKey: passwordKey) ?? "" }
     static var allowed: [String] {
@@ -33,7 +43,7 @@ enum APIAccess {
 
     /// true = this connection may talk to the API.
     static func permits(_ conn: NWConnection) -> Bool {
-        guard let h = host(of: conn) else { return false }
+        guard enabled, let h = host(of: conn) else { return false }
         if isLoopback(h) { return mode != "off" }
         switch mode {
         case "off", "local": return false
@@ -51,8 +61,12 @@ final class HTTPAPIServer {
     private var listener: NWListener?
     private let queue = DispatchQueue(label: "HongMix.http")
 
+    var isRunning: Bool { listener != nil }
+
     func start(port: UInt16) -> Bool {
-        guard let p = NWEndpoint.Port(rawValue: port), let l = try? NWListener(using: .tcp, on: p) else { return false }
+        let params = NWParameters.tcp
+        params.allowLocalEndpointReuse = true      // turning remote control off → on re-binds at once
+        guard let p = NWEndpoint.Port(rawValue: port), let l = try? NWListener(using: params, on: p) else { return false }
         l.newConnectionHandler = { [weak self] conn in self?.handle(conn) }
         l.start(queue: queue)
         listener = l
@@ -310,8 +324,12 @@ final class TCPAPIServer {
     private var eventSub: AnyCancellable?
     private var lastActs: [String: String] = [:]                // activator key -> value
 
+    var isRunning: Bool { listener != nil }
+
     func start(port: UInt16) -> Bool {
-        guard let p = NWEndpoint.Port(rawValue: port), let l = try? NWListener(using: .tcp, on: p) else { return false }
+        let params = NWParameters.tcp
+        params.allowLocalEndpointReuse = true      // turning remote control off → on re-binds at once
+        guard let p = NWEndpoint.Port(rawValue: port), let l = try? NWListener(using: params, on: p) else { return false }
         l.newConnectionHandler = { [weak self] conn in
             DispatchQueue.main.async { self?.accept(conn) }
         }

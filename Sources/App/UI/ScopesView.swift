@@ -265,7 +265,7 @@ struct ScopesView: View {
         HStack(spacing: 12) {
             Menu {
                 Button("Output (Program)") { scopes.source = .output }
-                Button("Preview") { scopes.source = .preview }
+                Button(L("미리보기")) { scopes.source = .preview }
                 if !engine.inputs.isEmpty {
                     Divider()
                     ForEach(engine.inputs) { i in

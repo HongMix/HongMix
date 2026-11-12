@@ -21,12 +21,15 @@ enum UISnapshots {
             return view(VStack(spacing: 0) { TopBar(); ControlFocusBanner(forceShow: true) }
                             .environmentObject(engine).padding(4).background(Color(white: 0.09)),
                         size: NSSize(width: 1500, height: 72), to: path)
-        // 2.1.2
+        // 2.1.2 / 2.1.3
         case "lang-en", "lang-ko":          // switch the UI language (same as Settings › General)
             let l: AppLanguage = name.lowercased() == "lang-en" ? .en : .ko
             AppLanguage.set(l)
             UserDefaults.standard.set(l.rawValue, forKey: AppLanguage.defaultsKey)
             return nil
+        case "remote":          // Settings › Network › Remote control (build 110)
+            return view(Form { RemoteControlSection() }.formStyle(.grouped).environmentObject(engine)
+                            .frame(width: 640, height: 460), size: NSSize(width: 640, height: 460), to: path)
         case "cleanup":
             return view(MacCleanupPanel().padding(10).frame(width: 800), size: nil, to: path)
         case "healthbanner":
@@ -43,6 +46,18 @@ enum UISnapshots {
                         size: NSSize(width: 620, height: 1000), to: path)
         default:
             // "inputmonitor-<n>": open the monitor window of input n (captured from the screen — it shows video)
+            // "props-<n>-<tab>": Input Settings of input n on a tab (3 = Position, 6 = Layers) — 2.1.4
+            let parts = name.lowercased().split(separator: "-")
+            if parts.count == 3, parts[0] == "props", let n = Int(parts[1]), let t = Int(parts[2]),
+               n >= 1, n <= engine.inputs.count {
+                return window(InputPropertiesSheet(input: engine.inputs[n - 1], initialTab: t).environmentObject(engine)
+                                .frame(width: 980, height: 760), size: NSSize(width: 980, height: 760), title: "Snapshot props")
+            }
+            // "layers-<n>": Layers editor of input n, layer 1 selected, Crop mode — 2.1.4
+            if parts.count == 2, parts[0] == "layers", let n = Int(parts[1]), n >= 1, n <= engine.inputs.count {
+                return window(LayersEditor(input: engine.inputs[n - 1], previewCropMode: true).environmentObject(engine)
+                                .padding(12).frame(width: 980, height: 420), size: NSSize(width: 980, height: 420), title: "Snapshot layers")
+            }
             if name.lowercased().hasPrefix("inputmonitor-"), let n = Int(name.dropFirst(13)),
                n >= 1, n <= engine.inputs.count {
                 InputMonitorWindow.show(engine.inputs[n - 1], engine: engine)
@@ -53,6 +68,24 @@ enum UISnapshots {
     }
 
     private static var keep: [NSWindow] = []
+
+    /// Views with live video (Metal) can't be drawn offscreen: open a real window titled `title`; the
+    /// tester captures it by window id (screencapture -l) and closes it (File › Close Window).
+    private static func window<V: View>(_ v: V, size: NSSize, title: String) -> String? {
+        let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable],
+                         backing: .buffered, defer: false)
+        w.title = title
+        w.appearance = NSAppearance(named: .darkAqua)
+        w.isReleasedWhenClosed = false
+        w.contentView = NSHostingView(rootView: v.preferredColorScheme(.dark))
+        w.center()
+        w.makeKeyAndOrderFront(nil)
+        keep.append(w)
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { _ in
+            keep.removeAll { $0 === w }
+        }
+        return nil
+    }
 
     private static func view<V: View>(_ v: V, size: NSSize?, to path: String) -> String? {
         let host = NSHostingView(rootView: v.preferredColorScheme(.dark))

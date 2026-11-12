@@ -205,9 +205,9 @@ struct InputEditorSheet: View {
                         .foregroundColor(.secondary)
                 }
                 Spacer()
-                Button("Cancel") { dismiss() }
+                Button(L("취소")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button("OK") { commit() }
+                Button(L("확인")) { commit() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!isValid)
             }
@@ -250,10 +250,10 @@ struct InputEditorSheet: View {
     // MARK: Video
 
     @ViewBuilder private var videoSection: some View {
-        Section("Video") {
+        Section(L("비디오")) {
             HStack {
                 TextField(L("파일"), text: $cfg.url)
-                Button("Browse…") {
+                Button(L("찾아보기…")) {
                     if let p = pickFile(types: [.movie, .audiovisualContent, .audio, .mpeg4Movie, .quickTimeMovie]) {
                         cfg.url = p
                         cfg.playlist = []
@@ -264,7 +264,7 @@ struct InputEditorSheet: View {
             }
             Text(L("비디오 입력 하나에는 파일 하나만 연결됩니다. 여러 파일을 차례로 재생하려면 왼쪽의 List 입력을 선택하세요."))
                 .font(.caption).foregroundColor(.secondary)
-            Toggle("Loop", isOn: $cfg.loop)
+            Toggle(L("반복 재생 (Loop)"), isOn: $cfg.loop)
             Toggle(L("Auto Play (Output으로 갈 때 재생)"), isOn: $cfg.autoPlay)
             Toggle(L("Auto Pause (Output에서 빠질 때 일시정지)"), isOn: $cfg.autoPause)
             Toggle(L("Auto Restart (Output에서 빠질 때 처음으로)"), isOn: $cfg.autoRestart)
@@ -323,11 +323,11 @@ struct InputEditorSheet: View {
     // MARK: Colour
 
     @ViewBuilder private var colourSection: some View {
-        Section("Colour") {
+        Section(L("색")) {
             Picker(L("종류"), selection: $cfg.color) {
-                Text("SMPTE Colour Bars").tag("bars")
-                Text("Black").tag("black")
-                Text("White").tag("white")
+                Text(L("SMPTE 컬러바")).tag("bars")
+                Text(L("검정")).tag("black")
+                Text(L("흰색")).tag("white")
                 Text(L("투명 (Transparent)")).tag("transparent")
                 Text(L("사용자 지정")).tag(cfg.color.hasPrefix("#") ? cfg.color : "#0050C8")
             }
@@ -354,7 +354,7 @@ struct InputEditorSheet: View {
         Section {
             Picker("", selection: $ndiMode) {
                 Text("NDI").tag(0)
-                Text("Desktop Capture").tag(1)
+                Text(L("화면 캡처")).tag(1)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -375,7 +375,7 @@ struct InputEditorSheet: View {
                     Button {
                         refreshNDI()
                     } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
+                        Label(L("새로 고침"), systemImage: "arrow.clockwise")
                     }
                 }
                 ForEach(ndiSources, id: \.self) { src in
@@ -385,7 +385,7 @@ struct InputEditorSheet: View {
                     }
                 }
                 TextField(L("직접 입력 (예: MACHINE (Source))"), text: $cfg.ndiSource)
-                Toggle("Low Bandwidth", isOn: $cfg.ndiLowBandwidth)
+                Toggle(L("저대역폭"), isOn: $cfg.ndiLowBandwidth)
                 Text(L("다른 서브넷 장비는 설정 → 네트워크의 'NDI 추가 검색 IP'에 넣으세요."))
                     .font(.caption).foregroundColor(.secondary)
             }
@@ -472,10 +472,10 @@ struct InputEditorSheet: View {
     // MARK: Image
 
     @ViewBuilder private var imageSection: some View {
-        Section("Image") {
+        Section(L("이미지")) {
             HStack {
                 TextField(L("파일"), text: $cfg.imagePath)
-                Button("Browse…") {
+                Button(L("찾아보기…")) {
                     if let p = pickFile(types: [.png, .jpeg, .tiff, .gif, .image]) {
                         cfg.imagePath = p
                         if !nameEdited { cfg.name = (p as NSString).lastPathComponent }
@@ -507,7 +507,7 @@ struct InputEditorSheet: View {
     // MARK: Camera
 
     @ViewBuilder private var cameraSection: some View {
-        Section("Camera") {
+        Section(L("카메라")) {
             let _ = cameraDeviceRefresh
             ForEach(CameraInput.videoDevices(), id: \.uniqueID) { d in
                 sourceRow(d.localizedName, selected: cameraSelection == "av:" + d.uniqueID) {
@@ -536,8 +536,8 @@ struct InputEditorSheet: View {
             }
         }
         if !cameraSelection.hasPrefix("dl:") {
-            Section("Audio") {
-                Picker("Audio Device", selection: $cfg.audioDeviceID) {
+            Section(L("오디오")) {
+                Picker(L("오디오 장치"), selection: $cfg.audioDeviceID) {
                     Text(L("없음")).tag("")
                     ForEach(CameraInput.audioDevices(), id: \.uniqueID) { d in
                         Text(d.localizedName).tag(d.uniqueID)
@@ -574,16 +574,16 @@ struct InputEditorSheet: View {
     // MARK: Stream / SRT
 
     @ViewBuilder private var streamSection: some View {
-        Section("Stream / SRT") {
-            Picker("Stream Type", selection: $streamType) {
-                ForEach(StreamType.allCases) { t in Text(t.rawValue).tag(t) }
+        Section(L("스트림 / SRT")) {
+            Picker(L("스트림 종류"), selection: $streamType) {
+                ForEach(StreamType.allCases) { t in Text(L(t.rawValue)).tag(t) }
             }
             if streamType.needsURL {
                 TextField(streamType == .pull ? "URL (rtmp://, https://…m3u8, udp://, rtp://)" : "URL (rtsp://host/stream)",
                           text: $pullURL)
             }
             if streamType.needsHost {
-                TextField("Hostname", text: $host)
+                TextField(L("호스트 이름"), text: $host)
             }
             if !streamType.needsURL {
                 NumberField("Port", value: $port, in: 1...65535)
@@ -594,8 +594,8 @@ struct InputEditorSheet: View {
             }
             if streamType.isSRT {
                 NumberField("Latency", value: $latency, in: 20...8000, unit: "ms")
-                SecureField("Passphrase", text: $passphrase)
-                TextField("Stream ID", text: $streamID)
+                SecureField(L("암호 문구"), text: $passphrase)
+                TextField(L("스트림 ID"), text: $streamID)
                 Text(streamType == .srtListener
                      ? Lf("모든 네트워크 어댑터의 이 포트에서 접속을 기다립니다. 송출 장비(LiveU 등)는 srt://%@:%@ 로 Caller 접속하세요.", "\(HTTPAPIServer.localIPAddress() ?? "이 맥 IP")", "\(port)")
                      : streamType == .srtRendezvous ? L("상대방도 같은 포트로 Rendezvous 모드여야 합니다.") : L("지정한 호스트/포트로 접속합니다."))
@@ -603,15 +603,15 @@ struct InputEditorSheet: View {
                 Text(L("Latency는 상대방과 같게, 대략 왕복 지연(ping)의 4배 이상으로 설정하세요."))
                     .font(.caption).foregroundColor(.secondary)
             }
-            Toggle("Use Hardware Decoder", isOn: $cfg.hardwareDecode)
-            Toggle("Low Latency Mode", isOn: $cfg.lowLatency)
+            Toggle(L("하드웨어 디코더 사용"), isOn: $cfg.hardwareDecode)
+            Toggle(L("저지연 모드"), isOn: $cfg.lowLatency)
         }
     }
 
     // MARK: Web Browser
 
     @ViewBuilder private var browserSection: some View {
-        Section("Web Browser") {
+        Section(L("웹 브라우저")) {
             TextField("URL", text: $cfg.browserURL)
             NumberField(L("가로"), value: $cfg.browserWidth, in: 320...3840, unit: "px", step: 10)
             NumberField(L("세로"), value: $cfg.browserHeight, in: 180...2160, unit: "px", step: 10)
@@ -648,17 +648,17 @@ struct InputEditorSheet: View {
     }
 
     @ViewBuilder private var audioSection: some View {
-        Section("Audio Input") {
+        Section(L("오디오 입력")) {
             ForEach(CameraInput.audioDevices(), id: \.uniqueID) { d in
                 sourceRow(d.localizedName, selected: cfg.audioDeviceID == d.uniqueID) {
                     cfg.audioDeviceID = d.uniqueID
                     if !nameEdited { cfg.name = d.localizedName }
                 }
             }
-            Picker("Channels", selection: $cfg.audioFX.channelMode) {
-                Text("Stereo (1+2)").tag(0)
-                Text("Mono (1)").tag(1)
-                Text("Mono (2)").tag(2)
+            Picker(L("채널 구성"), selection: $cfg.audioFX.channelMode) {
+                Text(L("스테레오 (1+2)")).tag(0)
+                Text(L("모노 (1)")).tag(1)
+                Text(L("모노 (2)")).tag(2)
             }
             Text(L("마이크, USB 오디오 인터페이스, Dante/AVB 가상 사운드카드 등 macOS에 보이는 장치."))
                 .font(.caption).foregroundColor(.secondary)
@@ -844,10 +844,10 @@ struct InputEditorSheet: View {
     }
 
     @ViewBuilder private var photosSection: some View {
-        Section("Photos") {
+        Section(L("사진")) {
             HStack {
                 TextField(L("폴더"), text: $cfg.slides.path)
-                Button("Browse…") {
+                Button(L("찾아보기…")) {
                     if let p = pickFolder() {
                         cfg.slides.path = p
                         if !nameEdited { cfg.name = (p as NSString).lastPathComponent }
@@ -866,7 +866,7 @@ struct InputEditorSheet: View {
         Section(L("PDF 슬라이드")) {
             HStack {
                 TextField(L("파일"), text: $cfg.slides.path)
-                Button("Browse…") {
+                Button(L("찾아보기…")) {
                     if let p = pickFile(types: [.pdf]) {
                         cfg.slides.path = p
                         if !nameEdited { cfg.name = ((p as NSString).lastPathComponent as NSString).deletingPathExtension }
@@ -882,10 +882,10 @@ struct InputEditorSheet: View {
 
     @ViewBuilder private var virtualSetSection: some View {
         let others = engine.inputs.filter { $0.id != editing?.id && $0.kind != .virtualSet }
-        Section("Virtual Set") {
+        Section(L("가상 세트")) {
             HStack {
                 TextField(L("배경 이미지"), text: $cfg.virtualSet.backgroundPath)
-                Button("Browse…") {
+                Button(L("찾아보기…")) {
                     if let p = pickFile(types: [.png, .jpeg, .tiff, .heic, .image]) {
                         cfg.virtualSet.backgroundPath = p
                         cfg.virtualSet.backgroundInputID = nil
@@ -918,7 +918,7 @@ struct InputEditorSheet: View {
             }
             HStack {
                 TextField(L("앞쪽 이미지"), text: $cfg.virtualSet.foregroundPath, prompt: Text(L("책상 등 투명 PNG")))
-                Button("Browse…") {
+                Button(L("찾아보기…")) {
                     if let p = pickFile(types: [.png, .tiff, .image]) { cfg.virtualSet.foregroundPath = p }
                 }
             }

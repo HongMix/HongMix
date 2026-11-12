@@ -10,24 +10,30 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.2</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.4</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.1.2
-- Layer media now follows its parent input, and input thumbnails reflect Fit, Fill and Stretch accurately.
-- Open any input in an independent monitor window and move it to another display or macOS Space.
-- Choose VBR or CBR for streaming. CBR transport stability still needs an end-to-end SRT measurement.
-- HongMix detects a stuck macOS Live Activities helper that can make Preview/Output appear frozen for 0.5–2 seconds after a Mac has been running for days. **Clean Up Mac** restarts only that helper—no reboot and no other apps are closed.
-- Clip-end/on-air freeze recovery and background CPU/UI work were improved. See the [English release notes](docs/RELEASE-NOTES-2.1.2.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.2.ko.md).
+### Latest update · 2.1.4
+- **Remote control is now off by default.** Companion, Stream Deck and web-remote users should turn it on once in Settings › Network after updating.
+- Right-click an input to create a Virtual Input with its own position, crop and layers, without opening a second decoder.
+- Crop individual layers in the Layers editor with Move/Crop modes, canvas handles and per-edge sliders.
+- Input Settings now shows crop and position live; double-clicking an input opens its settings.
+- Choose 6, 15 or 30 fps for input thumbnails. Program, recording and outputs always remain full rate.
+- ⌘W safely closes tool windows and sheets, while the switcher and Display output stay open.
+- Korean and English UI coverage, display-lag alerts, recent renderer health and audio-underrun diagnostics were improved. See the [English release notes](docs/RELEASE-NOTES-2.1.4.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.4.ko.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.2/en-01-mac-cleanup.png" alt="HongMix 2.1.2 Mac cleanup diagnostics" width="100%"><br><sub>Detect and restart only a stuck macOS Live Activities helper</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.2/en-05-input-monitor-window.png" alt="HongMix 2.1.2 independent input monitor" width="100%"><br><sub>Independent input monitor for another display or Space</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.4/en-01-virtual-input.png" alt="HongMix 2.1.4 Virtual Input" width="100%"><br><sub>Virtual Input without a second decoder</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.4/en-03-layer-crop.png" alt="HongMix 2.1.4 layer crop editor" width="100%"><br><sub>Move/Crop modes and per-layer crop controls</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.4/en-02-position-live-preview.png" alt="HongMix 2.1.4 live position preview" width="100%"><br><sub>Crop and position shown live in Input Settings</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.3/en-03-remote-control.png" alt="HongMix remote control switch" width="100%"><br><sub>Remote control switch, off by default</sub></td>
   </tr>
 </table>
 
@@ -219,8 +225,8 @@ Optional SDKs (not included in this repository):
 
 ## Remote control & security
 
-HTTP 8088 / TCP 8099 are open on the local network, like vMix. Use **Settings › Network › Remote control security** to limit them:
-- Network / this Mac only / off
+Remote control is **off by default**. Enable it in **Settings › Network › Remote Control** if you use Companion, Stream Deck or the web remote. When enabled, use its security settings to limit HTTP 8088 / TCP 8099:
+- Network / this Mac only
 - IP allow list
 - Web/HTTP password
 

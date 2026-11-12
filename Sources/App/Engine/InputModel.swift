@@ -421,6 +421,8 @@ struct InputConfig: Codable, Identifiable, Equatable {
     var virtualSet = VirtualSetSettings()
     /// PTZ camera control (PTZ.swift); nil = not configured
     var ptz: PTZCameraConfig? = nil
+    /// Virtual input (vMix Virtual Input, VirtualInput.swift): id of the input whose picture it shares; "" = normal input
+    var virtualOf: String = ""
 
     init(kind: InputKind, name: String) {
         self.kind = kind
@@ -497,6 +499,7 @@ struct InputConfig: Codable, Identifiable, Equatable {
         slides = c.value(.slides, d.slides)
         virtualSet = c.value(.virtualSet, d.virtualSet)
         ptz = c.value(.ptz, d.ptz)
+        virtualOf = c.value(.virtualOf, d.virtualOf)
         if let b: String = try? c.decodeIfPresent(String.self, forKey: .buses) {
             buses = b
         } else {
@@ -917,6 +920,7 @@ class InputSource: ObservableObject, Identifiable {
     }
 
     static func make(_ config: InputConfig) -> InputSource {
+        if !config.virtualOf.isEmpty { return VirtualInput(config: config) }
         switch config.kind {
         case .camera: return CameraInput(config: config)
         case .media, .stream: return FFmpegInput(config: config)

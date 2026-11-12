@@ -217,7 +217,7 @@ struct RundownButton: View {
         Button { openWindow(id: "rundown") } label: {
             HStack(spacing: 4) {
                 Image(systemName: "list.number")
-                Text("Rundown")
+                Text(L("큐시트"))
             }
             .font(.system(size: 12, weight: .semibold))
             .foregroundColor(.white)

@@ -27,7 +27,7 @@ struct BGRemovalSection: View {
             if input.bgRemoval.background == "image" {
                 HStack {
                     TextField("", text: $input.bgRemoval.imagePath, prompt: Text(L("배경 이미지 파일"))).labelsHidden()
-                    Button("Browse…") {
+                    Button(L("찾아보기…")) {
                         let p = NSOpenPanel()
                         p.allowedContentTypes = [.png, .jpeg, .heic, .tiff, .image]
                         if p.runModal() == .OK, let u = p.url { input.bgRemoval.imagePath = u.path }
