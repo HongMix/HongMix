@@ -10,30 +10,24 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.4</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.6</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.1.4
-- **Remote control is now off by default.** Companion, Stream Deck and web-remote users should turn it on once in Settings › Network after updating.
-- Right-click an input to create a Virtual Input with its own position, crop and layers, without opening a second decoder.
-- Crop individual layers in the Layers editor with Move/Crop modes, canvas handles and per-edge sliders.
-- Input Settings now shows crop and position live; double-clicking an input opens its settings.
-- Choose 6, 15 or 30 fps for input thumbnails. Program, recording and outputs always remain full rate.
-- ⌘W safely closes tool windows and sheets, while the switcher and Display output stay open.
-- Korean and English UI coverage, display-lag alerts, recent renderer health and audio-underrun diagnostics were improved. See the [English release notes](docs/RELEASE-NOTES-2.1.4.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.4.ko.md).
+### Latest update · 2.1.6
+- **Edit position and layers directly on the picture:** drag inside to move, yellow corners to resize, orange edge handles to crop, or Option-drag to slide the visible part. Values are shown in output pixels.
+- Position and Layers keep the live Program-matched preview fixed on the right while controls scroll on the left.
+- **Trim Transparent Edges** removes empty alpha margins from title and PNG layers so Fill can use the whole box.
+- Virtual Inputs now bring in the original input's audio when its audio is on Auto (follow video).
+- Mouse dragging and Trim Transparent Edges still need wider hands-on testing. See the [English release notes](docs/RELEASE-NOTES-2.1.6.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.6.ko.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.4/en-01-virtual-input.png" alt="HongMix 2.1.4 Virtual Input" width="100%"><br><sub>Virtual Input without a second decoder</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.4/en-03-layer-crop.png" alt="HongMix 2.1.4 layer crop editor" width="100%"><br><sub>Move/Crop modes and per-layer crop controls</sub></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.4/en-02-position-live-preview.png" alt="HongMix 2.1.4 live position preview" width="100%"><br><sub>Crop and position shown live in Input Settings</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.3/en-03-remote-control.png" alt="HongMix remote control switch" width="100%"><br><sub>Remote control switch, off by default</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.6/en-01-position-editor.png" alt="HongMix 2.1.6 mouse position editor" width="100%"><br><sub>Move, resize and crop on the Program-matched picture</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.6/en-02-layers-editor.png" alt="HongMix 2.1.6 layers editor" width="100%"><br><sub>Layer pixel controls and Trim Transparent Edges</sub></td>
   </tr>
 </table>
 

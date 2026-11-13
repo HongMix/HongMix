@@ -51,12 +51,12 @@ enum UISnapshots {
             if parts.count == 3, parts[0] == "props", let n = Int(parts[1]), let t = Int(parts[2]),
                n >= 1, n <= engine.inputs.count {
                 return window(InputPropertiesSheet(input: engine.inputs[n - 1], initialTab: t).environmentObject(engine)
-                                .frame(width: 980, height: 760), size: NSSize(width: 980, height: 760), title: "Snapshot props")
+                                .frame(width: 1240, height: 790), size: NSSize(width: 1240, height: 790), title: "Snapshot props")
             }
             // "layers-<n>": Layers editor of input n, layer 1 selected, Crop mode — 2.1.4
             if parts.count == 2, parts[0] == "layers", let n = Int(parts[1]), n >= 1, n <= engine.inputs.count {
                 return window(LayersEditor(input: engine.inputs[n - 1], previewCropMode: true).environmentObject(engine)
-                                .padding(12).frame(width: 980, height: 420), size: NSSize(width: 980, height: 420), title: "Snapshot layers")
+                                .padding(12).frame(width: 1080, height: 560), size: NSSize(width: 1080, height: 560), title: "Snapshot layers")
             }
             if name.lowercased().hasPrefix("inputmonitor-"), let n = Int(name.dropFirst(13)),
                n >= 1, n <= engine.inputs.count {

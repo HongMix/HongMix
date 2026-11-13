@@ -1520,7 +1520,7 @@
  "글자 가로 비율": "Glyph width",
  "글자 색": "Text color",
  "글자 크기": "Font size",
- "높이": "H",
+ "높이": "Height",
  "레이아웃": "Layout",
  "말하는 중인 문장 미리 표시 (하늘색)": "Show the sentence being spoken (light blue)",
  "배경 불투명도": "Background opacity",
@@ -1842,5 +1842,15 @@
  "라이브 소스 없음": "No live sources",
  "라이브 소스 %@ / %@ 연결": "%@ / %@ live sources online",
  " · 계속 진행": " · continuing",
- "%.2f fps · 렌더 %.1f ms": "%.2f fps · render %.1f ms"
+ "%.2f fps · 렌더 %.1f ms": "%.2f fps · render %.1f ms",
+ "레이어가 없습니다. ＋를 눌러 입력을 올리거나, 아래에서 템플릿을 고르세요.": "No layers. Press + to add an input, or choose a template below.",
+ "레이어 %@": "Layer %@",
+ "투명 여백 자동 자르기": "Trim Transparent Edges",
+ "그래픽(PNG·자막)의 투명한 부분을 잘라 실제 그림만 남깁니다. 채우기와 함께 쓰면 칸을 그림으로 꽉 채웁니다.": "Crops away the transparent part of a graphic (PNG, title) so only the picture remains. With Fill, the graphic then fills the box.",
+ "너비": "Width",
+ "투명 여백을 찾지 못했습니다 (투명 배경이 있는 그래픽에서만 됩니다)": "No transparent edges found (works only for graphics with a transparent background)",
+ "안쪽 끌기 = 이동": "Drag inside = move",
+ "모서리 = 크기": "Corners = size",
+ "변 가운데 = 자르기": "Edge handles = crop",
+ "⌥ 끌기 = 보이는 부분 옮기기": "⌥-drag = slide the visible part"
 }

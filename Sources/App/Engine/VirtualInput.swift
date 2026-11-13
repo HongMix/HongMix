@@ -11,7 +11,14 @@ import CoreVideo
 /// media like a layer does (SwitcherEngine.layerSources), and the virtual input has no audio of its own.
 final class VirtualInput: InputSource {
     private(set) weak var source: InputSource?
-    var sourceID: UUID? { UUID(uuidString: config.virtualOf) }
+    /// The original's id — fixed at creation, safe to read from the render thread.
+    let originalID: UUID?
+    var sourceID: UUID? { originalID }
+
+    override init(config: InputConfig) {
+        originalID = UUID(uuidString: config.virtualOf)
+        super.init(config: config)
+    }
 
     override var alphaPremultiplied: Bool { source?.alphaPremultiplied ?? false }
 

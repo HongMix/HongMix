@@ -10,30 +10,24 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.1.4 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.1.6 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.1.4
-- **원격 제어는 이제 기본으로 꺼집니다.** Companion·Stream Deck·웹 리모트를 쓰시면 업데이트 후 설정 › 네트워크에서 한 번 켜 주세요.
-- 입력을 우클릭해 두 번째 디코더 없이 위치·자르기·레이어가 독립된 가상 입력을 만듭니다.
-- 레이어 편집의 이동/자르기 모드, 주황 손잡이와 방향별 슬라이더로 레이어를 직접 자릅니다.
-- 입력 설정에서 자르기·위치를 실시간으로 보고, 입력을 더블클릭해 설정을 엽니다.
-- 입력 썸네일을 6·15·30fps로 고릅니다. Program·녹화·송출은 항상 원래 프레임을 유지합니다.
-- ⌘W는 도구 창과 시트를 닫지만 메인 스위처와 Display 출력은 닫지 않습니다.
-- 한국어·영어 화면, 화면 지연 알림, 최근 렌더러 상태와 오디오 언더런 진단을 개선했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.4.ko.md) · [English release notes](docs/RELEASE-NOTES-2.1.4.md)
+### 최신 업데이트 · 2.1.6
+- **화면에서 위치·레이어를 바로 편집합니다.** 안쪽을 끌면 이동, 노란 모서리는 크기, 주황 손잡이는 자르기, Option-끌기는 보이는 부분 이동입니다. 값은 출력 픽셀로 표시합니다.
+- 위치·레이어 탭은 Program과 같은 미리보기를 오른쪽에 고정하고 왼쪽 값만 스크롤합니다.
+- **투명 여백 자동 자르기**로 자막·PNG 레이어의 빈 알파 영역을 제거해 채우기가 칸을 제대로 채우게 합니다.
+- 가상 입력 송출 시 원본 오디오가 AUTO라면 원본 소리도 함께 나옵니다.
+- 마우스 드래그와 투명 여백 자동 자르기는 더 많은 실제 조작 검증이 필요합니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.6.ko.md) · [English release notes](docs/RELEASE-NOTES-2.1.6.md)
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.4/ko-01-virtual-input.png" alt="HongMix 2.1.4 가상 입력" width="100%"><br><sub>두 번째 디코더가 필요 없는 가상 입력</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.4/ko-03-layer-crop.png" alt="HongMix 2.1.4 레이어 자르기" width="100%"><br><sub>이동/자르기 모드와 레이어별 자르기</sub></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.4/ko-02-position-live-preview.png" alt="HongMix 2.1.4 위치 실시간 미리보기" width="100%"><br><sub>입력 설정에서 바로 보는 자르기와 위치</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.3/ko-03-remote-control.png" alt="HongMix 원격 제어 스위치" width="100%"><br><sub>기본으로 꺼지는 원격 제어 스위치</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.6/ko-01-position-editor.png" alt="HongMix 2.1.6 마우스 위치 편집기" width="100%"><br><sub>Program과 같은 화면에서 이동·크기·자르기</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.6/ko-02-layers-editor.png" alt="HongMix 2.1.6 레이어 편집기" width="100%"><br><sub>레이어 픽셀 값과 투명 여백 자동 자르기</sub></td>
   </tr>
 </table>
 

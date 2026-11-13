@@ -93,7 +93,8 @@ struct InputPropertiesSheet: View {
             }
             .padding()
         }
-        .frame(width: 900, height: 680)
+        // Position / Layers put the live picture beside the values: wider window for those two tabs
+        .frame(width: tab == 3 || tab == 6 ? 1240 : 900, height: tab == 3 || tab == 6 ? 760 : 680)
     }
 
     private var propertyTabs: [(id: Int, title: String, icon: String)] {
@@ -227,19 +228,22 @@ struct InputPropertiesSheet: View {
                 })
     }
 
+    /// Values on the left (scroll), the live picture on the right (always in view): drag it to move,
+    /// corners to resize, orange edges to crop (PlacementCanvas) — the same editor as the Layers tab.
     private var positionTab: some View {
-        Form {
-            // Live result while dragging the sliders — crop/zoom/pan in one go, no need to watch Preview.
-            Section(L("미리보기 (출력과 같은 배치)")) {
-                HStack {
-                    Spacer()
-                    MonitorView(fps: 30, placement: { [weak input] in input?.videoAdjust }) { input.monitorFrame() }
-                        .frame(width: 384, height: 216)
-                        .background(Color.black)
-                        .overlay(Rectangle().stroke(Color.white.opacity(0.25), lineWidth: 1))
-                    Spacer()
-                }
+        HStack(alignment: .top, spacing: 12) {
+            positionForm.frame(width: 400)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(L("미리보기 (출력과 같은 배치)")).font(.subheadline.bold())
+                PlacementCanvas(input: input, target: .constant(.input), layersView: false)
             }
+            .padding(.top, 10)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var positionForm: some View {
+        Form {
             Section(L("위치 (SetZoom / SetPanX / SetPanY)")) {
                 Picker(L("화면 맞춤"), selection: $input.adjust.fitMode) {
                     Text(L("맞추기")).tag(0)

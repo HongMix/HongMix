@@ -1897,6 +1897,11 @@ final class SwitcherEngine: ObservableObject {
             if let id = o.id { weights[id] = max(weights[id] ?? 0, o.alpha) }
         }
         if let sg = st.stinger { weights[sg.id] = 1 }
+        // A virtual input has no sound of its own: on air, it brings in its original's audio
+        // (Audio Auto / follow video), as if the original were on air.
+        for case let v as VirtualInput in ins {
+            if let w = weights[v.id], w > 0, let o = v.originalID { weights[o] = max(weights[o] ?? 0, w) }
+        }
         audioAccumulator += AudioMixer.rate * fmt.fpsDen
         let frames = audioAccumulator / fmt.fpsNum
         audioAccumulator -= frames * fmt.fpsNum

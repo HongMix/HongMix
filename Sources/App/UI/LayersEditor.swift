@@ -9,68 +9,60 @@ struct LayersEditor: View {
     @ViewState private var gap: Double = 0.01
     @ViewState private var border: Double = 0
     @ViewState private var selected: UUID? = nil
-    @ViewState private var cropMode = false
-    /// Screenshots (SnapshotView "layers-<n>"): open with layer 1 selected in Crop mode.
+    /// Screenshots (SnapshotView "layers-<n>"): open with layer 1 selected.
     var previewCropMode = false
+
+    private var target: Binding<PlacementTarget> {
+        Binding(get: { selected.map { .layer($0) } ?? .input },
+                set: { t in if case .layer(let id) = t { selected = id } })
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                Picker("", selection: $cropMode) {
-                    Label(L("이동"), systemImage: "arrow.up.and.down.and.arrow.left.and.right").tag(false)
-                    Label(L("자르기"), systemImage: "crop").tag(true)
-                }
-                .pickerStyle(.segmented).labelsHidden().frame(width: 200)
-                .help(L("vMix 레이어 디자이너처럼: 이동 = 칸 옮기기·크기, 자르기 = 고른 칸의 가장자리를 끌어 자르고 안쪽을 끌어 보이는 부분 옮기기"))
-                LayersCanvas(input: input, selected: $selected, cropMode: cropMode)
-                    .frame(width: 400, height: 225)
-                HStack {
-                    Menu(L("템플릿 적용")) {
-                        ForEach(LayerLayout.allCases) { l in Button(l.label) { apply(l) } }
+            // left: list and values (scrolls) · right: the live picture (stays in view)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(Lf("레이어 (%@/10)", "\(input.layers.count)")).font(.subheadline.bold())
+                        Spacer()
+                        Button { add() } label: { Image(systemName: "plus") }.disabled(input.layers.count >= 10)
+                        Button(L("모두 지우기"), role: .destructive) { input.layers = [] }.disabled(input.layers.isEmpty)
                     }
-                    .fixedSize()
-                    Button(L("입력 자동 배치")) { autoAssign() }
-                        .help(L("비어 있는 칸에 입력 1, 2, 3… 순서로 넣습니다"))
-                }
-                HStack {
-                    Text(L("간격")).font(.caption)
-                    Slider(value: $gap, in: 0...0.04).frame(width: 110)
-                    Text(L("테두리")).font(.caption)
-                    Slider(value: $border, in: 0...12, step: 1).frame(width: 90)
-                    Button(L("모든 칸에")) {
-                        for k in input.layers.indices { input.layers[k].border = border }
+                    if input.layers.isEmpty {
+                        Text(L("레이어가 없습니다. ＋를 눌러 입력을 올리거나, 아래에서 템플릿을 고르세요."))
+                            .font(.caption).foregroundColor(.secondary)
                     }
-                    .controlSize(.small)
+                    ForEach(Array(input.layers.enumerated()), id: \.element.id) { k, _ in row(k) }
+                    if let k = input.layers.firstIndex(where: { $0.id == selected }) { detailPanel(k) }
+                    Divider()
+                    HStack {
+                        Menu(L("템플릿 적용")) {
+                            ForEach(LayerLayout.allCases) { l in Button(l.label) { apply(l) } }
+                        }
+                        .fixedSize()
+                        Button(L("입력 자동 배치")) { autoAssign() }
+                            .help(L("비어 있는 칸에 입력 1, 2, 3… 순서로 넣습니다"))
+                    }
+                    HStack {
+                        Text(L("간격")).font(.caption)
+                        Slider(value: $gap, in: 0...0.04).frame(width: 100)
+                        Text(L("테두리")).font(.caption)
+                        Slider(value: $border, in: 0...12, step: 1).frame(width: 80)
+                        Button(L("모든 칸에")) {
+                            for k in input.layers.indices { input.layers[k].border = border }
+                        }
+                        .controlSize(.small)
+                    }
                 }
-                Text(L("템플릿을 고르면 간격·테두리가 적용됩니다. 칸을 드래그해 옮기고 노란 모서리로 크기를 바꿉니다. 칸을 고르면 아래에서 그 레이어를 자를 수 있습니다."))
-                    .font(.caption).foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                .padding(.trailing, 6)
             }
             .frame(width: 400)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(Lf("레이어 (%@/10)", "\(input.layers.count)")).font(.subheadline.bold())
-                    Spacer()
-                    Button { add() } label: { Image(systemName: "plus") }.disabled(input.layers.count >= 10)
-                    Button(L("모두 지우기"), role: .destructive) { input.layers = [] }.disabled(input.layers.isEmpty)
-                }
-                ScrollView {
-                    VStack(spacing: 4) {
-                        if input.layers.isEmpty {
-                            Text(L("레이어가 없습니다. ＋를 눌러 입력을 올리거나, 왼쪽에서 템플릿을 고르세요."))
-                                .font(.caption).foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
-                        }
-                        ForEach(Array(input.layers.enumerated()), id: \.element.id) { k, _ in row(k) }
-                    }
-                }
-                if let k = input.layers.firstIndex(where: { $0.id == selected }) { cropPanel(k) }
-            }
-            .frame(minWidth: 0, maxWidth: .infinity)
+            PlacementCanvas(input: input, target: target, layersView: true)
+                .frame(maxWidth: .infinity)
         }
         .padding(.vertical, 6)
         .onAppear {
-            if previewCropMode { cropMode = true; selected = input.layers.first?.id }
+            if previewCropMode || selected == nil { selected = input.layers.first?.id }
         }
     }
 
@@ -81,6 +73,7 @@ struct LayersEditor: View {
         HStack(spacing: 6) {
             Text("\(k + 1)").font(.system(size: 11, weight: .bold).monospacedDigit()).frame(width: 18)
                 .foregroundColor(selected == l.id ? .yellow : .primary)
+                .contentShape(Rectangle()).onTapGesture { selected = l.id }
             Toggle("", isOn: $input.layers[k].visible).labelsHidden().toggleStyle(.checkbox)
             Picker("", selection: $input.layers[k].inputID) {
                 Text(L("없음")).tag(UUID?.none)
@@ -107,21 +100,31 @@ struct LayersEditor: View {
         .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 
-    /// Crop of the selected layer's source (vMix: Layer › Crop) — no second copy of the input needed.
-    /// The preview on the left shows the result live.
-    @ViewBuilder private func cropPanel(_ k: Int) -> some View {
+    /// The selected layer in numbers (pixels of the output) + crop + "trim transparent edges".
+    @ViewBuilder private func detailPanel(_ k: Int) -> some View {
+        let W = Double(engine.format.width), H = Double(engine.format.height)
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(Lf("레이어 %@ 자르기", "\(k + 1)")).font(.caption.bold())
+                Text(Lf("레이어 %@", "\(k + 1)")).font(.caption.bold())
                 Spacer()
+                Button(L("투명 여백 자동 자르기")) { trim(k) }
+                    .controlSize(.small)
+                    .help(L("그래픽(PNG·자막)의 투명한 부분을 잘라 실제 그림만 남깁니다. 채우기와 함께 쓰면 칸을 그림으로 꽉 채웁니다."))
                 Button(L("초기화")) {
                     input.layers[k].cropL = 0; input.layers[k].cropT = 0
                     input.layers[k].cropR = 0; input.layers[k].cropB = 0
                 }
                 .controlSize(.small)
-                .disabled(input.layers[k].cropL == 0 && input.layers[k].cropT == 0 && input.layers[k].cropR == 0 && input.layers[k].cropB == 0)
             }
-            Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 2) {
+            Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 3) {
+                GridRow {
+                    pxField("X", Binding(get: { input.layers[k].x * W }, set: { input.layers[k].x = $0 / W }))
+                    pxField("Y", Binding(get: { input.layers[k].y * H }, set: { input.layers[k].y = $0 / H }))
+                }
+                GridRow {
+                    pxField(L("너비"), Binding(get: { input.layers[k].w * W }, set: { input.layers[k].w = max(8, $0) / W }))
+                    pxField(L("높이"), Binding(get: { input.layers[k].h * H }, set: { input.layers[k].h = max(8, $0) / H }))
+                }
                 GridRow {
                     cropSlider(L("왼쪽"), $input.layers[k].cropL)
                     cropSlider(L("오른쪽"), $input.layers[k].cropR)
@@ -135,6 +138,24 @@ struct LayersEditor: View {
         .padding(6)
         .background(Color.yellow.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    private func pxField(_ label: String, _ v: Binding<Double>) -> some View {
+        HStack(spacing: 4) {
+            Text(label).font(.caption).frame(width: 40, alignment: .leading)
+            TextField("", value: v, format: .number.precision(.fractionLength(0)))
+                .textFieldStyle(.roundedBorder).frame(width: 70)
+            Text("px").font(.caption).foregroundColor(.secondary)
+        }
+    }
+
+    private func trim(_ k: Int) {
+        guard let id = input.layers[k].inputID, let src = engine.inputs.first(where: { $0.id == id }),
+              let c = AlphaTrim.crop(of: src) else {
+            engine.lastMessage = L("투명 여백을 찾지 못했습니다 (투명 배경이 있는 그래픽에서만 됩니다)")
+            return
+        }
+        input.layers[k].cropL = c.0; input.layers[k].cropT = c.1; input.layers[k].cropR = c.2; input.layers[k].cropB = c.3
     }
 
     private func cropSlider(_ label: String, _ v: Binding<Float>) -> some View {
@@ -173,129 +194,5 @@ struct LayersEditor: View {
             guard !pool.isEmpty else { break }
             input.layers[k].inputID = pool.removeFirst().id
         }
-    }
-}
-
-/// Live preview of the composed input with draggable layer boxes.
-private struct LayersCanvas: View {
-    @ObservedObject var input: InputSource
-    @Binding var selected: UUID?
-    var cropMode = false
-    @ViewState private var start: InputLayer? = nil
-
-    var body: some View {
-        GeometryReader { g in
-            let size = g.size
-            ZStack(alignment: .topLeading) {
-                Color.black
-                MonitorView(fps: 12) { input.monitorFrame() }
-                ForEach(Array(input.layers.enumerated()), id: \.element.id) { k, l in
-                    let r = CGRect(x: l.x * size.width, y: l.y * size.height, width: l.w * size.width, height: l.h * size.height)
-                    let sel = selected == l.id
-                    ZStack(alignment: .topLeading) {
-                        Rectangle().fill(Color.yellow.opacity(sel ? 0.1 : 0.001))
-                        Rectangle().stroke(sel ? Color.yellow : Color.white.opacity(0.5),
-                                           style: StrokeStyle(lineWidth: sel ? 2 : 1, dash: sel ? [] : [4, 3]))
-                        Text("\(k + 1)").font(.system(size: 10, weight: .bold)).foregroundColor(.black)
-                            .padding(.horizontal, 3).background(sel ? Color.yellow : Color.white.opacity(0.8))
-                    }
-                    .frame(width: max(6, r.width), height: max(6, r.height))
-                    .offset(x: r.minX, y: r.minY)
-                    .gesture(slideCrop(k, r), including: cropMode && sel ? .all : .subviews)
-                    .gesture(move(k, size), including: cropMode ? .subviews : .all)
-                    .onTapGesture { selected = l.id }
-                    if sel && !cropMode {
-                        Rectangle().fill(Color.yellow).frame(width: 9, height: 9)
-                            .offset(x: r.maxX - 4.5, y: r.maxY - 4.5)
-                            .gesture(resize(k, size))
-                    }
-                    if sel && cropMode {
-                        // edge handles: drag inwards to crop that side
-                        cropHandle(vertical: true).offset(x: r.minX - 3, y: r.midY - 10).gesture(cropEdge(k, r, .left))
-                        cropHandle(vertical: true).offset(x: r.maxX - 3, y: r.midY - 10).gesture(cropEdge(k, r, .right))
-                        cropHandle(vertical: false).offset(x: r.midX - 10, y: r.minY - 3).gesture(cropEdge(k, r, .top))
-                        cropHandle(vertical: false).offset(x: r.midX - 10, y: r.maxY - 3).gesture(cropEdge(k, r, .bottom))
-                    }
-                }
-            }
-            .clipped()
-        }
-    }
-
-    private func move(_ k: Int, _ size: CGSize) -> some Gesture {
-        DragGesture(minimumDistance: 1)
-            .onChanged { v in
-                guard input.layers.indices.contains(k) else { return }
-                if start == nil { start = input.layers[k]; selected = input.layers[k].id }
-                guard let l0 = start else { return }
-                input.layers[k].x = snap(l0.x + Double(v.translation.width / size.width), l0.w)
-                input.layers[k].y = snap(l0.y + Double(v.translation.height / size.height), l0.h)
-            }
-            .onEnded { _ in start = nil }
-    }
-
-    private func resize(_ k: Int, _ size: CGSize) -> some Gesture {
-        DragGesture(minimumDistance: 1)
-            .onChanged { v in
-                guard input.layers.indices.contains(k) else { return }
-                if start == nil { start = input.layers[k] }
-                guard let l0 = start else { return }
-                // keep 16:9 boxes 16:9 (aspect of the box in frame fractions stays the same)
-                let s = max(0.03, l0.w + Double(v.translation.width / size.width)) / max(0.0001, l0.w)
-                input.layers[k].w = l0.w * s
-                input.layers[k].h = l0.h * s
-            }
-            .onEnded { _ in start = nil }
-    }
-
-    private enum Edge { case left, right, top, bottom }
-
-    private func cropHandle(vertical: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 2).fill(Color.orange)
-            .frame(width: vertical ? 6 : 20, height: vertical ? 20 : 6)
-    }
-
-    /// Drag a side of the selected box: crop that side of the layer's source (fraction of the source).
-    private func cropEdge(_ k: Int, _ r: CGRect, _ edge: Edge) -> some Gesture {
-        DragGesture(minimumDistance: 1)
-            .onChanged { v in
-                guard input.layers.indices.contains(k), r.width > 0, r.height > 0 else { return }
-                if start == nil { start = input.layers[k] }
-                guard let l0 = start else { return }
-                let visW = max(0.05, 1 - l0.cropL - l0.cropR), visH = max(0.05, 1 - l0.cropT - l0.cropB)
-                let dx = Float(v.translation.width / r.width) * visW
-                let dy = Float(v.translation.height / r.height) * visH
-                func clamp(_ x: Float, _ other: Float) -> Float { max(0, min(0.95 - other, x)) }
-                switch edge {
-                case .left: input.layers[k].cropL = clamp(l0.cropL + dx, l0.cropR)
-                case .right: input.layers[k].cropR = clamp(l0.cropR - dx, l0.cropL)
-                case .top: input.layers[k].cropT = clamp(l0.cropT + dy, l0.cropB)
-                case .bottom: input.layers[k].cropB = clamp(l0.cropB - dy, l0.cropT)
-                }
-            }
-            .onEnded { _ in start = nil }
-    }
-
-    /// Crop mode, drag inside the box: slide the visible part of the source (vMix: Alt-drag in Crop).
-    private func slideCrop(_ k: Int, _ r: CGRect) -> some Gesture {
-        DragGesture(minimumDistance: 1)
-            .onChanged { v in
-                guard input.layers.indices.contains(k), r.width > 0, r.height > 0 else { return }
-                if start == nil { start = input.layers[k] }
-                guard let l0 = start else { return }
-                let visW = 1 - l0.cropL - l0.cropR, visH = 1 - l0.cropT - l0.cropB
-                // dragging the picture right shows more of its left side
-                let dx = max(-l0.cropL, min(l0.cropR, -Float(v.translation.width / r.width) * visW))
-                let dy = max(-l0.cropT, min(l0.cropB, -Float(v.translation.height / r.height) * visH))
-                input.layers[k].cropL = l0.cropL + dx; input.layers[k].cropR = l0.cropR - dx
-                input.layers[k].cropT = l0.cropT + dy; input.layers[k].cropB = l0.cropB - dy
-            }
-            .onEnded { _ in start = nil }
-    }
-
-    /// snap position (left/top edge or far edge) to 0, centre, 1
-    private func snap(_ v: Double, _ len: Double) -> Double {
-        for t in [0.0, 0.5 - len / 2, 1 - len] where abs(v - t) < 0.01 { return t }
-        return v
     }
 }

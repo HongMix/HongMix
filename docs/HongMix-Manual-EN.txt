@@ -1,4 +1,4 @@
-HongMix 2.1.4 — User Manual (English)
+HongMix 2.1.6 — User Manual (English)
 ================================================================
 A live production switcher for Apple Silicon Macs, with a vMix-style layout, shortcuts and API.
 Made by Hong Seunghoon (홍승훈) · 2026-10-28 · Korea
@@ -9,14 +9,14 @@ Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)
 Requirements: an Apple Silicon Mac (M1 and later), macOS 14 or later.
 Everything (FFmpeg, SRT, NDI runtime, Chromium web engine) is bundled inside the app — nothing else to install.
 
-[Option A — recommended] Double-click HongMix-2.1.4.pkg
+[Option A — recommended] Double-click HongMix-2.1.6.pkg
   1) If macOS says "unidentified developer": right-click the file → Open → Open
      (or System Settings → Privacy & Security → "Open Anyway").
   2) Continue → Install. HongMix is installed in Applications.
   3) First launch: if macOS warns, right-click HongMix in Applications → Open → Open (once).
      (HongMix is not notarized by Apple yet, so macOS asks once.)
 
-[Option B] Open HongMix-2.1.4.dmg → drag HongMix into Applications
+[Option B] Open HongMix-2.1.6.dmg → drag HongMix into Applications
   - If warned on first launch, right-click the app → Open (once).
 
 On first use macOS asks for permissions:
@@ -24,9 +24,14 @@ On first use macOS asks for permissions:
   - Screen Recording — only for Screen/Window capture inputs
   - Local Network — allow so NDI and SRT devices can be found
 
-New in 2.1.4
+New in 2.1.6
   - Remote control is off by default. Companion, Stream Deck and web-remote users should enable
     it once in Settings > Network after updating.
+  - Edit Position and Layers directly on the picture: drag to move, use yellow corners to resize,
+    orange edge handles to crop, and Option-drag to slide the visible part. Values use output pixels.
+  - The live Program-matched preview stays fixed on the right while controls scroll on the left.
+  - Trim Transparent Edges removes empty alpha margins from title and PNG layers before Fill.
+  - Virtual Inputs now follow the original input's Auto audio correctly.
   - Create a Virtual Input from an input's context menu: no second decoder, with independent
     position, crop and layers. Playback and sound follow the original.
   - Crop individual layers with Move/Crop modes, canvas handles and per-edge sliders.
