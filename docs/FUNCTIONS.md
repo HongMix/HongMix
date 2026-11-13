@@ -87,8 +87,13 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `RemoveInput / MoveInput / SetInputName` | Input [Value] | 입력을 삭제하거나, 순서를 옮기거나, 이름을 바꿉니다. |
 | `SetZoom / SetZoomX / SetZoomY / SetPanX / SetPanY` | Input, Value | 위치와 줌을 바꿉니다. 줌은 0.01~5, 팬은 -2~2입니다. `SetZoom`은 X/Y를 다시 비례 줌으로 맞춥니다. |
 | `SetFitMode / SetPositionFit` | Input, Value=fit\|fill\|stretch | 화면 맞춤·꽉 채우기(잘림)·늘리기를 선택합니다. |
+| `SetLayerRect` | Input, Value=layer,x,y,width,height | 레이어 사각형을 출력 픽셀 단위로 설정합니다. 유한한 값만 허용합니다. |
+| `SetLayerOpacity` | Input, Value=layer,0~100 | 레이어 불투명도를 설정합니다. |
+| `SetLayerRotation` | Input, Value=layer,-180~180 | 레이어를 시계 방향 각도로 회전합니다. |
+| `LayerTrim` | Input, Value=layer | 현재 알파 프레임에서 투명 배경을 잘라냅니다. 투명 가장자리가 없으면 오류를 반환합니다. |
+| `UpscaleOn / UpscaleOff / Upscale` | Input | 지원되는 macOS에서 해당 입력의 AI 화질 올리기를 켜거나 끕니다. |
 
-입력 설정의 위치·레이어 탭에서는 Program과 같은 미리보기 위에서 이동·크기·자르기를 마우스로 편집하고 출력 픽셀 값을 확인할 수 있습니다. 레이어의 **투명 여백 자동 자르기**는 현재 BGRA 프레임의 알파 영역을 검사해 그래픽 주변의 빈 여백을 제거합니다.
+입력 설정의 위치·레이어 탭에서는 Program과 같은 미리보기 위에서 이동·크기·자르기를 마우스와 숫자칸으로 편집하고 출력 픽셀 값을 확인할 수 있습니다. 레이어 잠금·불투명도·회전·위치 복사/붙여넣기와 **투명 배경만 잘라내기**를 지원합니다. 위치 탭의 AI 화질 올리기는 저해상도 소스를 송출 중일 때만 처리합니다.
 | `SetCropX1 / X2 / Y1 / Y2, SetCrop` | Input, Value=0~1 (SetCrop: X1,Y1,X2,Y2) | 크롭합니다. |
 | `SetAlpha` | Input, Value=0~255 | 불투명도를 바꿉니다. |
 | `MirrorOn/Off, DeinterlaceOn/Off, SharpenOn/Off` | Input | 영상 처리를 켜고 끕니다. |

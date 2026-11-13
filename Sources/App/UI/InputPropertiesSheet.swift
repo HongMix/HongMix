@@ -94,7 +94,7 @@ struct InputPropertiesSheet: View {
             .padding()
         }
         // Position / Layers put the live picture beside the values: wider window for those two tabs
-        .frame(width: tab == 3 || tab == 6 ? 1240 : 900, height: tab == 3 || tab == 6 ? 760 : 680)
+        .frame(width: tab == 3 || tab == 6 ? 1240 : 900, height: tab == 3 || tab == 6 ? 800 : 680)
     }
 
     private var propertyTabs: [(id: Int, title: String, icon: String)] {
@@ -199,16 +199,23 @@ struct InputPropertiesSheet: View {
         .textFieldStyle(.roundedBorder)
     }
 
+    /// Slider + number field (type a value, ↑↓ = one step, ⇧ = ten, ± buttons) + reset — vMix-style value entry.
+    /// `percent`: the value is a fraction shown as % (crop). Every change can be undone with ⌘Z.
     private func slider(_ label: String, _ value: Binding<Float>, _ range: ClosedRange<Float>, format: String = "%.2f",
-                        reset: Float) -> some View {
-        HStack {
-            // natural width (never wraps/truncates English labels like "Gate Threshold dB"), min 120 keeps columns aligned
-            Text(label).lineLimit(1).fixedSize().frame(minWidth: 120, alignment: .leading)
-            Slider(value: value, in: range)
-            Text(String(format: format, value.wrappedValue))
-                .font(.system(size: 11).monospacedDigit())
-                .frame(width: 50, alignment: .trailing)
+                        reset: Float, percent: Bool = false) -> some View {
+        let k: Double = percent ? 100 : 1
+        let decimals = percent ? 1 : (Int(format.dropFirst(2).prefix(1)) ?? 2)
+        let step = percent ? 0.5 : pow(10, -Double(decimals))
+        return HStack(spacing: 6) {
+            // natural width (never wraps/truncates English labels like "Gate Threshold dB"), min 110 keeps columns aligned
+            Text(label).lineLimit(1).fixedSize().frame(minWidth: 96, alignment: .leading)
+            Slider(value: value, in: range) { editing in if editing { PlacementHistory.push(input) } }
+            StepperField(label: "", value: Binding(get: { Double(value.wrappedValue) * k }, set: { value.wrappedValue = Float($0 / k) }),
+                         step: step, bigStep: step * 10, decimals: decimals,
+                         range: Double(range.lowerBound) * k...Double(range.upperBound) * k, unit: percent ? "%" : "",
+                         onEdit: { PlacementHistory.push(input, coalesce: true) })
             Button {
+                PlacementHistory.push(input)
                 value.wrappedValue = reset
             } label: {
                 Image(systemName: "arrow.counterclockwise")
@@ -232,7 +239,7 @@ struct InputPropertiesSheet: View {
     /// corners to resize, orange edges to crop (PlacementCanvas) — the same editor as the Layers tab.
     private var positionTab: some View {
         HStack(alignment: .top, spacing: 12) {
-            positionForm.frame(width: 400)
+            positionForm.frame(width: 480)
             VStack(alignment: .leading, spacing: 6) {
                 Text(L("미리보기 (출력과 같은 배치)")).font(.subheadline.bold())
                 PlacementCanvas(input: input, target: .constant(.input), layersView: false)
@@ -269,13 +276,18 @@ struct InputPropertiesSheet: View {
                 }
                 slider(L("가로 이동 (Pan X)"), $input.adjust.panX, -2...2, reset: 0)
                 slider(L("세로 이동 (Pan Y)"), $input.adjust.panY, -2...2, reset: 0)
+                Text(L("숫자를 넣으면 바로 적용돼요. 칸 위에서 ↑↓ = 한 칸, ⇧+↑↓ = 열 칸. 오른쪽 미리보기를 클릭하면 화살표 키로 1px씩 옮길 수 있고, ⌘Z로 되돌립니다."))
+                    .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Section(L("크롭 (가장자리에서 잘라낼 비율)")) {
-                slider(L("왼쪽"), $input.adjust.cropL, 0...0.9, reset: 0)
-                slider(L("오른쪽"), $input.adjust.cropR, 0...0.9, reset: 0)
-                slider(L("위"), $input.adjust.cropT, 0...0.9, reset: 0)
-                slider(L("아래"), $input.adjust.cropB, 0...0.9, reset: 0)
+                slider(L("왼쪽"), $input.adjust.cropL, 0...0.9, reset: 0, percent: true)
+                slider(L("오른쪽"), $input.adjust.cropR, 0...0.9, reset: 0, percent: true)
+                slider(L("위"), $input.adjust.cropT, 0...0.9, reset: 0, percent: true)
+                slider(L("아래"), $input.adjust.cropB, 0...0.9, reset: 0, percent: true)
+                Text(L("자르기는 크기를 바꾸지 않고 가장자리만 감춥니다. 미리보기의 주황 손잡이를 끌어도 됩니다."))
+                    .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             }
+            UpscaleSection(input: input)
             Section(L("기타")) {
                 slider(L("불투명도 (Alpha)"), $input.adjust.alpha, 0...1, reset: 1)
                 Toggle(L("좌우 반전 (Mirror)"), isOn: $input.adjust.mirror)

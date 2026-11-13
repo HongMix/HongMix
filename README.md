@@ -10,24 +10,25 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.6</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.7</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.1.6
-- **Edit position and layers directly on the picture:** drag inside to move, yellow corners to resize, orange edge handles to crop, or Option-drag to slide the visible part. Values are shown in output pixels.
-- Position and Layers keep the live Program-matched preview fixed on the right while controls scroll on the left.
-- **Trim Transparent Edges** removes empty alpha margins from title and PNG layers so Fill can use the whole box.
-- Virtual Inputs now bring in the original input's audio when its audio is on Auto (follow video).
-- Mouse dragging and Trim Transparent Edges still need wider hands-on testing. See the [English release notes](docs/RELEASE-NOTES-2.1.6.md) or [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.6.ko.md).
+### Latest update · 2.1.7
+- **Exact values like vMix:** every Position and Layer value has a number field with −/+; arrow keys adjust one step and Shift adjusts ten.
+- Boxes outside the frame stay editable in the gray margin. Fit in Frame, Center, Source Aspect, Full Screen, Copy/Paste Position, layer lock, opacity and rotation are included.
+- **Layer crop now fills the box** and Trim Transparent Background works inline. Older projects are converted on open to preserve their previous appearance.
+- Optional **AI Upscaling** enlarges low-resolution on-air sources with Apple's real-time model on supported macOS versions.
+- Layer composition caching and one GPU wait per frame cut render time roughly in half in the measured layer-heavy scene.
+- A 40-minute automated soak completed with 0 dropped frames, 0 restarts and flat 302–365 MB memory. Physical mouse, keyboard nudge and Undo still need hands-on checks. See [English notes](docs/RELEASE-NOTES-2.1.7.md) or [한국어](docs/RELEASE-NOTES-2.1.7.ko.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.6/en-01-position-editor.png" alt="HongMix 2.1.6 mouse position editor" width="100%"><br><sub>Move, resize and crop on the Program-matched picture</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.6/en-02-layers-editor.png" alt="HongMix 2.1.6 layers editor" width="100%"><br><sub>Layer pixel controls and Trim Transparent Edges</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.7/en-01-position-editor.png" alt="HongMix 2.1.7 exact Position controls and AI Upscaling" width="100%"><br><sub>Exact Position controls, AI Upscaling and gray canvas margin</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.7/en-02-layers-editor.png" alt="HongMix 2.1.7 precise Layers editor" width="100%"><br><sub>Layer rotation, opacity, lock, crop and precise pixel controls</sub></td>
   </tr>
 </table>
 

@@ -858,6 +858,41 @@ enum APIProcessor {
             let l = i.layers.remove(at: p[0] - 1)
             i.layers.insert(l, at: p[1] - 1)
 
+        case "setlayeropacity", "setlayerrotation":
+            // HongMix extension: Value = "layer,value" — opacity 0…100 %, rotation degrees (clockwise)
+            guard let i = input else { return needInput() }
+            let p = value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            guard p.count == 2, let n = Int(p[0]), i.layers.indices.contains(n - 1), let v = Double(p[1]), v.isFinite else {
+                return "Value=layer,value"
+            }
+            if fn == "setlayeropacity" { i.layers[n - 1].opacity = Float(max(0, min(100, v)) / 100) }
+            else { i.layers[n - 1].rotation = max(-180, min(180, v)) }
+
+        case "setlayerrect":
+            // HongMix extension: Value = "layer,x,y,width,height" in output pixels (vMix Layer Designer values)
+            guard let i = input else { return needInput() }
+            // finite only: Int(nan) traps, and a non-finite value would make the project unsavable (JSON)
+            let p = value.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }.filter { $0.isFinite && abs($0) < 1e6 }
+            guard p.count == 5, i.layers.indices.contains(Int(p[0]) - 1), p[3] >= 8, p[4] >= 8 else {
+                return "Value=layer,x,y,width,height"
+            }
+            let W = Double(e.format.width), H = Double(e.format.height), n = Int(p[0]) - 1
+            i.layers[n].x = p[1] / W; i.layers[n].y = p[2] / H; i.layers[n].w = p[3] / W; i.layers[n].h = p[4] / H
+
+        case "layertrim":
+            // HongMix extension: Value = layer — "Trim Transparent Background" (crop the layer to the visible
+            // pixels of its source; titles / PNGs with alpha)
+            guard let i = input else { return needInput() }
+            guard let n = Int(value), i.layers.indices.contains(n - 1), let sid = i.layers[n - 1].inputID,
+                  let src = e.inputs.first(where: { $0.id == sid }) else { return "Value=layer" }
+            guard let c = AlphaTrim.crop(ifUseful: src) else { return "No transparent edges" }
+            i.layers[n - 1].cropL = c.0; i.layers[n - 1].cropT = c.1; i.layers[n - 1].cropR = c.2; i.layers[n - 1].cropB = c.3
+
+        case "upscaleon", "upscaleoff", "upscale":
+            // HongMix extension: AI upscaling of a low-resolution input (Input Settings › Position)
+            guard let i = input else { return needInput() }
+            i.upscale = fn == "upscaleon" ? true : (fn == "upscaleoff" ? false : !i.upscale)
+
         default:
             if unsupportedPrefixes.contains(where: { fn.hasPrefix($0) }) {
                 return "Not supported in HongMix: \(function)"
@@ -1267,6 +1302,10 @@ enum APIProcessor {
                         tf(i.signalLost), Double(ad.available) / 48.0, ad.written, ad.read, ad.shortReads,
                         mixAudio.primes, mixAudio.underflows, st.latestPTSUs, st.lastPTSStepMs,
                         st.repeatedProgramTicks, st.maxProgramFrameAgeMs)
+            if let u = i.upscaler {
+                x += String(format: "<inputUpscaleStats number=\"%d\" state=\"%@\" factor=\"%.2f\" ms=\"%.2f\" srcW=\"%d\" srcH=\"%d\" />",
+                            e.number(of: i), "\(u.state)", u.factor, u.averageMs, u.sourceSize.0, u.sourceSize.1)
+            }
             if let fileInput = i as? FFmpegInput, let q = fileInput.audioQueueDiagnostics() {
                 x += String(format: "<inputAudioQueueStats number=\"%d\" currentMs=\"%.1f\" peakMs=\"%.1f\" lateChunks=\"%llu\" maxLateMs=\"%.1f\" pcmMinBeforeReadMs=\"%@\" />",
                             e.number(of: i), Double(q.queued_frames) / 48.0, Double(q.peak_queued_frames) / 48.0,

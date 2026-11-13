@@ -308,9 +308,11 @@ kernel void tileKernel(texture2d<float> src [[texture(0)]],
 // ---- Input layers (vMix Layers / MultiView): rendered with blending into a transparent frame ----
 
 struct ComposeParams {
-    float w, h;           // destination rect size (pixels)
+    float w, h;           // layer rect size (pixels)
     float border;         // px
     float borderR, borderG, borderB;
+    float bw, bh;         // drawn area (bounding box of the rotated rect), pixels
+    float cosA, sinA;     // rotation, clockwise
 };
 
 
@@ -363,12 +365,20 @@ fragment float4 composeFragment(VOut in [[stage_in]],
                                 constant LayerParams &L [[buffer(0)]],
                                 constant ComposeParams &cp [[buffer(1)]]) {
     constexpr sampler smp(coord::normalized, address::clamp_to_edge, filter::linear);
-    float2 px = in.uv * float2(cp.w, cp.h);
+    // pixel in the bounding box → pixel in the (unrotated) layer rect
+    float2 q = in.uv * float2(cp.bw, cp.bh) - float2(cp.bw, cp.bh) * 0.5;
+    float2 px = float2(q.x * cp.cosA + q.y * cp.sinA, -q.x * cp.sinA + q.y * cp.cosA) + float2(cp.w, cp.h) * 0.5;
+    // 1 px soft edge (anti-aliased rotated edges); 1 everywhere inside an unrotated rect
+    float edge = min(min(px.x, px.y), min(cp.w - px.x, cp.h - px.y));
+    float cover = cp.sinA == 0.0 ? 1.0 : clamp(edge + 0.5, 0.0, 1.0);
+    if (cover <= 0.0) return float4(0.0);
+    float op = clamp(L.mixAlpha, 0.0, 1.0) * cover;
     if (cp.border > 0.0 && (px.x < cp.border || px.y < cp.border || px.x >= cp.w - cp.border || px.y >= cp.h - cp.border)) {
-        return float4(cp.borderR, cp.borderG, cp.borderB, 1.0);
+        return float4(float3(cp.borderR, cp.borderG, cp.borderB) * op, op);
     }
-    float4 c = sampleLayer(tex, texC, smp, in.uv, L, cp.w, cp.h);
-    float a = clamp(c.a * L.mixAlpha, 0.0, 1.0);
+    float2 uv = px / float2(cp.w, cp.h);
+    float4 c = sampleLayer(tex, texC, smp, uv, L, cp.w, cp.h);
+    float a = clamp(c.a * L.mixAlpha, 0.0, 1.0) * cover;
     return float4(c.rgb * a, a);
 }
 

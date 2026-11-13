@@ -1617,11 +1617,29 @@ final class SwitcherEngine: ObservableObject {
     private func composeLayers(_ ins: [InputSource], fmt: VideoFormat) {
         guard let mixer = mixer else { return }
         let W = CGFloat(fmt.width), H = CGFloat(fmt.height)
+        // 0. AI upscaling of low-resolution sources (only for inputs that are on air / in Preview)
+        var upscaled: [UUID: CVPixelBuffer] = [:]
+        if ins.contains(where: { $0.upscaleSnapshot || $0.upscaler != nil }) {
+            let live = liveInputIDs(ins)
+            for i in ins {
+                // off (or a source with its own alpha): release the model session
+                guard i.upscaleSnapshot, !i.alphaPremultiplied else {
+                    if i.upscaler != nil { i.upscaler = nil }
+                    continue
+                }
+                // no frame right now (camera reconnecting): keep the loaded model for when it returns
+                guard let s = i.video.latest() else { continue }
+                let u: Upscaler
+                if let existing = i.upscaler { u = existing } else { u = Upscaler(); i.upscaler = u }
+                if let o = u.frame(for: s, outW: fmt.width, outH: fmt.height, process: live.contains(i.id)) { upscaled[i.id] = o }
+            }
+        }
+        func source(_ i: InputSource) -> CVPixelBuffer? { upscaled[i.id] ?? i.video.latest() }
         // 1. LUT pre-pass (only inputs with a loaded LUT; reused while the source frame is unchanged)
         var lutOut: [UUID: CVPixelBuffer] = [:]
         for i in ins {
             let (path, strength) = i.lutSnapshot
-            guard !path.isEmpty, strength > 0.001, let lut = LUTCache.shared.lut(path), let src = i.video.latest() else {
+            guard !path.isEmpty, strength > 0.001, let lut = LUTCache.shared.lut(path), let src = source(i) else {
                 if i.lutCacheOut != nil { i.lutCacheOut = nil; i.lutCacheSrc = nil }
                 continue
             }
@@ -1636,7 +1654,7 @@ final class SwitcherEngine: ObservableObject {
         // 1b. Alpha / Fill & Key pre-pass (opaque, or key taken from another input)
         for i in ins {
             let ak = i.alphaKeySnapshot
-            guard ak.mode != "auto", let fill = lutOut[i.id] ?? i.video.latest() else {
+            guard ak.mode != "auto", let fill = lutOut[i.id] ?? source(i) else {
                 if i.keyCacheOut != nil { i.keyCacheOut = nil; i.keyCacheFill = nil; i.keyCacheKey = nil }
                 continue
             }
@@ -1662,7 +1680,7 @@ final class SwitcherEngine: ObservableObject {
         // 1c. AI background removal (Vision runs on its own queue; uses the newest finished frame)
         for i in ins {
             let bg = i.bgRemovalSnapshot
-            guard bg.enabled, let src = lutOut[i.id] ?? i.video.latest() else {
+            guard bg.enabled, let src = lutOut[i.id] ?? source(i) else {
                 if i.bgRemover != nil { i.bgRemover = nil }
                 continue
             }
@@ -1670,13 +1688,29 @@ final class SwitcherEngine: ObservableObject {
             if let existing = i.bgRemover { r = existing } else { r = BackgroundRemover(); i.bgRemover = r }
             if let o = r.frame(for: src, settings: bg) { lutOut[i.id] = o }
         }
-        // 2. layers
+        // upscaled frames are opaque BGRA: they stand in for the source like a LUT result
+        for (id, o) in upscaled where lutOut[id] == nil { lutOut[id] = o }
+        // 2. layers — unchanged compositions are reused; the rest go to the GPU in one batch
+        var jobs: [(InputSource, [ComposeLayer])] = []
+        func flush() {
+            guard !jobs.isEmpty else { return }
+            let outs = mixer.compose(batch: jobs.map(\.1))
+            for (k, job) in jobs.enumerated() {
+                job.0.composed = outs[k]
+                job.0.composeKey = outs[k] == nil ? nil : job.1
+            }
+            jobs.removeAll()
+        }
         for i in ins {
             let ls = i.layersSnapshot.filter { $0.visible && $0.inputID != nil }
+            // nested layers: an input waiting in this batch is used as a layer here — compose it first so
+            // this frame shows its new composition (not last frame's)
+            if !jobs.isEmpty, ls.contains(where: { l in jobs.contains { $0.0.id == l.inputID } }) { flush() }
             let top = i.topOverlayFrame          // [Virtual Set] foreground picture above the layers
             if ls.isEmpty && top == nil {
                 let o = lutOut[i.id]
                 if i.composed !== o { i.composed = o }
+                i.composeKey = nil
                 continue
             }
             var parts: [ComposeLayer] = []
@@ -1692,23 +1726,54 @@ final class SwitcherEngine: ObservableObject {
                 p.cropL = l.cropL; p.cropT = l.cropT; p.cropR = l.cropR; p.cropB = l.cropB
                 let rect = CGRect(x: CGFloat(l.x) * W, y: CGFloat(l.y) * H, width: CGFloat(l.w) * W, height: CGFloat(l.h) * H)
                 p.zoom = 1; p.zoomX = 1; p.zoomY = 1; p.fitMode = 0
-                if l.fill, let b = buf {
-                    // crop-to-fill: zoom so the (cropped) source covers the box
-                    let sw = CGFloat(CVPixelBufferGetWidth(b)) * CGFloat(1 - l.cropL - l.cropR)
-                    let sh = CGFloat(CVPixelBufferGetHeight(b)) * CGFloat(1 - l.cropT - l.cropB)
-                    let sa = sw / max(1, sh), da = rect.width / max(1, rect.height)
-                    p.zoom = Float(max(sa / da, da / sa))
+                if let b = buf {
+                    // vMix layer rectangle: the cropped part of the source is fitted (Fit) or fills (Fill) the
+                    // box, centred — so cropping a camera or trimming a graphic makes it use the whole box.
+                    // sampleLayer letterboxes the full source (fx × fy of the box), then zoom / pan.
+                    let sa = CGFloat(CVPixelBufferGetWidth(b)) / max(1, CGFloat(CVPixelBufferGetHeight(b)))
+                    let da = rect.width / max(1, rect.height)
+                    let fx = min(1, sa / da), fy = min(1, da / sa)
+                    let cw = max(0.01, CGFloat(1 - l.cropL - l.cropR)), ch = max(0.01, CGFloat(1 - l.cropT - l.cropB))
+                    let zx = 1 / (cw * fx), zy = 1 / (ch * fy)
+                    let z = l.fill ? max(zx, zy) : min(zx, zy)
+                    let cx = CGFloat(l.cropL + 1 - l.cropR) / 2, cy = CGFloat(l.cropT + 1 - l.cropB) / 2
+                    p.zoom = Float(z)
+                    p.panX = Float(-2 * (cx - 0.5) * fx * z)
+                    p.panY = Float(2 * (cy - 0.5) * fy * z)
                 }
+                p.mixAlpha = max(0, min(1, l.opacity))
                 let bc = HexColor.parse(l.borderColor) ?? (1, 1, 1, 1)
                 parts.append(ComposeLayer(buffer: buf, params: p, rect: rect, border: Float(l.border),
-                                          borderColor: (Float(bc.0), Float(bc.1), Float(bc.2))))
+                                          borderColor: (Float(bc.0), Float(bc.1), Float(bc.2)),
+                                          rotation: Float(l.rotation * .pi / 180)))
             }
             if let top {                         // [Virtual Set] foreground (desk), full frame, premultiplied
                 var p = LayerParams(); p.premul = 1
                 parts.append(ComposeLayer(buffer: top, params: p, rect: CGRect(x: 0, y: 0, width: W, height: H)))
             }
-            i.composed = mixer.compose(parts)
+            if let k = i.composeKey, i.composed != nil, k.count == parts.count,
+               zip(k, parts).allSatisfy({ $0.same(as: $1) }) {
+                continue
+            }
+            jobs.append((i, parts))
         }
+        flush()
+    }
+
+    /// Inputs whose picture can be seen right now: Program, Preview, overlays, stinger and their layers.
+    private func liveInputIDs(_ ins: [InputSource]) -> Set<UUID> {
+        stateLock.lock()
+        var ids: Set<UUID> = []
+        if let p = rs.programID { ids.insert(p) }
+        if let p = rs.previewID { ids.insert(p) }
+        for o in rs.overlays where o.alpha > 0 || o.target > 0 { if let id = o.id { ids.insert(id) } }
+        if let s = rs.stinger { ids.insert(s.id) }
+        stateLock.unlock()
+        for i in ins where ids.contains(i.id) {
+            for l in i.layersSnapshot where l.visible { if let id = l.inputID { ids.insert(id) } }
+            if let v = i as? VirtualInput, let o = v.originalID { ids.insert(o) }
+        }
+        return ids
     }
 
     private func overlayLayer(_ input: InputSource?, alpha: Float, settings os: OverlaySettings) -> LayerInput {

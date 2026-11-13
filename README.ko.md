@@ -10,24 +10,25 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.1.6 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.1.7 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.1.6
-- **화면에서 위치·레이어를 바로 편집합니다.** 안쪽을 끌면 이동, 노란 모서리는 크기, 주황 손잡이는 자르기, Option-끌기는 보이는 부분 이동입니다. 값은 출력 픽셀로 표시합니다.
-- 위치·레이어 탭은 Program과 같은 미리보기를 오른쪽에 고정하고 왼쪽 값만 스크롤합니다.
-- **투명 여백 자동 자르기**로 자막·PNG 레이어의 빈 알파 영역을 제거해 채우기가 칸을 제대로 채우게 합니다.
-- 가상 입력 송출 시 원본 오디오가 AUTO라면 원본 소리도 함께 나옵니다.
-- 마우스 드래그와 투명 여백 자동 자르기는 더 많은 실제 조작 검증이 필요합니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.6.ko.md) · [English release notes](docs/RELEASE-NOTES-2.1.6.md)
+### 최신 업데이트 · 2.1.7
+- **vMix처럼 정확한 숫자 조정:** 위치·레이어의 모든 값에 숫자칸과 −/+를 넣었습니다. 화살표 키는 한 단계, Shift는 열 단계입니다.
+- 화면 밖 상자도 회색 여백에서 계속 잡을 수 있습니다. 화면에 맞추기·가운데·원래 비율·전체 화면·위치 복사/붙여넣기와 레이어 잠금·불투명도·회전을 지원합니다.
+- **레이어 자르기가 상자를 채우며**, 투명 배경만 잘라내기가 화면 안에서 바로 안내됩니다. 이전 프로젝트는 열 때 자동 변환해 기존 모습을 유지합니다.
+- 지원되는 macOS에서 선택형 **AI 화질 올리기**로 저해상도 송출 소스를 Apple 실시간 모델로 확대합니다.
+- 레이어 합성 캐시와 프레임당 한 번의 GPU 대기로 측정한 레이어 다중 장면 렌더 시간이 약 절반으로 줄었습니다.
+- 40분 자동 안정성 시험에서 프레임 빠짐 0, 재시작 0, 메모리 302~365MB로 일정했습니다. 실제 마우스·키 이동·되돌리기는 직접 확인이 남았습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.7.ko.md) · [English](docs/RELEASE-NOTES-2.1.7.md)
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.6/ko-01-position-editor.png" alt="HongMix 2.1.6 마우스 위치 편집기" width="100%"><br><sub>Program과 같은 화면에서 이동·크기·자르기</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.6/ko-02-layers-editor.png" alt="HongMix 2.1.6 레이어 편집기" width="100%"><br><sub>레이어 픽셀 값과 투명 여백 자동 자르기</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.7/ko-01-position-editor.png" alt="HongMix 2.1.7 정확한 위치 조정과 AI 화질 올리기" width="100%"><br><sub>정확한 위치 값·AI 화질 올리기·화면 밖 편집</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.7/ko-02-layers-editor.png" alt="HongMix 2.1.7 정밀 레이어 편집기" width="100%"><br><sub>레이어 회전·불투명도·잠금·자르기·픽셀 조정</sub></td>
   </tr>
 </table>
 

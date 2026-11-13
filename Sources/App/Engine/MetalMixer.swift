@@ -88,15 +88,30 @@ struct ComposeParams {
     var borderR: Float = 1
     var borderG: Float = 1
     var borderB: Float = 1
+    /// size of the drawn (bounding) area in pixels — larger than w × h when the layer is rotated
+    var bw: Float = 0
+    var bh: Float = 0
+    var cosA: Float = 1
+    var sinA: Float = 0
 }
 
 /// One layer of an input composition (pixels, top-left origin).
 struct ComposeLayer {
+    /// Same source frame (identity — the buffer is retained, so it can't be recycled meanwhile) and same
+    /// parameters: drawing it again would give the same pixels.
+    func same(as o: ComposeLayer) -> Bool {
+        guard buffer === o.buffer, rect == o.rect, border == o.border, rotation == o.rotation,
+              borderColor == o.borderColor else { return false }
+        return withUnsafeBytes(of: params) { a in withUnsafeBytes(of: o.params) { b in a.elementsEqual(b) } }
+    }
+
     var buffer: CVPixelBuffer?
     var params: LayerParams
     var rect: CGRect
     var border: Float = 0
     var borderColor: (Float, Float, Float) = (1, 1, 1)
+    /// radians, clockwise around the rect centre
+    var rotation: Float = 0
 }
 
 /// One source for the program mixer (layer slots: 0 A, 1 B, 2-5 overlays, 6 stinger).
@@ -278,9 +293,23 @@ final class MetalMixer {
     }
 
     /// Input with layers → one premultiplied BGRA frame (transparent where nothing is drawn).
-    func compose(_ layers: [ComposeLayer]) -> CVPixelBuffer? {
+    func compose(_ layers: [ComposeLayer]) -> CVPixelBuffer? { compose(batch: [layers]).first ?? nil }
+
+    /// Several compositions in one command buffer — the render thread waits for the GPU once per frame
+    /// instead of once per input with layers.
+    func compose(batch: [[ComposeLayer]]) -> [CVPixelBuffer?] {
+        guard !batch.isEmpty, let cmd = queue.makeCommandBuffer() else { return batch.map { _ in nil } }
+        var keep: [CVMetalTexture] = []
+        let outs = batch.map { encodeCompose($0, cmd, &keep) }
+        cmd.commit()
+        cmd.waitUntilCompleted()
+        keep.removeAll()
+        return outs
+    }
+
+    private func encodeCompose(_ layers: [ComposeLayer], _ cmd: MTLCommandBuffer, _ keep: inout [CVMetalTexture]) -> CVPixelBuffer? {
         guard let pso = composePipeline, let out = PixelBufferFactory.makeBuffer(pool: pool),
-              let outTex = outputTexture(out), let cmd = queue.makeCommandBuffer() else { return nil }
+              let outTex = outputTexture(out) else { return nil }
         let rp = MTLRenderPassDescriptor()
         rp.colorAttachments[0].texture = outTex
         rp.colorAttachments[0].loadAction = .clear
@@ -288,19 +317,26 @@ final class MetalMixer {
         rp.colorAttachments[0].storeAction = .store
         guard let enc = cmd.makeRenderCommandEncoder(descriptor: rp) else { return nil }
         enc.setRenderPipelineState(pso)
-        var keep: [CVMetalTexture] = []
         let W = Double(format.width), H = Double(format.height)
         for l in layers {
             guard let pb = l.buffer, let src = inputTexture(pb) else { continue }
-            let r = l.rect.integral
-            let x0 = max(0, r.minX), y0 = max(0, r.minY), x1 = min(W, r.maxX), y1 = min(H, r.maxY)
-            guard x1 > x0, y1 > y0, r.width >= 1, r.height >= 1 else { continue }
+            let rr = l.rect.integral
+            guard rr.width >= 1, rr.height >= 1 else { continue }
+            // rotated layer: draw its bounding box, the shader rotates back and cuts the corners
+            let ca = cos(l.rotation), sa = sin(l.rotation)
+            let bw = abs(rr.width * CGFloat(ca)) + abs(rr.height * CGFloat(sa))
+            let bh = abs(rr.width * CGFloat(sa)) + abs(rr.height * CGFloat(ca))
+            let r = l.rotation == 0 ? rr : CGRect(x: rr.midX - bw / 2, y: rr.midY - bh / 2, width: bw, height: bh)
+            let x0 = max(0, r.minX.rounded(.down)), y0 = max(0, r.minY.rounded(.down))
+            let x1 = min(W, r.maxX.rounded(.up)), y1 = min(H, r.maxY.rounded(.up))
+            guard x1 > x0, y1 > y0 else { continue }
             keep.append(contentsOf: src.keep)
             var lp = l.params
             lp.has = 1; lp.yuv = src.yuv
             lp.srcW = Float(src.width); lp.srcH = Float(src.height)
-            var cp = ComposeParams(w: Float(r.width), h: Float(r.height), border: l.border,
-                                   borderR: l.borderColor.0, borderG: l.borderColor.1, borderB: l.borderColor.2)
+            var cp = ComposeParams(w: Float(rr.width), h: Float(rr.height), border: l.border,
+                                   borderR: l.borderColor.0, borderG: l.borderColor.1, borderB: l.borderColor.2,
+                                   bw: Float(r.width), bh: Float(r.height), cosA: ca, sinA: sa)
             enc.setViewport(MTLViewport(originX: r.minX, originY: r.minY, width: r.width, height: r.height, znear: 0, zfar: 1))
             enc.setScissorRect(MTLScissorRect(x: Int(x0), y: Int(y0), width: Int(x1 - x0), height: Int(y1 - y0)))
             enc.setFragmentTexture(src.luma, index: 0)
@@ -310,9 +346,6 @@ final class MetalMixer {
             enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         }
         enc.endEncoding()
-        cmd.commit()
-        cmd.waitUntilCompleted()
-        keep.removeAll()
         return out
     }
 

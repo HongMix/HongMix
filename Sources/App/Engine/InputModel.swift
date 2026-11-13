@@ -234,6 +234,15 @@ struct InputLayer: Codable, Equatable, Identifiable {
     var cropL: Float = 0, cropT: Float = 0, cropR: Float = 0, cropB: Float = 0
     var border: Double = 0          // px at output size
     var borderColor: String = "#FFFFFF"
+    /// 0…1 (vMix layer opacity)
+    var opacity: Float = 1
+    /// degrees, clockwise, around the box centre
+    var rotation: Double = 0
+    /// locked layers can't be moved / resized / cropped in the editor
+    var locked = false
+    /// Saved by 2.1.7+: the cropped part fills the box (vMix). Older files hid the cropped part inside
+    /// the box instead; they are converted when loaded (see init(from:)).
+    var cropFills = true
 
     init(inputID: UUID? = nil, x: Double, y: Double, w: Double, h: Double, fill: Bool = true) {
         self.inputID = inputID; self.x = x; self.y = y; self.w = w; self.h = h; self.fill = fill
@@ -250,6 +259,20 @@ struct InputLayer: Codable, Equatable, Identifiable {
         cropR = c.value(.cropR, Float(0)); cropB = c.value(.cropB, Float(0))
         border = c.value(.border, 0)
         borderColor = c.value(.borderColor, "#FFFFFF")
+        opacity = c.value(.opacity, Float(1))
+        rotation = c.value(.rotation, 0)
+        locked = c.value(.locked, false)
+        cropFills = true
+        if !c.contains(.cropFills), cropL > 0 || cropT > 0 || cropR > 0 || cropB > 0 {
+            // ≤ 2.1.6: crop only hid that part of the picture, which kept its full-box size. Shrink the
+            // box to the part that was visible so the layer looks the same (exact for sources with the
+            // output's aspect — cameras, full-screen graphics, titles).
+            let l = Double(cropL), t = Double(cropT), r = Double(cropR), b = Double(cropB)
+            if l + r < 0.98, t + b < 0.98 {
+                x += w * l; y += h * t
+                w *= 1 - l - r; h *= 1 - t - b
+            }
+        }
     }
 }
 
@@ -413,6 +436,8 @@ struct InputConfig: Codable, Identifiable, Equatable {
     var alphaKey = AlphaKeySettings()
     /// AI background removal (person segmentation, no green screen)
     var bgRemoval = BGRemovalSettings()
+    /// AI upscaling of low-resolution sources (VideoToolbox super resolution, macOS 26+)
+    var upscale = false
     /// Instant Replay input: 0 = channel A, 1 = channel B
     var replayChannel: Int = 0
     /// Photos (folder slideshow) / PDF Slides settings (SlideInputs.swift)
@@ -495,6 +520,7 @@ struct InputConfig: Codable, Identifiable, Equatable {
         lutStrength = c.value(.lutStrength, d.lutStrength)
         alphaKey = c.value(.alphaKey, d.alphaKey)
         bgRemoval = c.value(.bgRemoval, d.bgRemoval)
+        upscale = c.value(.upscale, d.upscale)
         replayChannel = c.value(.replayChannel, d.replayChannel)
         slides = c.value(.slides, d.slides)
         virtualSet = c.value(.virtualSet, d.virtualSet)
@@ -627,6 +653,23 @@ class InputSource: ObservableObject, Identifiable {
         paramsLock.lock(); defer { paramsLock.unlock() }
         return bgRemovalStore
     }
+    /// AI upscaling (super resolution) — snapshot read by the render thread
+    @Published var upscale = false { didSet { paramsLock.lock(); upscaleStore = upscale; paramsLock.unlock() } }
+    private var upscaleStore = false
+    var upscaleSnapshot: Bool {
+        paramsLock.lock(); defer { paramsLock.unlock() }
+        return upscaleStore
+    }
+    /// Super-resolution worker (nil while upscaling is off). Set by the render thread, read by the UI
+    /// and the API — guarded so a read never races the render thread's write.
+    private var upscalerStore: Upscaler?
+    var upscaler: Upscaler? {
+        get { paramsLock.lock(); defer { paramsLock.unlock() }; return upscalerStore }
+        set {
+            paramsLock.lock(); let old = upscalerStore; upscalerStore = newValue; paramsLock.unlock()
+            withExtendedLifetime(old) {}   // released here, outside the lock: tearing down the model session can take a moment
+        }
+    }
     /// Render thread: Vision worker for this input (nil while background removal is off).
     var bgRemover: BackgroundRemover?
     /// Render thread: last alpha/key result, reused while fill and key frames don't change.
@@ -634,6 +677,8 @@ class InputSource: ObservableObject, Identifiable {
     var keyCacheKey: CVPixelBuffer?
     var keyCacheOut: CVPixelBuffer?
     var keyCacheSettings = AlphaKeySettings()
+    /// Render thread: what `composed` was drawn from — reused while every layer is unchanged (static graphics).
+    var composeKey: [ComposeLayer]?
     /// Render thread: last LUT result, reused while the source frame doesn't change.
     var lutCacheSrc: CVPixelBuffer?
     var lutCacheOut: CVPixelBuffer?
@@ -804,11 +849,13 @@ class InputSource: ObservableObject, Identifiable {
         self.lutStrength = config.lutStrength
         self.alphaKey = config.alphaKey
         self.bgRemoval = config.bgRemoval
+        self.upscale = config.upscale
         self.config = config
         layersStore = config.layers          // didSet doesn't run in init
         lutStore = (config.lutPath, config.lutStrength)
         alphaKeyStore = config.alphaKey
         bgRemovalStore = config.bgRemoval
+        upscaleStore = config.upscale
         if !config.lutPath.isEmpty { LUTCache.shared.preload(config.lutPath) }
         syncAudioParams()
         syncVideoParams()
@@ -898,6 +945,7 @@ class InputSource: ObservableObject, Identifiable {
         c.lutStrength = lutStrength
         c.alphaKey = alphaKey
         c.bgRemoval = bgRemoval
+        c.upscale = upscale
         return c
     }
 
