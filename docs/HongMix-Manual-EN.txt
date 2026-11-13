@@ -1,4 +1,4 @@
-HongMix 2.1.7 — User Manual (English)
+HongMix 2.1.8 — User Manual (English)
 ================================================================
 A live production switcher for Apple Silicon Macs, with a vMix-style layout, shortcuts and API.
 Made by Hong Seunghoon (홍승훈) · 2026-10-28 · Korea
@@ -9,14 +9,14 @@ Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)
 Requirements: an Apple Silicon Mac (M1 and later), macOS 14 or later.
 Everything (FFmpeg, SRT, NDI runtime, Chromium web engine) is bundled inside the app — nothing else to install.
 
-[Option A — recommended] Double-click HongMix-2.1.7.pkg
+[Option A — recommended] Double-click HongMix-2.1.8.pkg
   1) If macOS says "unidentified developer": right-click the file → Open → Open
      (or System Settings → Privacy & Security → "Open Anyway").
   2) Continue → Install. HongMix is installed in Applications.
   3) First launch: if macOS warns, right-click HongMix in Applications → Open → Open (once).
      (HongMix is not notarized by Apple yet, so macOS asks once.)
 
-[Option B] Open HongMix-2.1.7.dmg → drag HongMix into Applications
+[Option B] Open HongMix-2.1.8.dmg → drag HongMix into Applications
   - If warned on first launch, right-click the app → Open (once).
 
 On first use macOS asks for permissions:
@@ -24,7 +24,13 @@ On first use macOS asks for permissions:
   - Screen Recording — only for Screen/Window capture inputs
   - Local Network — allow so NDI and SRT devices can be found
 
-New in 2.1.7
+New in 2.1.8
+  - Save layer placement presets and apply them across inputs and projects. Presets include position,
+    size, crop, rotation, opacity, border and Fit/Fill, but not the source input.
+  - Shift-click or Command-A to select layers together, then move, align, space or resize them as a group.
+  - Moving layers snap to the edges and centers of other visible layers.
+  - Cropping a rotated layer now moves that edge of its box like an unrotated layer.
+  - LayerPreset and LayerPresetSave add preset control to Companion and Stream Deck workflows.
   - Exact number fields with −/+ for Position and Layers; arrow keys adjust one step, Shift ten.
   - The gray canvas margin keeps off-frame boxes and handles reachable. Layer controls include Fit in Frame,
     Center, Source Aspect, Full Screen, Copy/Paste Position, lock, opacity and rotation.

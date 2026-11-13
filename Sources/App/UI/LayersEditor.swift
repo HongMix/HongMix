@@ -9,16 +9,28 @@ struct LayersEditor: View {
     @ViewState private var gap: Double = 0.01
     @ViewState private var border: Double = 0
     @ViewState private var selected: UUID? = nil
+    /// Two or more selected layers (⇧-click / ⌘A); first = selected first. Empty = single selection.
+    @ViewState private var group: [UUID] = []
+    @ViewState private var alignRef: AlignReference = .selection
+    @ObservedObject private var presets = LayerPresetStore.shared
     @ViewState private var trimAvailable: [UUID: Bool] = [:]
     @ViewState private var trimNote: [UUID: String] = [:]
     /// "Copy position" (shared between inputs, like vMix's Layer Designer copy / paste)
     static var clipboard: InputLayer?
     /// Screenshots (SnapshotView "layers-<n>"): open with layer 1 selected.
     var previewCropMode = false
+    /// Screenshots (SnapshotView "props-<n>-6-all"): the next Layers editor opens with every layer selected.
+    static var snapshotSelectAll = false
 
     private var target: Binding<PlacementTarget> {
         Binding(get: { selected.map { .layer($0) } ?? .input },
                 set: { t in if case .layer(let id) = t { selected = id } })
+    }
+
+    /// Selected layers that still exist, when two or more are selected.
+    private var multi: [UUID] {
+        let g = group.filter { id in input.layers.contains { $0.id == id } }
+        return g.count > 1 ? g : []
     }
 
     var body: some View {
@@ -37,7 +49,14 @@ struct LayersEditor: View {
                             .font(.caption).foregroundColor(.secondary)
                     }
                     ForEach(Array(input.layers.enumerated()), id: \.element.id) { k, _ in row(k) }
-                    if let k = input.layers.firstIndex(where: { $0.id == selected }) { detailPanel(k) }
+                    if !input.layers.isEmpty {
+                        hint(L("⇧ 클릭 = 여러 레이어 선택 (목록·미리보기), ⌘A = 모두 선택. 함께 끌고 화살표 키로 함께 움직입니다."))
+                    }
+                    if multi.count > 1 {
+                        multiPanel(multi)
+                    } else if let k = input.layers.firstIndex(where: { $0.id == selected }) {
+                        detailPanel(k)
+                    }
                     Divider()
                     HStack {
                         Menu(L("템플릿 적용")) {
@@ -61,12 +80,16 @@ struct LayersEditor: View {
                 .padding(.trailing, 6)
             }
             .frame(width: 400)
-            PlacementCanvas(input: input, target: target, layersView: true)
+            PlacementCanvas(input: input, target: target, layersView: true, group: $group)
                 .frame(maxWidth: .infinity)
         }
         .padding(.vertical, 6)
         .onAppear {
             if previewCropMode || selected == nil { selected = input.layers.first?.id }
+            if Self.snapshotSelectAll {
+                Self.snapshotSelectAll = false
+                group = input.layers.count > 1 ? input.layers.map(\.id) : []
+            }
         }
     }
 
@@ -77,8 +100,8 @@ struct LayersEditor: View {
         let lid = l.id   // bindings look the layer up by id: safe if it is removed while a field is focused
         HStack(spacing: 6) {
             Text("\(k + 1)").font(.system(size: 11, weight: .bold).monospacedDigit()).frame(width: 18)
-                .foregroundColor(selected == l.id ? .yellow : .primary)
-                .contentShape(Rectangle()).onTapGesture { selected = l.id }
+                .foregroundColor(isSelected(l.id) ? .yellow : .primary)
+                .contentShape(Rectangle()).onTapGesture { pick(l.id) }
             Toggle("", isOn: $input.layers[layer: lid].visible).labelsHidden().toggleStyle(.checkbox)
             Picker("", selection: $input.layers[layer: lid].inputID) {
                 Text(L("없음")).tag(UUID?.none)
@@ -92,7 +115,8 @@ struct LayersEditor: View {
             }
             .labelsHidden().frame(minWidth: 64, idealWidth: 76, maxWidth: 76)
             .help(L("채우기: 칸을 꽉 채우고 넘치는 부분은 잘라냄 · 맞추기: 전체가 보이게 (여백 생김)"))
-            Button { selected = l.id } label: { Image(systemName: "scope") }.buttonStyle(.borderless)
+            Button { pick(l.id) } label: { Image(systemName: "scope") }.buttonStyle(.borderless)
+                .help(L("선택 (⇧ 누르고 클릭 = 여러 개 선택)"))
             Button {
                 guard k > 0 else { return }
                 PlacementHistory.push(input)
@@ -102,7 +126,7 @@ struct LayersEditor: View {
                 .buttonStyle(.borderless)
         }
         .padding(4)
-        .background(selected == l.id ? Color.yellow.opacity(0.12) : Color.clear)
+        .background(isSelected(l.id) ? Color.yellow.opacity(0.12) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 
@@ -166,8 +190,10 @@ struct LayersEditor: View {
                         input.layers[layer: lid].rotation = c.rotation
                     }
                     .help(L("복사한 위치·크기·자르기·회전을 이 레이어에 넣습니다 (다른 입력의 레이어에도 됩니다)"))
+                    presetMenu(lid)
                 }
                 .controlSize(.small)
+                hint(L("프리셋: 자주 쓰는 배치(위치·크기·자르기·회전·불투명도·테두리)를 이름 붙여 저장합니다. 앱 전체에 저장돼 다른 입력·다른 프로젝트에서도 쓸 수 있고, 레이어에 들어간 입력은 바꾸지 않습니다."))
 
                 Divider().padding(.vertical, 2)
                 Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 3) {
@@ -201,10 +227,10 @@ struct LayersEditor: View {
                     }
                     .controlSize(.small)
                 }
-                cropRow(L("왼쪽"), $input.layers[layer: lid].cropL)
-                cropRow(L("오른쪽"), $input.layers[layer: lid].cropR)
-                cropRow(L("위"), $input.layers[layer: lid].cropT)
-                cropRow(L("아래"), $input.layers[layer: lid].cropB)
+                cropRow(L("왼쪽"), $input.layers[layer: lid].cropL, other: input.layers[layer: lid].cropR)
+                cropRow(L("오른쪽"), $input.layers[layer: lid].cropR, other: input.layers[layer: lid].cropL)
+                cropRow(L("위"), $input.layers[layer: lid].cropT, other: input.layers[layer: lid].cropB)
+                cropRow(L("아래"), $input.layers[layer: lid].cropB, other: input.layers[layer: lid].cropT)
                 hint(L("남은 부분이 상자를 채웁니다(채우기·맞추기 기준). 미리보기의 주황 손잡이를 끌면 그쪽 가장자리만 잘리고 그림 크기는 그대로입니다."))
             }
             .disabled(l.locked)
@@ -236,12 +262,262 @@ struct LayersEditor: View {
         }
     }
 
+    private func isSelected(_ id: UUID) -> Bool { selected == id || multi.contains(id) }
+
+    /// Click = this layer only; ⇧-click = add to / remove from the selection.
+    private func pick(_ id: UUID) {
+        guard NSEvent.modifierFlags.contains(.shift) else { group = []; selected = id; return }
+        var g = multi
+        if g.isEmpty, let cur = selected, input.layers.contains(where: { $0.id == cur }) { g = [cur] }
+        if let k = g.firstIndex(of: id) { g.remove(at: k) } else { g.append(id) }
+        selected = g.first
+        group = g.count > 1 ? g : []
+    }
+
+    // MARK: Presets (app-wide, LayerPresets.swift)
+
+    private func presetMenu(_ lid: UUID) -> some View {
+        let W = Double(engine.format.width), H = Double(engine.format.height)
+        return Menu {
+            if presets.items.isEmpty {
+                Text(L("저장된 프리셋이 없습니다"))
+            }
+            ForEach(presets.items) { p in
+                Button("\(p.name)  —  \(Int((p.w * W).rounded()))×\(Int((p.h * H).rounded()))") {
+                    PlacementHistory.push(input)
+                    p.apply(to: &input.layers[layer: lid])
+                }
+            }
+            Divider()
+            Button(L("현재 위치를 프리셋으로 저장…")) { savePreset(lid) }
+            if !presets.items.isEmpty {
+                Menu(L("이름 바꾸기")) {
+                    ForEach(presets.items) { p in Button(p.name) { renamePreset(p) } }
+                }
+                Menu(L("삭제")) {
+                    ForEach(presets.items) { p in Button(p.name, role: .destructive) { presets.remove(p.id) } }
+                }
+            }
+        } label: {
+            Label(L("프리셋"), systemImage: "bookmark")
+        }
+        .fixedSize()
+        .help(L("저장해 둔 배치를 이 레이어에 적용하거나, 지금 배치를 저장합니다"))
+    }
+
+    private func askName(title: String, initial: String) -> String? {
+        let a = NSAlert()
+        a.messageText = title
+        a.addButton(withTitle: L("저장"))
+        a.addButton(withTitle: L("취소"))
+        let f = NSTextField(string: initial)
+        f.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
+        a.accessoryView = f
+        a.window.initialFirstResponder = f
+        guard a.runModal() == .alertFirstButtonReturn else { return nil }
+        let n = f.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return n.isEmpty ? nil : String(n.prefix(60))
+    }
+
+    private func savePreset(_ lid: UUID) {
+        let l = input.layers[layer: lid]
+        let W = Double(engine.format.width), H = Double(engine.format.height)
+        let initial = Lf("프리셋 %@ (%@)", "\(presets.items.count + 1)", "\(Int((l.w * W).rounded()))×\(Int((l.h * H).rounded()))")
+        guard let name = askName(title: L("프리셋 이름"), initial: initial) else { return }
+        if presets.preset(named: name) != nil {
+            let c = NSAlert()
+            c.messageText = Lf("‘%@’ 프리셋이 이미 있습니다. 바꿀까요?", name)
+            c.addButton(withTitle: L("바꾸기"))
+            c.addButton(withTitle: L("취소"))
+            guard c.runModal() == .alertFirstButtonReturn else { return }
+        }
+        presets.add(LayerPreset(name: name, from: l))
+    }
+
+    private func renamePreset(_ p: LayerPreset) {
+        guard let name = askName(title: L("새 이름"), initial: p.name) else { return }
+        if !presets.rename(p.id, to: name) {
+            let c = NSAlert()
+            c.messageText = Lf("‘%@’ 프리셋이 이미 있습니다. 바꿀까요?", name)
+            c.informativeText = L("같은 이름의 프리셋은 하나만 둘 수 있습니다. 바꾸면 그 프리셋은 지워집니다.")
+            c.addButton(withTitle: L("바꾸기"))
+            c.addButton(withTitle: L("취소"))
+            guard c.runModal() == .alertFirstButtonReturn else { return }
+            if let other = presets.preset(named: name), other.id != p.id { presets.remove(other.id) }
+            _ = presets.rename(p.id, to: name)
+        }
+    }
+
+    // MARK: Several layers: align, distribute, same size
+
+    enum AlignReference: String, CaseIterable, Identifiable {
+        case selection, frame, first
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .selection: return L("선택한 상자들")
+            case .frame: return L("화면")
+            case .first: return L("처음 선택한 상자")
+            }
+        }
+    }
+
+    private enum AlignOp { case left, hCenter, right, top, vCenter, bottom }
+
+    @ViewBuilder private func multiPanel(_ ids: [UUID]) -> some View {
+        let locked = input.layers.filter { ids.contains($0.id) && $0.locked }.count
+        VStack(alignment: .leading, spacing: 6) {
+            Text(Lf("레이어 %@개 선택됨", "\(ids.count)")).font(.caption.bold())
+            HStack {
+                Text(L("기준")).font(.caption).foregroundColor(.secondary)
+                Picker("", selection: $alignRef) {
+                    ForEach(AlignReference.allCases) { r in Text(r.label).tag(r) }
+                }
+                .labelsHidden().fixedSize()
+            }
+            HStack(spacing: 4) {
+                alignButton("align.horizontal.left", L("왼쪽 맞춤"), .left, ids)
+                alignButton("align.horizontal.center", L("가로 가운데 맞춤"), .hCenter, ids)
+                alignButton("align.horizontal.right", L("오른쪽 맞춤"), .right, ids)
+                Divider().frame(height: 16)
+                alignButton("align.vertical.top", L("위 맞춤"), .top, ids)
+                alignButton("align.vertical.center", L("세로 가운데 맞춤"), .vCenter, ids)
+                alignButton("align.vertical.bottom", L("아래 맞춤"), .bottom, ids)
+            }
+            HStack(spacing: 4) {
+                Button { distribute(ids, horizontal: true) } label: {
+                    Label(L("가로 간격 같게"), systemImage: "distribute.horizontal.center")
+                }
+                Button { distribute(ids, horizontal: false) } label: {
+                    Label(L("세로 간격 같게"), systemImage: "distribute.vertical.center")
+                }
+            }
+            .controlSize(.small)
+            HStack(spacing: 4) {
+                Menu(L("크기 같게")) {
+                    Button(L("너비와 높이")) { sameSize(ids, w: true, h: true) }
+                    Button(L("너비만")) { sameSize(ids, w: true, h: false) }
+                    Button(L("높이만")) { sameSize(ids, w: false, h: true) }
+                }
+                .fixedSize()
+                Text(L("처음 선택한 상자 크기로 맞춥니다")).font(.caption).foregroundColor(.secondary)
+            }
+            .controlSize(.small)
+            hint(L("기준: ‘선택한 상자들’ = 선택한 상자 전체의 범위, ‘화면’ = 출력 화면, ‘처음 선택한 상자’ = 그 상자는 그대로. 간격 같게는 화면 기준이면 2개부터, 아니면 3개부터 됩니다. 잠긴 레이어는 움직이지 않습니다."))
+            if locked > 0 {
+                Label(Lf("잠긴 레이어 %@개는 그대로 둡니다", "\(locked)"), systemImage: "lock").font(.caption).foregroundColor(.orange)
+            }
+            Button(L("선택 해제")) { group = [] }.controlSize(.small)
+        }
+        .padding(6)
+        .background(Color.yellow.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    private func alignButton(_ icon: String, _ help: String, _ op: AlignOp, _ ids: [UUID]) -> some View {
+        Button { align(ids, op) } label: { Image(systemName: icon).frame(width: 18) }
+            .controlSize(.small)
+            .help(help)
+    }
+
+    /// The rectangle to align to (fractions of the output).
+    private func reference(_ ids: [UUID]) -> CGRect {
+        let boxes = input.layers.filter { ids.contains($0.id) }.map { CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h) }
+        switch alignRef {
+        case .frame: return CGRect(x: 0, y: 0, width: 1, height: 1)
+        case .first:
+            if let f = input.layers.first(where: { $0.id == ids.first }) { return CGRect(x: f.x, y: f.y, width: f.w, height: f.h) }
+            return boxes.reduce(CGRect.null) { $0.union($1) }
+        case .selection: return boxes.reduce(CGRect.null) { $0.union($1) }
+        }
+    }
+
+    /// Layers that may move: selected, unlocked, and (for "first selected") not the reference itself.
+    private func movable(_ ids: [UUID]) -> [Int] {
+        input.layers.indices.filter { k in
+            let l = input.layers[k]
+            return ids.contains(l.id) && !l.locked && !(alignRef == .first && l.id == ids.first)
+        }
+    }
+
+    private func align(_ ids: [UUID], _ op: AlignOp) {
+        let r = reference(ids)
+        let ks = movable(ids)
+        guard !r.isNull, !ks.isEmpty else { NSSound.beep(); return }
+        PlacementHistory.push(input)
+        for k in ks {
+            let l = input.layers[k]
+            switch op {
+            case .left: input.layers[k].x = r.minX
+            case .hCenter: input.layers[k].x = r.midX - l.w / 2
+            case .right: input.layers[k].x = r.maxX - l.w
+            case .top: input.layers[k].y = r.minY
+            case .vCenter: input.layers[k].y = r.midY - l.h / 2
+            case .bottom: input.layers[k].y = r.maxY - l.h
+            }
+        }
+    }
+
+    /// Equal gaps between the boxes. Boxes that can't move are fixed points: locked layers, the first
+    /// selected box with "First selected box", and the outermost boxes (or the frame edges with "Frame").
+    /// The boxes between two fixed points are spaced evenly in that stretch.
+    private func distribute(_ ids: [UUID], horizontal: Bool) {
+        var ks = input.layers.indices.filter { ids.contains(input.layers[$0].id) }
+        ks.sort { horizontal ? input.layers[$0].x < input.layers[$1].x : input.layers[$0].y < input.layers[$1].y }
+        let pos = { (k: Int) -> Double in horizontal ? self.input.layers[k].x : self.input.layers[k].y }
+        let len = { (k: Int) -> Double in horizontal ? self.input.layers[k].w : self.input.layers[k].h }
+        let frame = alignRef == .frame
+        guard ks.count >= (frame ? 2 : 3) else { NSSound.beep(); return }
+        func fixed(_ k: Int) -> Bool {
+            input.layers[k].locked || (alignRef == .first && input.layers[k].id == ids.first)
+        }
+        // fixed points: (start, end, index or nil for a frame edge)
+        var anchors: [(Double, Double, Int?)] = []
+        var runs: [[Int]] = [[]]
+        if frame { anchors.append((0, 0, nil)) }
+        for (n, k) in ks.enumerated() {
+            let outer = !frame && (n == 0 || n == ks.count - 1)
+            if fixed(k) || outer {
+                anchors.append((pos(k), pos(k) + len(k), k)); runs.append([])
+            } else {
+                runs[runs.count - 1].append(k)
+            }
+        }
+        if frame { anchors.append((1, 1, nil)) } else { runs.removeLast() }
+        // runs[i] lies between anchors[i] and anchors[i + 1]
+        guard runs.contains(where: { !$0.isEmpty }), anchors.count == runs.count + 1 else { NSSound.beep(); return }
+        PlacementHistory.push(input)
+        for (i, run) in runs.enumerated() where !run.isEmpty {
+            let a = anchors[i].1, b = anchors[i + 1].0
+            let gap = (b - a - run.map(len).reduce(0, +)) / Double(run.count + 1)
+            var p = a + gap
+            for k in run {
+                if horizontal { input.layers[k].x = p } else { input.layers[k].y = p }
+                p += len(k) + gap
+            }
+        }
+    }
+
+    /// Size of the layer selected first; top-left corners stay.
+    private func sameSize(_ ids: [UUID], w: Bool, h: Bool) {
+        guard let f = input.layers.first(where: { $0.id == ids.first }) else { return }
+        let ks = input.layers.indices.filter { ids.contains(input.layers[$0].id) && !input.layers[$0].locked && input.layers[$0].id != f.id }
+        guard !ks.isEmpty else { NSSound.beep(); return }
+        PlacementHistory.push(input)
+        for k in ks {
+            if w { input.layers[k].w = f.w }
+            if h { input.layers[k].h = f.h }
+        }
+    }
+
     private func hint(_ s: String) -> some View {
         Text(s).font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
     }
 
-    private func cropRow(_ label: String, _ v: Binding<Float>) -> some View {
-        HStack(spacing: 4) {
+    /// `other`: the opposite side — together they never cut more than 95 % (something must remain).
+    private func cropRow(_ label: String, _ raw: Binding<Float>, other: Float) -> some View {
+        let v = Binding<Float>(get: { raw.wrappedValue }, set: { raw.wrappedValue = max(0, min($0, 0.95 - other)) })
+        return HStack(spacing: 4) {
             Text(label).font(.caption).foregroundColor(.secondary).frame(width: 40, alignment: .leading)
             Slider(value: Binding(get: { Double(v.wrappedValue) * 100 }, set: { v.wrappedValue = Float($0 / 100) }), in: 0...90) { e in
                 if e { PlacementHistory.push(input) }

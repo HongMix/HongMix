@@ -10,25 +10,24 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.7</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.8</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.1.7
-- **Exact values like vMix:** every Position and Layer value has a number field with −/+; arrow keys adjust one step and Shift adjusts ten.
-- Boxes outside the frame stay editable in the gray margin. Fit in Frame, Center, Source Aspect, Full Screen, Copy/Paste Position, layer lock, opacity and rotation are included.
-- **Layer crop now fills the box** and Trim Transparent Background works inline. Older projects are converted on open to preserve their previous appearance.
-- Optional **AI Upscaling** enlarges low-resolution on-air sources with Apple's real-time model on supported macOS versions.
-- Layer composition caching and one GPU wait per frame cut render time roughly in half in the measured layer-heavy scene.
-- A 40-minute automated soak completed with 0 dropped frames, 0 restarts and flat 302–365 MB memory. Physical mouse, keyboard nudge and Undo still need hands-on checks. See [English notes](docs/RELEASE-NOTES-2.1.7.md) or [한국어](docs/RELEASE-NOTES-2.1.7.ko.md).
+### Latest update · 2.1.8
+- **Layer presets:** save position, size, crop, rotation, opacity, border and Fit/Fill by name, then apply the placement to any layer in any project.
+- **Edit several layers at once:** Shift-click or Command-A, move together, align, space evenly and match size. Boxes now snap to other layers' edges and centers.
+- Cropping a rotated layer now moves that box edge like an unrotated layer.
+- Includes the precise numeric controls, gray off-frame margin, Undo, layer rotation/lock, fixed crop behavior, AI Upscaling and layer-performance work introduced in 2.1.7.
+- A 10-minute automated soak applied presets about 85 times with 0 dropped frames, 0 errors, 0 restarts and flat 344–450 MB memory. Physical mouse and keyboard interactions still need hands-on checks. See [English notes](docs/RELEASE-NOTES-2.1.8.md) or [한국어](docs/RELEASE-NOTES-2.1.8.ko.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.7/en-01-position-editor.png" alt="HongMix 2.1.7 exact Position controls and AI Upscaling" width="100%"><br><sub>Exact Position controls, AI Upscaling and gray canvas margin</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.7/en-02-layers-editor.png" alt="HongMix 2.1.7 precise Layers editor" width="100%"><br><sub>Layer rotation, opacity, lock, crop and precise pixel controls</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.8/en-02-layers-editor.png" alt="HongMix 2.1.8 layer presets" width="100%"><br><sub>Reusable layer presets with precise placement controls</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.8/en-03-layers-align.png" alt="HongMix 2.1.8 multi-layer alignment" width="100%"><br><sub>Select, align, distribute and resize several layers together</sub></td>
   </tr>
 </table>
 

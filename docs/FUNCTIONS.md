@@ -92,6 +92,8 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `SetLayerRotation` | Input, Value=layer,-180~180 | 레이어를 시계 방향 각도로 회전합니다. |
 | `LayerTrim` | Input, Value=layer | 현재 알파 프레임에서 투명 배경을 잘라냅니다. 투명 가장자리가 없으면 오류를 반환합니다. |
 | `UpscaleOn / UpscaleOff / Upscale` | Input | 지원되는 macOS에서 해당 입력의 AI 화질 올리기를 켜거나 끕니다. |
+| `LayerPreset` | Input, Value=layer,preset name | 저장된 레이어 위치 프리셋을 적용합니다. 이름은 대소문자를 구분하지 않으며 레이어의 소스 입력은 바뀌지 않습니다. |
+| `LayerPresetSave` | Input, Value=layer,preset name | 현재 레이어 배치를 앱 전체 프리셋으로 저장합니다. 같은 이름은 교체하며 이름은 최대 60자입니다. |
 
 입력 설정의 위치·레이어 탭에서는 Program과 같은 미리보기 위에서 이동·크기·자르기를 마우스와 숫자칸으로 편집하고 출력 픽셀 값을 확인할 수 있습니다. 레이어 잠금·불투명도·회전·위치 복사/붙여넣기와 **투명 배경만 잘라내기**를 지원합니다. 위치 탭의 AI 화질 올리기는 저해상도 소스를 송출 중일 때만 처리합니다.
 | `SetCropX1 / X2 / Y1 / Y2, SetCrop` | Input, Value=0~1 (SetCrop: X1,Y1,X2,Y2) | 크롭합니다. |

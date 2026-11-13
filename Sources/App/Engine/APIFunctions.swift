@@ -879,6 +879,22 @@ enum APIProcessor {
             let W = Double(e.format.width), H = Double(e.format.height), n = Int(p[0]) - 1
             i.layers[n].x = p[1] / W; i.layers[n].y = p[2] / H; i.layers[n].w = p[3] / W; i.layers[n].h = p[4] / H
 
+        case "layerpreset":
+            // HongMix extension: Value = "layer,preset name" — apply a saved layer preset (Layers › Preset,
+            // app-wide) to that layer; its input stays
+            guard let i = input else { return needInput() }
+            let p = value.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            guard p.count == 2, let n = Int(p[0]), i.layers.indices.contains(n - 1) else { return "Value=layer,preset name" }
+            guard let pr = LayerPresetStore.shared.preset(named: p[1]) else { return "Layer preset not found: \(p[1])" }
+            pr.apply(to: &i.layers[n - 1])
+        case "layerpresetsave":
+            // HongMix extension: Value = "layer,preset name" — save that layer's placement as a preset
+            // (same name = replaced)
+            guard let i = input else { return needInput() }
+            let p = value.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            guard p.count == 2, !p[1].isEmpty, let n = Int(p[0]), i.layers.indices.contains(n - 1) else { return "Value=layer,preset name" }
+            LayerPresetStore.shared.add(LayerPreset(name: String(p[1].prefix(60)), from: i.layers[n - 1]))
+
         case "layertrim":
             // HongMix extension: Value = layer — "Trim Transparent Background" (crop the layer to the visible
             // pixels of its source; titles / PNGs with alpha)

@@ -174,7 +174,11 @@ struct PlacementCanvas: View {
     @Binding var target: PlacementTarget
     /// true = the input's own picture with its layers (Layers tab); false = the input as placed in Program.
     let layersView: Bool
+    /// Layers tab: all selected layers when two or more are selected (first = the one selected first;
+    /// `target` is then that one). Empty = single selection.
+    var group: Binding<[UUID]> = .constant([])
 
+    @ViewState private var startGroup: [InputLayer] = []
     @ViewState private var startAdjust: VideoAdjust? = nil
     @ViewState private var startRect: CGRect = .zero
     @ViewState private var startLayer: InputLayer? = nil
@@ -215,6 +219,17 @@ struct PlacementCanvas: View {
                 case .leftArrow: nudge(-n, 0)
                 default: nudge(n, 0)
                 }
+                return .handled
+            }
+            // a drag whose handle disappeared mid-drag (selection changed) never ends: start fresh
+            .onChange(of: groupIDs) { _, _ in startGroup = [] }
+            .onChange(of: target) { _, _ in startLayer = nil }
+            .onKeyPress(keys: ["a"], phases: .down) { press in
+                // ⌘A: select every layer
+                guard layersView, press.modifiers.contains(.command), !input.layers.isEmpty else { return .ignored }
+                let ids = input.layers.map(\.id)
+                target = .layer(ids[0])
+                group.wrappedValue = ids.count > 1 ? ids : []
                 return .handled
             }
             .overlay(alignment: .topTrailing) {
@@ -268,12 +283,29 @@ struct PlacementCanvas: View {
     @ViewBuilder private func editing(_ size: CGSize) -> some View {
         ZStack(alignment: .topLeading) {
             if layersView {
+                let multi = groupIDs
                 ForEach(Array(input.layers.enumerated()), id: \.element.id) { k, l in
                     let r = CGRect(x: l.x, y: l.y, width: l.w, height: l.h)
-                    box(r, size: size, label: "\(k + 1)", locked: l.locked, selected: target == .layer(l.id), rotation: l.rotation)
-                        .onTapGesture { target = .layer(l.id); focused = true }
+                    box(r, size: size, label: "\(k + 1)", locked: l.locked,
+                        selected: target == .layer(l.id) || multi.contains(l.id), rotation: l.rotation)
+                        .onTapGesture { click(l.id) }
                 }
-                if case .layer(let id) = target, let k = input.layers.firstIndex(where: { $0.id == id }), !input.layers[k].locked {
+                if multi.count > 1 {
+                    // several layers: dashed outline of the whole selection; drag any selected box to move them all
+                    let b = bounds(of: multi)
+                    Rectangle().stroke(Color.yellow, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                        .frame(width: max(6, b.width * size.width + 8), height: max(6, b.height * size.height + 8))
+                        .offset(x: b.minX * size.width - 4, y: b.minY * size.height - 4)
+                        .allowsHitTesting(false)
+                    ForEach(input.layers.filter { multi.contains($0.id) && !$0.locked }, id: \.id) { l in
+                        Rectangle().fill(Color.yellow.opacity(0.001))
+                            .frame(width: max(6, l.w * size.width), height: max(6, l.h * size.height))
+                            .rotationEffect(.degrees(l.rotation))
+                            .offset(x: l.x * size.width, y: l.y * size.height)
+                            .onTapGesture { click(l.id) }
+                            .gesture(groupMove(size))
+                    }
+                } else if case .layer(let id) = target, let k = input.layers.firstIndex(where: { $0.id == id }), !input.layers[k].locked {
                     let l = input.layers[k]
                     handles(CGRect(x: l.x, y: l.y, width: l.w, height: l.h), size: size, rotation: l.rotation,
                             move: layerMove(k, size), corner: { c in layerResize(k, c, size) },
@@ -374,6 +406,9 @@ struct PlacementCanvas: View {
             return px(me.rect(out: out)) + String(format: "  ·  Zoom %.2f  Pan %.2f / %.2f  ·  Crop L%.0f R%.0f T%.0f B%.0f %%",
                                                    a.zoom, a.panX, a.panY, a.cropL * 100, a.cropR * 100, a.cropT * 100, a.cropB * 100)
         case .layer(let id):
+            if groupIDs.count > 1 {
+                return Lf("레이어 %@개 선택됨", "\(groupIDs.count)") + "  ·  " + px(bounds(of: groupIDs))
+            }
             guard let l = input.layers.first(where: { $0.id == id }) else { return "" }
             var s = px(CGRect(x: l.x, y: l.y, width: l.w, height: l.h))
                 + String(format: "  ·  Crop L%.0f R%.0f T%.0f B%.0f %%", l.cropL * 100, l.cropR * 100, l.cropT * 100, l.cropB * 100)
@@ -405,8 +440,44 @@ struct PlacementCanvas: View {
     private func select(at p: CGPoint) {
         guard layersView else { return }
         if let hit = input.layers.reversed().first(where: { CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h).contains(p) }) {
-            target = .layer(hit.id)
+            click(hit.id)
+        } else if !shiftDown {
+            group.wrappedValue = []
         }
+    }
+
+    /// Selected layers that still exist (two or more), else [].
+    private var groupIDs: [UUID] {
+        let g = group.wrappedValue.filter { id in input.layers.contains { $0.id == id } }
+        return g.count > 1 ? g : []
+    }
+
+    /// Click = select only this layer; ⇧-click = add it to / remove it from the selection.
+    private func click(_ id: UUID) {
+        focused = true
+        guard layersView, shiftDown else { group.wrappedValue = []; target = .layer(id); return }
+        var g = groupIDs
+        if g.isEmpty, case .layer(let cur) = target, input.layers.contains(where: { $0.id == cur }) { g = [cur] }
+        if let k = g.firstIndex(of: id) { g.remove(at: k) } else { g.append(id) }
+        if let first = g.first { target = .layer(first) }
+        group.wrappedValue = g.count > 1 ? g : []
+    }
+
+    /// Bounding box of the given layers (unrotated boxes, fractions of the output).
+    private func bounds(of ids: [UUID]) -> CGRect {
+        input.layers.filter { ids.contains($0.id) }
+            .map { CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h) }
+            .reduce(CGRect.null) { $0.union($1) }
+    }
+
+    /// Edges and centres of the other layers' boxes (snap targets while moving `moving`).
+    private func layerTargets(excluding moving: [UUID]) -> (x: [CGFloat], y: [CGFloat]) {
+        var xs: [CGFloat] = [], ys: [CGFloat] = []
+        for l in input.layers where l.visible && !moving.contains(l.id) {
+            xs += [l.x, l.x + l.w / 2, l.x + l.w]
+            ys += [l.y, l.y + l.h / 2, l.y + l.h]
+        }
+        return (xs, ys)
     }
 
     /// Arrow keys: move the selection by output pixels.
@@ -421,10 +492,14 @@ struct PlacementCanvas: View {
             a.panY -= Float(2 * dy / out.height)
             input.adjust = a
         case .layer(let id):
-            guard let k = input.layers.firstIndex(where: { $0.id == id }), !input.layers[k].locked else { NSSound.beep(); return }
+            let ids = groupIDs.isEmpty ? [id] : groupIDs
+            let ks = input.layers.indices.filter { ids.contains(input.layers[$0].id) && !input.layers[$0].locked }
+            guard !ks.isEmpty else { NSSound.beep(); return }
             PlacementHistory.push(input, coalesce: true)
-            input.layers[k].x += Double(dx / out.width)
-            input.layers[k].y += Double(dy / out.height)
+            for k in ks {
+                input.layers[k].x += Double(dx / out.width)
+                input.layers[k].y += Double(dy / out.height)
+            }
         }
     }
 
@@ -546,14 +621,40 @@ struct PlacementCanvas: View {
                     return
                 }
                 var dx = v.translation.width / size.width, dy = v.translation.height / size.height
-                let (sx, gx) = snap([l0.x + dx, l0.x + l0.w / 2 + dx, l0.x + l0.w + dx])
-                let (sy, gy) = snap([l0.y + dy, l0.y + l0.h / 2 + dy, l0.y + l0.h + dy])
+                let others = layerTargets(excluding: [l0.id])
+                let (sx, gx) = snap([l0.x + dx, l0.x + l0.w / 2 + dx, l0.x + l0.w + dx], extra: others.x)
+                let (sy, gy) = snap([l0.y + dy, l0.y + l0.h / 2 + dy, l0.y + l0.h + dy], extra: others.y)
                 dx += sx; dy += sy
                 guides = gx + gy.map { -1 - $0 }
                 input.layers[j].x = l0.x + dx
                 input.layers[j].y = l0.y + dy
             }
             .onEnded { _ in startLayer = nil; guides = [] }
+    }
+
+    /// Several selected layers move together; the selection's outline snaps like a single box.
+    private func groupMove(_ size: CGSize) -> some Gesture {
+        drag()
+            .onChanged { v in
+                if startGroup.isEmpty {
+                    PlacementHistory.push(input); focused = true
+                    startGroup = input.layers.filter { groupIDs.contains($0.id) && !$0.locked }
+                }
+                guard !startGroup.isEmpty else { return }
+                let b = startGroup.map { CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h) }.reduce(CGRect.null) { $0.union($1) }
+                var dx = v.translation.width / size.width, dy = v.translation.height / size.height
+                let others = layerTargets(excluding: startGroup.map(\.id))
+                let (sx, gx) = snap([b.minX + dx, b.midX + dx, b.maxX + dx], extra: others.x)
+                let (sy, gy) = snap([b.minY + dy, b.midY + dy, b.maxY + dy], extra: others.y)
+                dx += sx; dy += sy
+                guides = gx + gy.map { -1 - $0 }
+                for l0 in startGroup {
+                    guard let j = input.layers.firstIndex(where: { $0.id == l0.id }) else { continue }
+                    input.layers[j].x = l0.x + dx
+                    input.layers[j].y = l0.y + dy
+                }
+            }
+            .onEnded { _ in startGroup = []; guides = [] }
     }
 
     /// Opposite corner stays put (in the layer's own axes, so this also works on rotated layers).
@@ -598,28 +699,35 @@ struct PlacementCanvas: View {
                 // the layer may have been moved / removed meanwhile (API, layout): find it by id
                 guard let j = input.layers.firstIndex(where: { $0.id == l0.id }) else { return }
                 let t = local(v.translation, l0.rotation)
-                let visW = max(0.05, 1 - l0.cropL - l0.cropR), visH = max(0.05, 1 - l0.cropT - l0.cropB)
+                let visW = max(0.001, 1 - l0.cropL - l0.cropR), visH = max(0.001, 1 - l0.cropT - l0.cropB)
                 let dx = Float(t.width / size.width / max(0.0001, l0.w)) * visW
                 let dy = Float(t.height / size.height / max(0.0001, l0.h)) * visH
-                func clamp(_ x: Float, _ other: Float) -> Float { max(0, min(0.95 - other, x)) }
+                // together the two sides cut at most 95 %; a crop already past that only moves back out
+                func clamp(_ x: Float, _ cur: Float, _ other: Float) -> Float { max(0, min(max(cur, 0.95 - other), x)) }
                 var l = l0
                 switch e {
-                case .left: l.cropL = clamp(l0.cropL + dx, l0.cropR)
-                case .right: l.cropR = clamp(l0.cropR - dx, l0.cropL)
-                case .top: l.cropT = clamp(l0.cropT + dy, l0.cropB)
-                case .bottom: l.cropB = clamp(l0.cropB - dy, l0.cropT)
+                case .left: l.cropL = clamp(l0.cropL + dx, l0.cropL, l0.cropR)
+                case .right: l.cropR = clamp(l0.cropR - dx, l0.cropR, l0.cropL)
+                case .top: l.cropT = clamp(l0.cropT + dy, l0.cropT, l0.cropB)
+                case .bottom: l.cropB = clamp(l0.cropB - dy, l0.cropB, l0.cropT)
                 }
                 // vMix crop: the box edge follows the handle, so the picture keeps its size and only that side
-                // is cut (the cropped part fills the box — SwitcherEngine.composeLayers)
-                if l0.rotation == 0 {
-                    let gw = l0.w / Double(visW), gh = l0.h / Double(visH)      // box size per unit of source
-                    switch e {
-                    case .left: let d = Double(l.cropL - l0.cropL) * gw; l.x = l0.x + d; l.w = l0.w - d
-                    case .right: l.w = l0.w - Double(l.cropR - l0.cropR) * gw
-                    case .top: let d = Double(l.cropT - l0.cropT) * gh; l.y = l0.y + d; l.h = l0.h - d
-                    case .bottom: l.h = l0.h - Double(l.cropB - l0.cropB) * gh
-                    }
+                // is cut (the cropped part fills the box — SwitcherEngine.composeLayers). Worked out in the
+                // layer's own axes, so a rotated layer behaves the same: the opposite edge stays put.
+                let W0 = l0.w * size.width, H0 = l0.h * size.height                   // canvas px
+                let gw = W0 / Double(visW), gh = H0 / Double(visH)                     // px per unit of source
+                var nw = W0, nh = H0, lx = 0.0, ly = 0.0                               // new size, centre shift (local)
+                switch e {
+                case .left: let d = Double(l.cropL - l0.cropL) * gw; nw = W0 - d; lx = d / 2
+                case .right: let d = Double(l.cropR - l0.cropR) * gw; nw = W0 - d; lx = -d / 2
+                case .top: let d = Double(l.cropT - l0.cropT) * gh; nh = H0 - d; ly = d / 2
+                case .bottom: let d = Double(l.cropB - l0.cropB) * gh; nh = H0 - d; ly = -d / 2
                 }
+                let a = l0.rotation * .pi / 180
+                let cx = (l0.x + l0.w / 2) * size.width + lx * cos(a) - ly * sin(a)
+                let cy = (l0.y + l0.h / 2) * size.height + lx * sin(a) + ly * cos(a)
+                l.w = max(1, nw) / size.width; l.h = max(1, nh) / size.height
+                l.x = cx / size.width - l.w / 2; l.y = cy / size.height - l.h / 2
                 // write back only geometry and crop — other fields may have changed meanwhile (API)
                 input.layers[j].x = l.x; input.layers[j].y = l.y; input.layers[j].w = l.w; input.layers[j].h = l.h
                 input.layers[j].cropL = l.cropL; input.layers[j].cropT = l.cropT
@@ -629,8 +737,9 @@ struct PlacementCanvas: View {
     }
 
     /// Snap to 0, ½, 1 and the 5 % / 10 % safe-area lines (same targets as the Preview position editor).
-    private func snap(_ values: [CGFloat]) -> (CGFloat, [CGFloat]) {
-        let targets: [CGFloat] = [0, 0.05, 0.1, 0.5, 0.9, 0.95, 1]
+    /// `extra`: edges / centres of other layers (Layers tab), so boxes line up with each other.
+    private func snap(_ values: [CGFloat], extra: [CGFloat] = []) -> (CGFloat, [CGFloat]) {
+        let targets: [CGFloat] = [0, 0.05, 0.1, 0.5, 0.9, 0.95, 1] + extra
         var best: (CGFloat, CGFloat)? = nil
         for v in values {
             for t in targets where abs(t - v) < 0.008 {

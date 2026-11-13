@@ -10,25 +10,24 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.1.7 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.1.8 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.1.7
-- **vMix처럼 정확한 숫자 조정:** 위치·레이어의 모든 값에 숫자칸과 −/+를 넣었습니다. 화살표 키는 한 단계, Shift는 열 단계입니다.
-- 화면 밖 상자도 회색 여백에서 계속 잡을 수 있습니다. 화면에 맞추기·가운데·원래 비율·전체 화면·위치 복사/붙여넣기와 레이어 잠금·불투명도·회전을 지원합니다.
-- **레이어 자르기가 상자를 채우며**, 투명 배경만 잘라내기가 화면 안에서 바로 안내됩니다. 이전 프로젝트는 열 때 자동 변환해 기존 모습을 유지합니다.
-- 지원되는 macOS에서 선택형 **AI 화질 올리기**로 저해상도 송출 소스를 Apple 실시간 모델로 확대합니다.
-- 레이어 합성 캐시와 프레임당 한 번의 GPU 대기로 측정한 레이어 다중 장면 렌더 시간이 약 절반으로 줄었습니다.
-- 40분 자동 안정성 시험에서 프레임 빠짐 0, 재시작 0, 메모리 302~365MB로 일정했습니다. 실제 마우스·키 이동·되돌리기는 직접 확인이 남았습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.7.ko.md) · [English](docs/RELEASE-NOTES-2.1.7.md)
+### 최신 업데이트 · 2.1.8
+- **레이어 위치 프리셋:** 위치·크기·자르기·회전·불투명도·테두리와 채우기/맞추기를 이름으로 저장해 어느 입력·프로젝트의 레이어에도 적용합니다.
+- **여러 레이어를 한꺼번에 편집:** Shift-클릭 또는 Command-A로 선택해 함께 이동하고 정렬·간격·크기를 맞춥니다. 다른 레이어의 가장자리와 가운데에도 스냅됩니다.
+- 회전한 레이어도 자르기 손잡이를 끌면 회전하지 않은 레이어처럼 그 상자 변이 움직입니다.
+- 2.1.7의 정확한 숫자 조정·화면 밖 회색 여백·되돌리기·레이어 회전/잠금·자르기 수정·AI 화질 올리기·성능 개선을 모두 포함합니다.
+- 10분 자동 시험에서 프리셋을 약 85회 적용하며 프레임 빠짐 0, 오류 0, 재시작 0, 메모리 344~450MB로 일정했습니다. 실제 마우스·키보드 조작은 직접 확인이 남았습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.8.ko.md) · [English](docs/RELEASE-NOTES-2.1.8.md)
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.7/ko-01-position-editor.png" alt="HongMix 2.1.7 정확한 위치 조정과 AI 화질 올리기" width="100%"><br><sub>정확한 위치 값·AI 화질 올리기·화면 밖 편집</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.7/ko-02-layers-editor.png" alt="HongMix 2.1.7 정밀 레이어 편집기" width="100%"><br><sub>레이어 회전·불투명도·잠금·자르기·픽셀 조정</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.8/ko-02-layers-editor.png" alt="HongMix 2.1.8 레이어 위치 프리셋" width="100%"><br><sub>정밀 배치를 다시 쓰는 레이어 위치 프리셋</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.1.8/ko-03-layers-align.png" alt="HongMix 2.1.8 여러 레이어 정렬" width="100%"><br><sub>여러 레이어 선택·정렬·간격·크기 조정</sub></td>
   </tr>
 </table>
 
