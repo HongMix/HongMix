@@ -104,6 +104,8 @@ struct InputEditorSheet: View {
     @ViewState private var streamID = ""
     @ViewState private var rtmpPath = "live/stream"
     @ViewState private var pullURL = ""
+    @ObservedObject private var srtPresets = SRTPresetStore.shared
+    @ViewState private var srtListNote: String? = nil
     // NDI / desktop
     @ViewState private var ndiMode = 0           // 0 NDI, 1 Desktop Capture
     @ViewState private var ndiSources: [String] = []
@@ -213,7 +215,7 @@ struct InputEditorSheet: View {
             }
             .padding(12)
         }
-        .frame(width: 820, height: 560)
+        .frame(width: 820, height: 640)
         .onAppear(perform: prepare)
     }
 
@@ -593,6 +595,8 @@ struct InputEditorSheet: View {
                 Text(Lf("송출 측 URL: rtmp://%@:%@/%@", "\(HTTPAPIServer.localIPAddress() ?? "이 맥 IP")", "\(port)", "\(rtmpPath)")).font(.caption).foregroundColor(.secondary)
             }
             if streamType.isSRT {
+                srtRecentList
+                srtLinkAdvice
                 NumberField("Latency", value: $latency, in: 20...8000, unit: "ms")
                 SecureField(L("암호 문구"), text: $passphrase)
                 TextField(L("스트림 ID"), text: $streamID)
@@ -602,6 +606,8 @@ struct InputEditorSheet: View {
                     .font(.caption).foregroundColor(.secondary)
                 Text(L("Latency는 상대방과 같게, 대략 왕복 지연(ping)의 4배 이상으로 설정하세요."))
                     .font(.caption).foregroundColor(.secondary)
+                Button { saveSRTToList() } label: { Label(L("목록에 저장…"), systemImage: "star") }
+                    .help(L("지금 칸의 SRT 설정을 이름 붙여 목록 맨 위에 저장합니다"))
             }
             Toggle(L("하드웨어 디코더 사용"), isOn: $cfg.hardwareDecode)
             Toggle(L("저지연 모드"), isOn: $cfg.lowLatency)
@@ -739,6 +745,109 @@ struct InputEditorSheet: View {
         }
     }
 
+    // MARK: SRT — recent / saved list, link advice
+
+    private var srtModeString: String {
+        streamType == .srtListener ? "listener" : streamType == .srtRendezvous ? "rendezvous" : "caller"
+    }
+
+    private var currentSRTPreset: SRTPreset {
+        SRTPreset(mode: srtModeString, host: streamType == .srtListener ? "" : host.trimmingCharacters(in: .whitespaces),
+                  port: port, latencyMs: latency, passphrase: passphrase, streamID: streamID)
+    }
+
+    private func fill(_ p: SRTPreset) {
+        streamType = p.mode == "listener" ? .srtListener : p.mode == "rendezvous" ? .srtRendezvous : .srtCaller
+        host = p.host; port = p.port; latency = p.latencyMs; passphrase = p.passphrase; streamID = p.streamID
+        srtListNote = nil
+    }
+
+    /// Recent and saved SRT endpoints: click = fill the fields, double-click = fill and apply (reconnect).
+    @ViewBuilder private var srtRecentList: some View {
+        let list = srtPresets.ordered
+        if !list.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(L("최근·저장한 SRT")).font(.caption.bold())
+                ForEach(list) { p in
+                    let current = p.key == currentSRTPreset.key
+                    HStack(spacing: 6) {
+                        Image(systemName: p.saved ? "star.fill" : "clock")
+                            .foregroundColor(p.saved ? .orange : .secondary).font(.system(size: 10))
+                        if p.saved { Text(p.name).font(.caption.weight(.semibold)).lineLimit(1) }
+                        Text(p.summary).font(.system(size: 11).monospacedDigit()).foregroundColor(.secondary).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(current ? L("지금 칸과 같음") : p.lastUsed.formatted(.dateTime.month(.defaultDigits).day()))
+                            .font(.system(size: 10)).foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(current ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.05)))
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        fill(p)
+                        if (NSApp.currentEvent?.clickCount ?? 1) >= 2 { commit() }
+                    }
+                    .contextMenu {
+                        Button(L("칸에 채우기")) { fill(p) }
+                        Button(L("채우고 바로 연결")) { fill(p); commit() }
+                        Divider()
+                        Button(p.saved ? L("이름 바꾸기…") : L("이름 붙여 저장…")) { renameSRT(p) }
+                        Button(L("목록에서 삭제"), role: .destructive) { srtPresets.remove(p.id) }
+                    }
+                }
+                Text(L("한 번 클릭 = 아래 칸에 채움 · 더블클릭 = 채우고 바로 다시 연결 · 오른쪽 클릭 = 이름 붙여 저장 / 삭제. 최근 10개는 자동으로 남고, 암호는 표시하지 않습니다."))
+                    .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                if let n = srtListNote { Text(n).font(.caption).foregroundColor(.orange) }
+            }
+        }
+    }
+
+    /// While this input is connected: its real RTT / loss / drops and the latency they call for.
+    @ViewBuilder private var srtLinkAdvice: some View {
+        if let e = editing, let l = engine.srtMonitor.links.first(where: { $0.id == "in:\(e.id)" }), l.stats.connected {
+            let rec = l.recommendedLatency
+            let ok = l.stats.latencyMs >= rec
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: ok ? "checkmark.circle" : "exclamationmark.triangle")
+                Text(Lf("지금 연결: RTT %@ ms · 손실 %@%% · 최근 드롭 %@ 패킷 → 권장 Latency %@ ms 이상 (지금 %@ ms)",
+                        String(format: "%.0f", l.stats.rttMs), String(format: "%.2f", l.stats.lossPercent),
+                        "\(l.recentDrops)", "\(rec)", "\(l.stats.latencyMs)"))
+                    .fixedSize(horizontal: false, vertical: true)
+                if !ok {
+                    Button(L("권장값 넣기")) { latency = max(latency, rec) }.controlSize(.small)
+                }
+            }
+            .font(.caption)
+            .foregroundColor(ok ? .green : .orange)
+        }
+    }
+
+    private func askName(_ title: String, _ initial: String) -> String? {
+        let a = NSAlert()
+        a.messageText = title
+        a.addButton(withTitle: L("저장"))
+        a.addButton(withTitle: L("취소"))
+        let f = NSTextField(string: initial)
+        f.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
+        a.accessoryView = f
+        a.window.initialFirstResponder = f
+        guard a.runModal() == .alertFirstButtonReturn else { return nil }
+        let n = f.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return n.isEmpty ? nil : n
+    }
+
+    private func saveSRTToList() {
+        let p = currentSRTPreset
+        guard p.isValid else { srtListNote = L("호스트·포트·Latency를 먼저 채우세요"); NSSound.beep(); return }
+        let initial = cfg.name.isEmpty ? (p.host.isEmpty ? "SRT :\(p.port)" : p.host) : cfg.name
+        guard let n = askName(L("SRT 설정 이름"), initial) else { return }
+        srtListNote = srtPresets.save(p, name: n) ? nil : Lf("‘%@’ 이름이 이미 있습니다. 다른 이름을 쓰세요.", n)
+    }
+
+    private func renameSRT(_ p: SRTPreset) {
+        guard let n = askName(L("SRT 설정 이름"), p.saved ? p.name : (p.host.isEmpty ? "SRT :\(p.port)" : p.host)) else { return }
+        srtListNote = srtPresets.rename(p.id, to: n) ? nil : Lf("‘%@’ 이름이 이미 있습니다. 다른 이름을 쓰세요.", n)
+    }
+
     private func parseStreamURL(_ url: String) {
         guard !url.isEmpty, let comps = URLComponents(string: url.replacingOccurrences(of: "#tcp", with: "")
             .replacingOccurrences(of: "#udp", with: "")) else { return }
@@ -797,7 +906,9 @@ struct InputEditorSheet: View {
         var c = cfg
         c.kind = kind
         switch kind {
-        case .stream: c.url = buildStreamURL()
+        case .stream:
+            c.url = buildStreamURL()
+            if streamType.isSRT { srtPresets.recordUse(currentSRTPreset) }
         case .media:
             c.lowLatency = false
             if category == .list {

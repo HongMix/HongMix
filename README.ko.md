@@ -10,27 +10,23 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.2.0 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.2.3 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.2.0
-- **메뉴 막대 아이콘 깜빡임 해결:** 방해 금지 단축어를 30초마다 실행하지 않고, 앱 시작·버튼 사용·HongMix로 돌아올 때만 확인합니다.
-- 2.1.7과 2.1.8의 정밀 위치/레이어 편집, AI 화질 올리기, 레이어 위치 프리셋과 다중 선택·정렬·간격·크기·스냅 기능을 모두 포함합니다.
-- AI 화질 올리기는 입력이 Program·Preview·송출 중 레이어에 올라가기 전까지 정확한 대기 상태를 표시합니다.
-- H.264·HEVC·ProRes·VP9·AV1·MPEG-2·알파·인터레이스·오디오 전용·이미지 등 합성 테스트 파일 22개를 모두 열고 재생했습니다.
-- 15분 시험과 빌드 121의 5분 재시험에서 프레임 빠짐 0, 오류 0, 재시작 0이었고 입력 22개를 연 상태에서도 메모리가 늘지 않았습니다. 실제 마우스·키보드 조작은 직접 확인이 남았습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.2.0.ko.md) · [English](docs/RELEASE-NOTES-2.2.0.md)
+### 최신 업데이트 · 2.2.3
+- **SRT 수신이 몇 분마다 끊기던 문제 해결:** 60fps 라이브 입력을 실제보다 약 2.7% 느리게 소비해 수신 버퍼가 넘치던 문제를 수정했습니다.
+- **끊김 원인을 블랙박스에 자동 기록:** 버퍼·Latency·RTT·손실·재전송·전송률·fps와 판정을 남기고, 직전 30초를 `srt.txt`로 저장합니다.
+- SRT 입력을 더블클릭하면 연결 설정을 바로 엽니다. 최근 연결과 이름 붙인 즐겨찾기에서 값을 채우거나 재연결하고, 현재 회선 상태와 권장 Latency를 확인합니다.
+- 여러 화면이 SRT 통계를 읽을 때 값을 서로 초기화해 전송률·손실·재전송이 0 또는 잘못된 값으로 보이던 문제를 수정했습니다.
+- 실제 회선과 로컬 SRT 시험에서 수정 후 수신 버퍼가 일정하고 드롭이 0이었습니다. 송신 중단과 대역폭 제한 시험은 각각 연결 끊김과 보내는 쪽 드롭으로 판정했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.2.3.ko.md) · [English](docs/RELEASE-NOTES-2.2.3.md)
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.2.0/ko-01-position-editor.png" alt="HongMix 2.2.0 위치 편집" width="100%"><br><sub>Program과 같은 미리보기를 보며 정밀하게 위치 편집</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.2.0/ko-02-layers-editor.png" alt="HongMix 2.2.0 레이어 위치 프리셋" width="100%"><br><sub>레이어 위치 프리셋과 화면 직접 편집</sub></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><img src="docs/screenshots/2.2.0/ko-03-layers-align.png" alt="HongMix 2.2.0 여러 레이어 정렬" width="75%"><br><sub>여러 레이어 선택·정렬·간격·크기 조정</sub></td>
+    <td colspan="2" align="center"><img src="docs/screenshots/2.2.1/ko-04-srt-settings.png" alt="HongMix 2.2.3 SRT 연결 설정" width="75%"><br><sub>최근·저장한 SRT 연결과 실시간 회선 안내</sub></td>
   </tr>
 </table>
 

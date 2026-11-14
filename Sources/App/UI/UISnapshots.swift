@@ -48,6 +48,12 @@ enum UISnapshots {
             // "inputmonitor-<n>": open the monitor window of input n (captured from the screen — it shows video)
             // "props-<n>-<tab>": Input Settings of input n on a tab (3 = Position, 6 = Layers) — 2.1.4
             let parts = name.lowercased().split(separator: "-")
+            // "editor-<n>": the source / connection editor of input n (SRT list, link advice) — 2.2.1
+            if parts.count == 2, parts[0] == "editor", let n = Int(parts[1]), n >= 1, n <= engine.inputs.count {
+                let i = engine.inputs[n - 1]
+                return window(InputEditorSheet(kind: i.kind, editing: i).environmentObject(engine)
+                                .frame(width: 820, height: 640), size: NSSize(width: 820, height: 640), title: "Snapshot props")
+            }
             // "props-<n>-6-all": Layers tab with every layer selected (align panel) — 2.1.8
             if parts.count == 4, parts[0] == "props", parts[3] == "all", let n = Int(parts[1]), let t = Int(parts[2]),
                t == 6, n >= 1, n <= engine.inputs.count {

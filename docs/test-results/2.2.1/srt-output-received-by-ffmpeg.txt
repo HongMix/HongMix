@@ -1,0 +1,1 @@
+frame= 7192 fps= 31 q=-0.0 Lsize=N/A time=00:04:00.00 bitrate=N/A speed=1.02x elapsed=0:03:55.33

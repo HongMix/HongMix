@@ -23,7 +23,11 @@ struct mc_srt {
     void *opaque;
     pthread_mutex_t lock;
     int closed;
-    int64_t rcv_retrans_total;   // libsrt only reports received retransmissions per interval
+    // One shared 1-second window for interval figures. Several readers (status board, statistics, API)
+    // used to clear libsrt's interval counters for each other, so rate / loss read as 0 or random.
+    int64_t win_t0_us;
+    int64_t win_pkts0, win_loss0;
+    double win_loss_pct;
     uint8_t pend[1500];          // remainder of a message when the caller asked for less than 1316 bytes
     int pend_off, pend_len;
 };
@@ -275,30 +279,39 @@ void mc_srt_get_stats(mc_srt *s, mc_srt_stats *o) {
         return;
     }
     SRT_TRACEBSTATS st;
-    if (srt_bstats(s->sock, &st, 1 /* clear interval counters */) == 0) {
+    // never clear libsrt's counters here (clear = 0); instantaneous = 1 → current rate and buffer
+    if (srt_bistats(s->sock, &st, 0, 1) == 0) {
         o->connected = srt_getsockstate(s->sock) == SRTS_CONNECTED;
         o->is_sender = s->is_sender;
         o->rtt_ms = st.msRTT;
         o->bandwidth_mbps = st.mbpsBandwidth;
         o->latency_ms = s->latency_ms;
+        int64_t pkts, loss;
         if (s->is_sender) {
             o->rate_mbps = st.mbpsSendRate;
-            o->pkts = st.pktSentTotal;
-            o->lost = st.pktSndLossTotal;
+            o->pkts = pkts = st.pktSentTotal;
+            o->lost = loss = st.pktSndLossTotal;
             o->retransmitted = st.pktRetransTotal;
             o->dropped = st.pktSndDropTotal;
-            o->loss_percent = st.pktSent > 0 ? 100.0 * st.pktSndLoss / st.pktSent : 0;
             o->buffer_ms = st.msSndBuf;
         } else {
             o->rate_mbps = st.mbpsRecvRate;
-            o->pkts = st.pktRecvTotal;
-            o->lost = st.pktRcvLossTotal;
-            s->rcv_retrans_total += st.pktRcvRetrans;
-            o->retransmitted = s->rcv_retrans_total;
+            o->pkts = pkts = st.pktRecvTotal;
+            o->lost = loss = st.pktRcvLossTotal;
+            o->retransmitted = st.pktRcvRetrans;          // never cleared (clear = 0): a running total
             o->dropped = st.pktRcvDropTotal;
-            o->loss_percent = st.pktRecv > 0 ? 100.0 * st.pktRcvLoss / (st.pktRecv + st.pktRcvLoss) : 0;
             o->buffer_ms = st.msRcvBuf;
         }
+        // loss % over a shared window of ≥ 1 s (the same for every reader)
+        int64_t now = mc_now_us();
+        if (s->win_t0_us == 0) {
+            s->win_t0_us = now; s->win_pkts0 = pkts; s->win_loss0 = loss;
+        } else if (now - s->win_t0_us >= 1000000) {
+            int64_t dp = pkts - s->win_pkts0, dl = loss - s->win_loss0;
+            s->win_loss_pct = (dp + dl) > 0 ? 100.0 * (double)dl / (double)(dp + dl) : 0;
+            s->win_t0_us = now; s->win_pkts0 = pkts; s->win_loss0 = loss;
+        }
+        o->loss_percent = s->win_loss_pct;
     }
     snprintf(o->peer, sizeof(o->peer), "%s", s->peer);
     snprintf(o->mode, sizeof(o->mode), "%s", s->mode);

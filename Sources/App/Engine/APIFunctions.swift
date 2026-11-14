@@ -1322,6 +1322,13 @@ enum APIProcessor {
                 x += String(format: "<inputUpscaleStats number=\"%d\" state=\"%@\" factor=\"%.2f\" ms=\"%.2f\" srcW=\"%d\" srcH=\"%d\" />",
                             e.number(of: i), "\(u.state)", u.factor, u.averageMs, u.sourceSize.0, u.sourceSize.1)
             }
+            if let fi = i as? FFmpegInput, let ss = fi.srtStats() {
+                // HongMix extension: SRT receive link (no peer address — the XML may be shown on other devices)
+                let link = e.srtMonitor.links.first { $0.id == "in:\(i.id)" }
+                x += String(format: "<inputSrtStats number=\"%d\" connected=\"%@\" mode=\"%@\" rttMs=\"%.1f\" lossPercent=\"%.2f\" lost=\"%lld\" retransmitted=\"%lld\" dropped=\"%lld\" recentDrops=\"%lld\" rateMbps=\"%.2f\" bufferMs=\"%d\" latencyMs=\"%d\" recommendedLatencyMs=\"%d\" />",
+                            e.number(of: i), tf(ss.connected), esc(ss.mode), ss.rttMs, ss.lossPercent, ss.lost, ss.retransmitted,
+                            ss.dropped, link?.recentDrops ?? 0, ss.rateMbps, ss.bufferMs, ss.latencyMs, link?.recommendedLatency ?? 0)
+            }
             if let fileInput = i as? FFmpegInput, let q = fileInput.audioQueueDiagnostics() {
                 x += String(format: "<inputAudioQueueStats number=\"%d\" currentMs=\"%.1f\" peakMs=\"%.1f\" lateChunks=\"%llu\" maxLateMs=\"%.1f\" pcmMinBeforeReadMs=\"%@\" />",
                             e.number(of: i), Double(q.queued_frames) / 48.0, Double(q.peak_queued_frames) / 48.0,

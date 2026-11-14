@@ -10,27 +10,23 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.2.0</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.2.3</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.2.0
-- **No more menu bar flicker:** the Do Not Disturb shortcut no longer runs every 30 seconds. HongMix checks it at launch, when the button is used and when you switch back to the app.
-- Includes 2.1.7 and 2.1.8: precise Position/Layer editing, AI Upscaling, reusable layer presets and multi-layer align, distribute, resize and snapping tools.
-- AI Upscaling now shows a clear waiting state until the input reaches Program, Preview or an on-air layer.
-- Compatibility testing opened and played 22 synthetic media files across H.264, HEVC, ProRes, VP9, AV1, MPEG-2, alpha, interlaced, audio-only and image formats.
-- A 15-minute soak plus a 5-minute build-121 rerun reported 0 dropped frames, 0 errors and 0 restarts; memory remained flat with 22 loaded inputs. Physical mouse and keyboard interactions still need hands-on checks. See [English notes](docs/RELEASE-NOTES-2.2.0.md) or [한국어](docs/RELEASE-NOTES-2.2.0.ko.md).
+### Latest update · 2.2.3
+- **Fixed SRT input dropping out every few minutes:** HongMix no longer consumes 60 fps live streams about 2.7% too slowly and lets the receive buffer overflow.
+- **The blackbox now says why an SRT link broke:** incidents include buffer, latency, RTT, loss, retransmissions, rate, fps and a verdict, plus the preceding 30 seconds in `srt.txt`.
+- Double-click an SRT input to edit its connection. Recent connections and named favorites can be filled or reconnected from the list, with live link advice and one-click recommended latency.
+- Fixed SRT rate, loss and retransmission statistics being reset by several readers and sometimes showing zero or incorrect values.
+- Real-link and local SRT tests kept the receive buffer stable with 0 drops after the pacing fix. Sender-stop and bandwidth-limit tests produced the expected disconnect and sender-drop verdicts. See [English notes](docs/RELEASE-NOTES-2.2.3.md) or [한국어](docs/RELEASE-NOTES-2.2.3.ko.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.2.0/en-01-position-editor.png" alt="HongMix 2.2.0 Position editor" width="100%"><br><sub>Precise Position editing with a Program-matched preview</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.2.0/en-02-layers-editor.png" alt="HongMix 2.2.0 layer presets" width="100%"><br><sub>Reusable layer presets and direct canvas editing</sub></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><img src="docs/screenshots/2.2.0/en-03-layers-align.png" alt="HongMix 2.2.0 multi-layer alignment" width="75%"><br><sub>Select, align, distribute and resize several layers together</sub></td>
+    <td colspan="2" align="center"><img src="docs/screenshots/2.2.1/en-04-srt-settings.png" alt="HongMix 2.2.3 SRT connection settings" width="75%"><br><sub>Recent and saved SRT connections with live link advice</sub></td>
   </tr>
 </table>
 

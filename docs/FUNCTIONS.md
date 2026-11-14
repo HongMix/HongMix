@@ -2,6 +2,8 @@
 
 HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 TCP 8099(`FUNCTION 이름 Input=…&Value=…`)로 제어합니다. 함수 이름과 파라미터 이름(Input, Value, Duration, SelectedName, SelectedIndex)은 vMix 공개 Web/TCP API와 같게 맞췄기 때문에, 기존 Companion·Stream Deck 버튼과 스크립트를 IP만 바꿔서 쓸 수 있습니다. 이 문서는 HongMix 동작을 기준으로 새로 작성했습니다.
 
+상태 XML에는 SRT 입력마다 `<inputSrtStats>`가 들어갑니다. `number`, `connected`, `mode`, `rttMs`, `lossPercent`, `lost`, `retransmitted`, `dropped`, `recentDrops`, `rateMbps`, `bufferMs`, `latencyMs`, `recommendedLatencyMs` 속성을 제공하며 상대 주소와 암호는 노출하지 않습니다.
+
 **공통 규칙**
 
 - `Input`에는 입력 번호(1부터), 입력 이름, 또는 key(UUID)를 넣을 수 있습니다.

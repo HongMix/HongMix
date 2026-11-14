@@ -639,6 +639,12 @@ struct InputBox: View {
 
     private var isProgram: Bool { engine.programID == input.id }
     private var isPreview: Bool { engine.previewID == input.id }
+    /// Double-click: a stream input (SRT, RTMP, UDP…) opens its connection settings — address, latency,
+    /// the recent / saved SRT list; every other input opens Input Settings (vMix habit).
+    private var doubleClickSheet: SheetRequest {
+        input.kind == .stream ? SheetRequest(kind: input.kind, editing: input)
+                              : SheetRequest(kind: input.kind, editing: input, mode: .properties)
+    }
     private var overlayChannels: [Int] { engine.overlayChannels(of: input.id) }
 
     private var headerColor: Color {
@@ -765,13 +771,14 @@ struct InputBox: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 if (NSApp.currentEvent?.clickCount ?? 1) >= 2 {
-                    sheet = SheetRequest(kind: input.kind, editing: input, mode: .properties)
+                    sheet = doubleClickSheet
                 } else if input.collapsed || input.folded {
                     engine.setPreview(input.id)
                 }
             }
             .overlay(RightClickCatcher { withAnimation(.easeInOut(duration: 0.15)) { input.folded.toggle() } })
-            .help(L("더블클릭: Input Settings · 우클릭: 접기/펼치기"))
+            .help(input.kind == .stream ? L("더블클릭: 연결 설정 (SRT 주소·Latency) · 우클릭: 접기/펼치기")
+                                        : L("더블클릭: Input Settings · 우클릭: 접기/펼치기"))
 
             if input.folded {
                 EmptyView()
@@ -832,7 +839,7 @@ struct InputBox: View {
                 .onTapGesture {
                     engine.setPreview(input.id)
                     if (NSApp.currentEvent?.clickCount ?? 1) >= 2 {
-                        sheet = SheetRequest(kind: input.kind, editing: input, mode: .properties)
+                        sheet = doubleClickSheet
                     }
                 }
             if input.adjust.fitMode != 0 {

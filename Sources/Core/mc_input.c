@@ -297,6 +297,7 @@ struct session {
     int64_t slack_min_us;        // live pacing: smallest "early" margin seen in the current window
     int64_t slack_t0_us;
     int64_t drain_us;            // live pacing: latency still to remove, spread over many frames
+    int drain_backlog;           // the drain was asked for by the SRT receive backlog (not cancelled by a late frame)
     int64_t prev_live_pts_us;
     int64_t live_t0_us;          // when live pacing (re)started
     int need_frame;          // show one frame after a seek even while paused
@@ -646,6 +647,7 @@ static void pace(mc_input *in, session *s, int64_t pts_us) {
             s->base_wall_us = now + LIVE_JITTER_US;
             s->slack_t0_us = 0;
             s->drain_us = 0;
+            s->drain_backlog = 0;
             s->prev_live_pts_us = 0;
             s->live_t0_us = now;
         }
@@ -661,20 +663,32 @@ static void pace(mc_input *in, session *s, int64_t pts_us) {
             target = s->base_wall_us;
             s->slack_t0_us = 0;
             s->drain_us = 0;
+            s->drain_backlog = 0;
         } else if (now > target) {
-            // frame arrived late: show it now and give the buffer that much more room
-            s->base_wall_us += now - target;
+            // Frame is late: show it now. Only a lateness of more than a frame (the source really
+            // arrived late: network stall, slower sender clock) moves the clock and gives the buffer
+            // more room. Smaller lateness is our own decode / wake-up jitter — moving the clock for it
+            // made 60 fps SRT play ~2.7 % slow, so libsrt's buffer grew until it overflowed and dropped
+            // packets (2.2.0). The jitter margin absorbs it instead.
+            int64_t late = now - target;
             target = now;
-            s->drain_us = 0;       // we're short of buffer, not long — stop draining
+            if (late > fdt) {
+                s->base_wall_us += late;
+                // short of buffer, not long: stop a slack drain — but never a drain the SRT backlog
+                // asked for (that backlog is real and only grows if we stop)
+                if (!s->drain_backlog) s->drain_us = 0;
+            }
         }
         // Gradual drain: play slightly fast (4 %, or 8 % while more than 200 ms is pending) until
         // caught up. Every frame still gets its own slot — even motion, no multi-frame bursts.
         if (s->drain_us > 0) {
-            int64_t step = s->drain_us > 200000 ? fdt / 12 : fdt / 25;
+            // 4 %, 8 % above 200 ms, 12.5 % above 1 s still to remove
+            int64_t step = s->drain_us > 1000000 ? fdt / 8 : s->drain_us > 200000 ? fdt / 12 : fdt / 25;
             if (step > s->drain_us) step = s->drain_us;
             s->base_wall_us -= step;
             target -= step;
             s->drain_us -= step;
+            if (s->drain_us <= 0) s->drain_backlog = 0;
         }
         // Every second: if every frame in the window was early by more than the jitter margin (or
         // libsrt is holding backlog beyond its latency), schedule a drain of the excess.
@@ -682,16 +696,22 @@ static void pace(mc_input *in, session *s, int64_t pts_us) {
         if (s->slack_t0_us == 0) { s->slack_t0_us = now; s->slack_min_us = slack; }
         if (slack < s->slack_min_us) s->slack_min_us = slack;
         if (now - s->slack_t0_us > 1000000) {
-            if (s->drain_us == 0) {
-                int backlog = s->srt ? mc_srt_backlog_ms(s->srt) : 0;
+            int backlog = s->srt ? mc_srt_backlog_ms(s->srt) : 0;
+            if (s->drain_us == 0 || (backlog > 250 && !s->drain_backlog)) {
                 int64_t want = 0;
                 // libsrt already de-jitters (TSBPD); our own hold and the demuxer also show up in its
-                // buffer (~60–90 ms), so drain only a clear excess, with hysteresis. A late frame cancels
-                // the drain, so it can never fight the jitter target.
-                if (backlog > 250) want = (int64_t)(backlog - 100) * 1000;   // hysteresis: 250 → 100
-                else if (s->slack_min_us > LIVE_JITTER_US / 2) want = s->slack_min_us - LIVE_JITTER_US / 4;
-                if (want > 600000) want = 600000;
-                s->drain_us = want;
+                // buffer (~60–90 ms), so drain only a clear excess, with hysteresis. A backlog drain
+                // runs to the end (a late frame can't cancel it); a slack drain stops at a late frame.
+                if (backlog > 250) {
+                    want = (int64_t)(backlog - 100) * 1000;               // hysteresis: 250 → 100
+                    if (want > 3000000) want = 3000000;
+                    s->drain_backlog = 1;
+                } else if (s->slack_min_us > LIVE_JITTER_US / 2) {
+                    want = s->slack_min_us - LIVE_JITTER_US / 4;
+                    if (want > 600000) want = 600000;
+                    s->drain_backlog = 0;
+                }
+                if (want > s->drain_us) s->drain_us = want;
             }
             s->slack_t0_us = now;
             s->slack_min_us = target - now;

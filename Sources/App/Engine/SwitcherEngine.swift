@@ -1410,7 +1410,14 @@ final class SwitcherEngine: ObservableObject {
     private func signalLost(_ i: InputSource) {
         let live = programID == i.id
         if live || overlayIDs.contains(i.id) {
-            blackbox.record(.signalLost, Lf("%@ 신호 끊김 (온에어)", i.name))
+            // SRT input: the link's state at this moment says why (HongMix / line / sender)
+            if let l = srtMonitor.links.first(where: { $0.id == "in:\(i.id)" }) {
+                blackbox.record(.signalLost, Lf("%@ 신호 끊김 (온에어)", i.name) + " · " + l.snapshot + " · " + l.verdict,
+                                attachment: ("srt.txt", l.historyText))
+            } else {
+                blackbox.record(.signalLost, Lf("%@ 신호 끊김 (온에어)", i.name)
+                                + (i.status.isEmpty ? "" : " · " + i.status))
+            }
         }
         if i.lossAlert {
             NSSound(named: live ? "Sosumi" : "Tink")?.play()
