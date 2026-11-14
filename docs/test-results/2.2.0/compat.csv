@@ -1,0 +1,23 @@
+file,n,type,state,w,h,fps,mfps,decode,lost,status,audio,drops
+01_h264_1080p2997_stereo48k.mp4,1,Video,Running,1920,1080,29.97,29.96,VideoToolbox,False,h264 + aac,0.082,0
+02_h264_720p5994.mp4,2,Video,Running,1280,720,59.94,59.91,VideoToolbox,False,h264 + aac,0.057,0
+03_h264_360p25_mono44k.mp4,3,Video,Running,640,360,25.00,25.00,VideoToolbox,False,h264 + aac,0.058,0
+04_h264_1080p50_bars.mp4,4,Video,Running,1920,1080,50.00,49.99,VideoToolbox,False,h264 + aac,0.057,0
+05_hevc_2160p30.mp4,5,Video,Running,3840,2160,30.00,29.97,VideoToolbox,False,hevc + aac,0.057,0
+06_hevc_1080p30_10bit_noaudio.mp4,6,Video,Running,1920,1080,30.00,29.98,VideoToolbox,False,hevc,0.000,0
+07_prores422hq_1080p2398_pcm24.mov,7,Video,Running,1920,1080,23.98,23.97,VideoToolbox,False,prores + pcm_s24le,0.057,0
+08_prores4444_alpha_lowerthird.mov,8,Video,Running,1920,1080,30.00,29.98,VideoToolbox,False,prores,0.000,0
+09_vp9_1080p30_opus.webm,9,Video,Running,1920,1080,30.00,29.98,VideoToolbox,False,vp9 + opus,0.057,0
+10_mpeg2_576i25_tff.mpg,10,Video,Running,720,576,25.00,25.00,Software,False,mpeg2video + mp2,0.057,0
+11_h264_480i2997_tff.mp4,11,Video,Running,720,480,29.97,29.97,Software,False,h264 + aac,0.057,0
+12_h264_vertical_1080x1920.mp4,12,Video,Running,1080,1920,30.00,29.97,VideoToolbox,False,h264 + aac,0.057,0
+13_av1_1080p30_noaudio.mp4,13,Video,Running,1920,1080,30.00,29.98,Software,False,libdav1d,0.000,0
+14_h264_1080p30_ac3_51.mkv,14,Video,Running,1920,1080,30.00,29.97,VideoToolbox,False,h264 + ac3,0.193,0
+15_h264_720p30_2s_short.mp4,15,Video,Paused,1280,720,0.00,0.00,VideoToolbox,False,재생 완료,0.000,0
+20_tone_1k_48k_stereo.wav,16,Video,Running,0,0,0.00,0.00,Pending,False,pcm_s16le,0.057,0
+21_tone_440_44k_stereo.mp3,17,Video,Running,0,0,0.00,0.00,Pending,False,mp3float,0.055,0
+22_tone_250_48k_stereo.m4a,18,Video,Running,0,0,0.00,0.00,Pending,False,aac,0.057,0
+30_png_1080p_opaque.png,19,Image,Running,1920,1080,29.97,0.00,n/a,False,1920×1080,0.000,0
+31_png_alpha_corner_logo.png,20,Image,Running,1920,1080,29.97,0.00,n/a,False,1920×1080,0.000,0
+32_jpg_4032x3024_large.jpg,21,Image,Running,4032,3024,29.97,0.00,n/a,False,4032×3024,0.000,0
+33_gif_animated_480x270.gif,22,Video,Paused,480,270,0.00,0.00,Software,False,재생 완료,0.000,0

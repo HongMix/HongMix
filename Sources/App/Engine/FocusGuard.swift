@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 
 /// Do Not Disturb while HongMix runs, so a call, message or notification can't take the keyboard,
 /// mouse or Companion control away from the operator (or appear over an output).
@@ -23,7 +24,8 @@ final class FocusGuard: ObservableObject {
     /// HongMix turned Do Not Disturb on (and so turns it off when it quits).
     private var turnedOnByHongMix = false
     private let queue = DispatchQueue(label: "hongmix.focus")
-    private var pollTimer: Timer?
+    private var activeObserver: NSObjectProtocol?
+    private var lastRefresh: CFTimeInterval = 0
     private var installWatch: Timer?
 
     static let autoOnKey = "focusAutoOn"
@@ -50,7 +52,7 @@ final class FocusGuard: ObservableObject {
             DispatchQueue.main.async {
                 self.installed = ok
                 self.focusName = current ?? (ok ? nil : "")
-                self.startPolling()
+                self.watchActivation()
                 if !ok {
                     self.askApproval(done: done)
                     return
@@ -173,15 +175,25 @@ final class FocusGuard: ObservableObject {
         }
     }
 
-    private func startPolling() {
-        pollTimer?.invalidate()
-        // The user can switch Focus in Control Center at any time; keep the lamp honest.
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in self?.refresh() }
+    /// Re-check the Focus state when the operator comes back to HongMix from another app (the Focus may
+    /// have been changed in Control Center or System Settings meanwhile). No periodic check: every
+    /// `shortcuts run` flashes the Shortcuts icon in the menu bar, and 2.1.1–2.1.8 did that every 30 s.
+    /// The top-bar button reads the state anyway when it toggles.
+    private func watchActivation() {
+        guard activeObserver == nil else { return }
+        activeObserver = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification,
+                                                                object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            let now = CACurrentMediaTime()
+            guard now - self.lastRefresh > 10 else { return }   // switching back and forth quickly: once is enough
+            self.lastRefresh = now
+            self.refresh()
+        }
     }
 
     /// Quit: turn Do Not Disturb off again if HongMix turned it on (synchronous, max ~4 s).
     func appWillQuit() {
-        pollTimer?.invalidate()
+        if let o = activeObserver { NotificationCenter.default.removeObserver(o); activeObserver = nil }
         guard installed, offOnQuit, turnedOnByHongMix else { return }
         turnedOnByHongMix = false
         _ = Self.runShortcut("off", timeout: 4)

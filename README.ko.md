@@ -10,24 +10,27 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.1.8 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.2.0 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.1.8
-- **레이어 위치 프리셋:** 위치·크기·자르기·회전·불투명도·테두리와 채우기/맞추기를 이름으로 저장해 어느 입력·프로젝트의 레이어에도 적용합니다.
-- **여러 레이어를 한꺼번에 편집:** Shift-클릭 또는 Command-A로 선택해 함께 이동하고 정렬·간격·크기를 맞춥니다. 다른 레이어의 가장자리와 가운데에도 스냅됩니다.
-- 회전한 레이어도 자르기 손잡이를 끌면 회전하지 않은 레이어처럼 그 상자 변이 움직입니다.
-- 2.1.7의 정확한 숫자 조정·화면 밖 회색 여백·되돌리기·레이어 회전/잠금·자르기 수정·AI 화질 올리기·성능 개선을 모두 포함합니다.
-- 10분 자동 시험에서 프리셋을 약 85회 적용하며 프레임 빠짐 0, 오류 0, 재시작 0, 메모리 344~450MB로 일정했습니다. 실제 마우스·키보드 조작은 직접 확인이 남았습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.1.8.ko.md) · [English](docs/RELEASE-NOTES-2.1.8.md)
+### 최신 업데이트 · 2.2.0
+- **메뉴 막대 아이콘 깜빡임 해결:** 방해 금지 단축어를 30초마다 실행하지 않고, 앱 시작·버튼 사용·HongMix로 돌아올 때만 확인합니다.
+- 2.1.7과 2.1.8의 정밀 위치/레이어 편집, AI 화질 올리기, 레이어 위치 프리셋과 다중 선택·정렬·간격·크기·스냅 기능을 모두 포함합니다.
+- AI 화질 올리기는 입력이 Program·Preview·송출 중 레이어에 올라가기 전까지 정확한 대기 상태를 표시합니다.
+- H.264·HEVC·ProRes·VP9·AV1·MPEG-2·알파·인터레이스·오디오 전용·이미지 등 합성 테스트 파일 22개를 모두 열고 재생했습니다.
+- 15분 시험과 빌드 121의 5분 재시험에서 프레임 빠짐 0, 오류 0, 재시작 0이었고 입력 22개를 연 상태에서도 메모리가 늘지 않았습니다. 실제 마우스·키보드 조작은 직접 확인이 남았습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.2.0.ko.md) · [English](docs/RELEASE-NOTES-2.2.0.md)
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.8/ko-02-layers-editor.png" alt="HongMix 2.1.8 레이어 위치 프리셋" width="100%"><br><sub>정밀 배치를 다시 쓰는 레이어 위치 프리셋</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.8/ko-03-layers-align.png" alt="HongMix 2.1.8 여러 레이어 정렬" width="100%"><br><sub>여러 레이어 선택·정렬·간격·크기 조정</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.2.0/ko-01-position-editor.png" alt="HongMix 2.2.0 위치 편집" width="100%"><br><sub>Program과 같은 미리보기를 보며 정밀하게 위치 편집</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.2.0/ko-02-layers-editor.png" alt="HongMix 2.2.0 레이어 위치 프리셋" width="100%"><br><sub>레이어 위치 프리셋과 화면 직접 편집</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/screenshots/2.2.0/ko-03-layers-align.png" alt="HongMix 2.2.0 여러 레이어 정렬" width="75%"><br><sub>여러 레이어 선택·정렬·간격·크기 조정</sub></td>
   </tr>
 </table>
 

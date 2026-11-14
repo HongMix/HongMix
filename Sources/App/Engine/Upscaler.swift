@@ -12,7 +12,8 @@ import QuartzCore
 /// Like background removal, the render thread never waits: it hands over the newest source frame and
 /// uses the newest finished result (one frame late at most while the model keeps up).
 final class Upscaler {
-    enum State: Equatable { case starting, running, notNeeded, unsupported, failed }
+    /// waiting = upscaling is on but the input isn't on air / in Preview, so nothing is processed.
+    enum State: Equatable { case starting, running, waiting, notNeeded, unsupported, failed }
 
     private let queue = DispatchQueue(label: "hongmix.upscale", qos: .userInteractive)
     private let lock = NSLock()
@@ -74,7 +75,12 @@ final class Upscaler {
         if stateStore == .unsupported { return nil }
         if stateStore == .notNeeded { stateStore = .starting }
         // off air: show the plain live source (input tiles, MultiView, buses) — never a frozen result
-        guard process else { lastOut = nil; return nil }
+        guard process else {
+            lastOut = nil
+            if stateStore == .starting || stateStore == .running { stateStore = .waiting }
+            return nil
+        }
+        if stateStore == .waiting { stateStore = .starting }
         let waiting = stateStore == .failed && CACurrentMediaTime() < retryAt
         if !waiting, src !== lastSrc, !busy {
             busy = true

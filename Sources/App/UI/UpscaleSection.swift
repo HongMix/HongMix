@@ -26,7 +26,7 @@ struct UpscaleSection: View {
         let u = input.upscaler
         let frameMs = 1000 / max(1, VideoSlot.programFPS)
         switch u?.state {
-        case nil:
+        case nil, .waiting?:
             Text(L("송출이나 Preview에 올리면 시작합니다")).foregroundColor(.secondary)
         case .notNeeded?:
             let s = u!.sourceSize

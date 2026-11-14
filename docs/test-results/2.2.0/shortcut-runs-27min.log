@@ -1,0 +1,14 @@
+# `shortcuts run "HongMix Focus"` processes seen (50 ms process watch), build 120 15:41-16:04 then build 121 16:04-16:10.
+# 15:41:46 launch (status, on) · 15:59:59 quit (off) · 16:00:17-20 relaunch (status, on, activation re-check) · 16:04:14 launch build 121 · 16:10:40 quit (off).
+# No run during playout: no periodic check any more (2.1.8 ran one every 30 s).
+    9.8s 15:41:46 15951 /usr/bin/shortcuts run HongMix Focus
+   10.1s 15:41:46 15961 /usr/bin/shortcuts run HongMix Focus
+ 1102.6s 15:59:59 29262 /usr/bin/shortcuts run HongMix Focus
+ 1120.9s 16:00:17 29517 /usr/bin/shortcuts run HongMix Focus
+ 1121.3s 16:00:18 29523 /usr/bin/shortcuts run HongMix Focus
+ 1123.7s 16:00:20 29560 /usr/bin/shortcuts run HongMix Focus
+ 1357.3s 16:04:14 33222 /usr/bin/shortcuts run HongMix Focus
+ 1357.6s 16:04:14 33235 /usr/bin/shortcuts run HongMix Focus
+   10.0s 16:04:14 33222 /usr/bin/shortcuts run HongMix Focus
+   10.4s 16:04:14 33235 /usr/bin/shortcuts run HongMix Focus
+  396.1s 16:10:40 39439 /usr/bin/shortcuts run HongMix Focus

@@ -10,24 +10,27 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.1.8</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.2.0</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.1.8
-- **Layer presets:** save position, size, crop, rotation, opacity, border and Fit/Fill by name, then apply the placement to any layer in any project.
-- **Edit several layers at once:** Shift-click or Command-A, move together, align, space evenly and match size. Boxes now snap to other layers' edges and centers.
-- Cropping a rotated layer now moves that box edge like an unrotated layer.
-- Includes the precise numeric controls, gray off-frame margin, Undo, layer rotation/lock, fixed crop behavior, AI Upscaling and layer-performance work introduced in 2.1.7.
-- A 10-minute automated soak applied presets about 85 times with 0 dropped frames, 0 errors, 0 restarts and flat 344–450 MB memory. Physical mouse and keyboard interactions still need hands-on checks. See [English notes](docs/RELEASE-NOTES-2.1.8.md) or [한국어](docs/RELEASE-NOTES-2.1.8.ko.md).
+### Latest update · 2.2.0
+- **No more menu bar flicker:** the Do Not Disturb shortcut no longer runs every 30 seconds. HongMix checks it at launch, when the button is used and when you switch back to the app.
+- Includes 2.1.7 and 2.1.8: precise Position/Layer editing, AI Upscaling, reusable layer presets and multi-layer align, distribute, resize and snapping tools.
+- AI Upscaling now shows a clear waiting state until the input reaches Program, Preview or an on-air layer.
+- Compatibility testing opened and played 22 synthetic media files across H.264, HEVC, ProRes, VP9, AV1, MPEG-2, alpha, interlaced, audio-only and image formats.
+- A 15-minute soak plus a 5-minute build-121 rerun reported 0 dropped frames, 0 errors and 0 restarts; memory remained flat with 22 loaded inputs. Physical mouse and keyboard interactions still need hands-on checks. See [English notes](docs/RELEASE-NOTES-2.2.0.md) or [한국어](docs/RELEASE-NOTES-2.2.0.ko.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.8/en-02-layers-editor.png" alt="HongMix 2.1.8 layer presets" width="100%"><br><sub>Reusable layer presets with precise placement controls</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.1.8/en-03-layers-align.png" alt="HongMix 2.1.8 multi-layer alignment" width="100%"><br><sub>Select, align, distribute and resize several layers together</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.2.0/en-01-position-editor.png" alt="HongMix 2.2.0 Position editor" width="100%"><br><sub>Precise Position editing with a Program-matched preview</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.2.0/en-02-layers-editor.png" alt="HongMix 2.2.0 layer presets" width="100%"><br><sub>Reusable layer presets and direct canvas editing</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/screenshots/2.2.0/en-03-layers-align.png" alt="HongMix 2.2.0 multi-layer alignment" width="75%"><br><sub>Select, align, distribute and resize several layers together</sub></td>
   </tr>
 </table>
 
