@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""English UI check: every Korean L("…") / Lf("…") key in Sources/App must exist in Resources/en.json,
+"""English UI check: every Korean L("…") / Lf("…") / WL("…") key in Sources/App must exist in Resources/en.json,
 and L() must not be cached in a `static let` (it would keep the first language after a switch).
 Run by build-cli.sh; exit 1 = missing translations (listed)."""
 import json, os, re, sys
@@ -7,7 +7,7 @@ import json, os, re, sys
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 en = json.load(open(os.path.join(root, "Resources/en.json"), encoding="utf-8"))
 hangul = re.compile("[가-힣]")
-call = re.compile(r'\bLf?\(\s*"((?:[^"\\\n]|\\.)*)"')
+call = re.compile(r'\b(?:Lf?|WL)\(\s*"((?:[^"\\\n]|\\.)*)"')   # WL = web remote (KO + EN)
 static_let = re.compile(r'^\s*(?:private |fileprivate )?static let \w+[^=\n]*=\s*(.*)$')
 
 def unescape(s):

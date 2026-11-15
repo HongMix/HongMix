@@ -626,7 +626,7 @@ struct RemoteControlSection: View {
                     TextField(L("허용할 IP만 (쉼표로 구분, 비우면 모두)"), text: $apiAllowed)
                 }
                 SecureField(L("웹/HTTP 비밀번호 (비우면 없음)"), text: $apiPassword)
-                Text(L("다른 웹사이트가 브라우저를 통해 명령을 보내는 것은 항상 차단됩니다. 비밀번호를 정하면 웹 리모트·HTTP API 접속 때 묻습니다(사용자 이름은 아무거나). TCP 8099(Companion vMix 모듈)는 IP 제한만 적용됩니다. 바꾼 설정은 바로 적용됩니다."))
+                Text(L("다른 웹사이트가 브라우저를 통해 명령을 보내는 것은 항상 차단됩니다. 비밀번호를 정하면 웹 리모트·HTTP API 접속 때 묻습니다(사용자 이름은 아무거나). 카메라 탈리(/tally)는 보기만 할 수 있어 비밀번호 없이 열립니다. TCP 8099(Companion vMix 모듈)는 IP 제한만 적용됩니다. 바꾼 설정은 바로 적용됩니다."))
                     .font(.caption).foregroundColor(.secondary)
                 LabeledContent(L("상태"), value: engine.apiStatus)
             }

@@ -95,8 +95,25 @@ final class HTTPAPIServer {
                 guard let i = l.firstIndex(of: ":") else { continue }
                 headers[l[..<i].lowercased()] = l[l.index(after: i)...].trimmingCharacters(in: .whitespaces)
             }
-            if let deny = HTTPAPIServer.reject(headers) {
+            let path = target.split(separator: "?", maxSplits: 1).first.map(String.init)?.lowercased() ?? "/"
+            if let deny = HTTPAPIServer.reject(headers, path: path) {
                 self.reply(conn, deny.0, "text/plain; charset=utf-8", Data(deny.1.utf8), extra: deny.2)
+                return
+            }
+            if path == "/thumb" || path == "/thumbnail" {
+                // picture on the main thread, JPEG encoding here (keeps the switcher UI free)
+                let queryPart = target.contains("?") ? String(target.split(separator: "?", maxSplits: 1)[1]) : ""
+                let q = APIProcessor.parseQuery(queryPart)
+                DispatchQueue.main.async {
+                    let pb = self.engine.flatMap { WebRemote.thumbBuffer(q, $0) }
+                    self.queue.async {
+                        if let pb = pb, let jpg = self.thumbnail(pb, width: Int(q["width"] ?? "") ?? 320) {
+                            self.reply(conn, "200 OK", "image/jpeg", jpg, extra: "Cache-Control: no-store\r\n")
+                        } else {
+                            self.reply(conn, "404 Not Found", "text/plain", Data("no picture".utf8))
+                        }
+                    }
+                }
                 return
             }
             DispatchQueue.main.async {
@@ -108,14 +125,14 @@ final class HTTPAPIServer {
 
     /// Blocks other websites from driving the switcher through the operator's browser (cross-site
     /// requests), and asks for the password when one is set.
-    static func reject(_ h: [String: String]) -> (String, String, String)? {
+    static func reject(_ h: [String: String], path: String = "/") -> (String, String, String)? {
         if h["sec-fetch-site"] == "cross-site" { return ("403 Forbidden", "cross-site request blocked", "") }
         if let origin = h["origin"], let host = h["host"] {
             let o = origin.replacingOccurrences(of: "http://", with: "").replacingOccurrences(of: "https://", with: "")
             if o != host { return ("403 Forbidden", "cross-origin request blocked", "") }
         }
         let pw = APIAccess.password
-        if !pw.isEmpty {
+        if !pw.isEmpty && !WebRemote.publicPaths.contains(path) {    // the tally is view-only: no password
             var ok = false
             if let a = h["authorization"], a.lowercased().hasPrefix("basic "),
                let d = Data(base64Encoded: String(a.dropFirst(6))), let s = String(data: d, encoding: .utf8),
@@ -140,18 +157,7 @@ final class HTTPAPIServer {
 
     private let ciContext = CIContext(options: [.cacheIntermediates: false])
 
-    /// Binary routes (thumbnails) first, then the text routes.
     private func routeData(_ target: String) -> (String, String, Data) {
-        let pathPart = target.split(separator: "?", maxSplits: 1).first.map(String.init)?.lowercased() ?? "/"
-        if pathPart == "/thumb" || pathPart == "/thumbnail" {
-            let queryPart = target.contains("?") ? String(target.split(separator: "?", maxSplits: 1)[1]) : ""
-            let q = APIProcessor.parseQuery(queryPart)
-            if let e = engine, let i = APIProcessor.resolveInput(q["input"], e), let pb = i.currentFrame(),
-               let jpg = thumbnail(pb, width: Int(q["width"] ?? "") ?? 320) {
-                return ("200 OK", "image/jpeg", jpg)
-            }
-            return ("404 Not Found", "text/plain", Data("no picture".utf8))
-        }
         let (st, ct, body) = route(target)
         return (st, ct, Data(body.utf8))
     }
@@ -159,7 +165,7 @@ final class HTTPAPIServer {
     /// Small JPEG of an input's latest frame (works for BGRA and NV12 sources).
     private func thumbnail(_ pb: CVPixelBuffer, width: Int) -> Data? {
         let img = CIImage(cvPixelBuffer: pb)
-        let w = max(64, min(1280, width))
+        let w = max(64, min(960, width))
         let scale = CGFloat(w) / max(1, img.extent.width)
         let small = img.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         guard let cs = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
@@ -174,7 +180,13 @@ final class HTTPAPIServer {
         let path = pathPart.lowercased()
         let q = APIProcessor.parseQuery(queryPart)
         if path == "/" || path == "/index.html" {
-            return ("200 OK", "text/html; charset=utf-8", controllerPage())
+            return ("200 OK", "text/html; charset=utf-8", WebRemote.remotePage())
+        }
+        if path == "/remote.json" {
+            return ("200 OK", "application/json; charset=utf-8", WebRemote.remoteState(engine))
+        }
+        if path == "/tally.json" {
+            return ("200 OK", "application/json; charset=utf-8", WebRemote.tallyState(engine))
         }
         if path == "/api" || path == "/api/" {
             if let fn = q["function"], !fn.isEmpty {
@@ -187,105 +199,12 @@ final class HTTPAPIServer {
         }
         if path == "/tally" || path == "/tally/" {
             // vMix-style phone tally light (pick an input, the whole screen turns red/green)
-            return ("200 OK", "text/html; charset=utf-8", tallyPage())
+            return ("200 OK", "text/html; charset=utf-8", WebRemote.tallyPage())
         }
         if path == "/tally.txt" {
             return ("200 OK", "text/plain", APIProcessor.tallyString(engine))
         }
         return ("404 Not Found", "text/plain", "not found")
-    }
-
-    private func tallyPage() -> String {
-        return #"""
-<!doctype html><html lang="ko"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<title>HongMix Tally</title>
-<style>
-html,body{margin:0;height:100%;background:#111;color:#fff;font:600 18px -apple-system,system-ui,sans-serif}
-#pick{padding:16px}#pick h1{font-size:18px;color:#aaa}
-#pick button{display:block;width:100%;margin:8px 0;padding:18px;font-size:20px;border-radius:12px;border:0;background:#2a2a2e;color:#fff;text-align:left}
-#light{display:none;position:fixed;inset:0;align-items:center;justify-content:center;flex-direction:column;transition:background .08s}
-#num{font-size:30vw;font-weight:800;line-height:1}#name{font-size:6vw;opacity:.85;margin-top:2vh;padding:0 4vw;text-align:center}
-#state{position:fixed;top:3vh;font-size:5vw;letter-spacing:.2em}
-#back{position:fixed;bottom:3vh;font-size:14px;opacity:.5;background:none;border:0;color:#fff}
-.pgm{background:#d01818}.pvw{background:#14a83a}.off{background:#141414}
-</style></head><body>
-<div id="pick"><h1>탈리 — 입력 선택</h1><div id="list">불러오는 중…</div></div>
-<div id="light"><div id="state"></div><div id="num"></div><div id="name"></div><button id="back" onclick="choose(0)">입력 바꾸기</button></div>
-<script>
-let sel=+(new URLSearchParams(location.search).get('input')||localStorage.getItem('bmTally')||0),lock=null;
-function choose(n){sel=n;localStorage.setItem('bmTally',n);document.getElementById('pick').style.display=n?'none':'block';
- document.getElementById('light').style.display=n?'flex':'none';if(n&&navigator.wakeLock)navigator.wakeLock.request('screen').then(l=>lock=l).catch(()=>{});tick();}
-function tick(){fetch('/api').then(r=>r.text()).then(t=>{const x=new DOMParser().parseFromString(t,'text/xml');
- const act=x.querySelector('active').textContent,pv=x.querySelector('preview').textContent;
- const ovl=[...x.querySelectorAll('overlays overlay')].map(o=>o.textContent).filter(Boolean);
- const inputs=[...x.querySelectorAll('inputs input')];
- if(!sel){const l=document.getElementById('list');l.innerHTML='';inputs.forEach(i=>{const b=document.createElement('button');const n=+i.getAttribute('number');
-  const im=document.createElement('img');im.src='/thumb?input='+n+'&width=320&t='+Date.now();b.appendChild(im);
-  b.appendChild(document.createTextNode(n+'. '+i.getAttribute('title')));b.onclick=()=>choose(n);l.appendChild(b);});return;}
- const me=inputs.find(i=>+i.getAttribute('number')==sel);const live=act==sel||ovl.includes(String(sel));
- const L=document.getElementById('light');L.className=live?'pgm':(pv==sel?'pvw':'off');
- document.getElementById('state').textContent=live?'ON AIR':(pv==sel?'PREVIEW':'');
- document.getElementById('num').textContent=sel;document.getElementById('name').textContent=me?me.getAttribute('title'):'(없음)';
-}).catch(()=>{document.getElementById('state').textContent='연결 끊김';});}
-choose(sel);setInterval(tick,250);
-</script></body></html>
-"""#
-    }
-
-    private func controllerPage() -> String {
-        return #"""
-<!doctype html><html lang="ko"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HongMix 리모트</title>
-<style>
-body{margin:0;background:#111;color:#eee;font:15px -apple-system,system-ui,sans-serif;padding:12px}
-h1{font-size:16px;margin:4px 0 12px;color:#aaa}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
-.grid img{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#000;border-radius:4px;margin-bottom:6px}
-button{background:#2a2a2e;color:#eee;border:2px solid #333;border-radius:8px;padding:14px 8px;font-size:15px}
-button.pgm{border-color:#e33;background:#4a1515}
-button.pvw{border-color:#2c2;background:#153a15}
-.row{display:flex;gap:8px;margin:12px 0;flex-wrap:wrap}
-.row button{flex:1;min-width:90px}
-.big{font-weight:700}
-#st{color:#888;font-size:13px}
-</style></head><body>
-<h1>HongMix 리모트 <span id="st"></span></h1>
-<div class="row">
-<button class="big" onclick="f('Cut')">CUT</button>
-<button class="big" onclick="f('Fade')">AUTO</button>
-<button onclick="f('FadeToBlack')">FTB</button>
-<button onclick="f('OverlayInput1Out')">OVL OFF</button>
-</div>
-<div class="grid" id="inputs"></div>
-<div class="row">
-<button onclick="f('StartStopStreaming')" id="stream">STREAM</button>
-<button onclick="f('StartStopRecording')" id="rec">REC</button>
-</div>
-<p id="st2" style="color:#777;font-size:12px">입력 버튼: 탭 = 프리뷰, 길게 누르기 = 바로 컷 · 카메라 탈리: <a style="color:#8af" href="/tally">/tally</a></p>
-<script>
-function f(fn,input){let u='/api/?Function='+fn;if(input)u+='&Input='+input;fetch(u).then(load);}
-let pressT;
-function load(){fetch('/api').then(r=>r.text()).then(t=>{
- const x=new DOMParser().parseFromString(t,'text/xml');
- const act=x.querySelector('active').textContent, pv=x.querySelector('preview').textContent;
- const g=document.getElementById('inputs');g.innerHTML='';
- x.querySelectorAll('inputs input').forEach(i=>{
-  const b=document.createElement('button');const n=i.getAttribute('number');
-  b.textContent=n+'. '+i.getAttribute('title');
-  if(n==act)b.className='pgm';else if(n==pv)b.className='pvw';
-  b.onpointerdown=()=>{pressT=setTimeout(()=>{pressT=null;f('CutDirect',n)},600)};
-  b.onpointerup=()=>{if(pressT){clearTimeout(pressT);f('PreviewInput',n)}};
-  g.appendChild(b);});
- document.getElementById('stream').style.borderColor=x.querySelector('streaming').textContent=='True'?'#e33':'#333';
- document.getElementById('rec').style.borderColor=x.querySelector('recording').textContent=='True'?'#e33':'#333';
- document.getElementById('st').textContent=(x.querySelector('format')||{textContent:''}).textContent;
-});}
-load();setInterval(load,1500);
-</script></body></html>
-"""#
     }
 
     /// First non-loopback IPv4 address (for display).

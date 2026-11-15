@@ -279,6 +279,14 @@ final class TitleInput: InputSource {
         return cdRemaining
     }
 
+    /// Web remote: seconds left, running, paused.
+    var countdownStatus: (remaining: Double, running: Bool, paused: Bool) {
+        let now = CACurrentMediaTime()
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return (remaining(at: now), cdRunning, cdPaused)
+    }
+
     func setCountdown(_ seconds: Double) {
         stateLock.lock()
         cdRemaining = max(0, seconds)

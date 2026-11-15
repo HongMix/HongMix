@@ -180,6 +180,16 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `BrowserReload / BrowserBack / BrowserForward` | Input | 새로고침, 뒤로, 앞으로. |
 | `BrowserKeyboardEnabled/Disabled, BrowserMouseEnabled/Disabled` | Input | 호환용입니다. 페이지 조작은 입력 메뉴의 '브라우저 창 열기'에서 합니다. |
 
+## 웹 페이지 (HTTP 8088, 2.2.4)
+
+| 주소 | 내용 |
+|---|---|
+| `/` | 휴대폰 웹 리모트. 탭 3개 — **스위처**(입력 썸네일, 탭 = Preview·길게 = 바로 컷, CUT·AUTO·FTB, 전환 효과·시간, T-바, 오버레이 1~4, 미디어 재생 제어, STREAM·REC는 끌 때 1초 길게 누르기), **오디오**(입력별 볼륨·음소거·레벨 미터, 마스터, 카운트다운 시작·일시정지·정지·±1분), **타이틀**(텍스트 수정 후 적용, 프리셋, IN/OUT, 오버레이 1). 상단에 송출·녹화 시간, 드롭 프레임, SRT 상태(RTT·손실·버린 패킷). 앱 언어(한국어/영어)를 따릅니다. |
+| `/tally` | 카메라 탈리(Program 빨강, Preview 초록). **보기 전용이라 HTTP 비밀번호 없이 열립니다**(IP 제한은 적용). 화면 꺼짐 방지: https가 아니어도 동작하도록 무음 영상 재생으로 보완. |
+| `/remote.json` | 웹 리모트가 읽는 상태(JSON). 비밀번호 적용. 파일 경로·주소·키는 들어가지 않습니다. |
+| `/tally.json` | 탈리 상태(입력 번호·이름·0/1/2). 비밀번호 없이 열림. |
+| `/thumb?Input=n&width=240` | 입력 썸네일 JPEG. 비밀번호 적용. |
+
 ## TCP 8099 명령
 
 | 명령 | 응답 |

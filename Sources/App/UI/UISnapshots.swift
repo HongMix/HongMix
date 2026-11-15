@@ -49,6 +49,11 @@ enum UISnapshots {
             // "props-<n>-<tab>": Input Settings of input n on a tab (3 = Position, 6 = Layers) — 2.1.4
             let parts = name.lowercased().split(separator: "-")
             // "editor-<n>": the source / connection editor of input n (SRT list, link advice) — 2.2.1
+            // "new-<kind>": the Add Input source editor for a new input of that kind (manual screenshots) — 2.2.5
+            if parts.count == 2, parts[0] == "new", let k = InputKind.allCases.first(where: { $0.rawValue.lowercased() == parts[1] }) {
+                return window(InputEditorSheet(kind: k, editing: nil).environmentObject(engine)
+                                .frame(width: 820, height: 640), size: NSSize(width: 820, height: 640), title: "Snapshot props")
+            }
             if parts.count == 2, parts[0] == "editor", let n = Int(parts[1]), n >= 1, n <= engine.inputs.count {
                 let i = engine.inputs[n - 1]
                 return window(InputEditorSheet(kind: i.kind, editing: i).environmentObject(engine)

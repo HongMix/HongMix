@@ -10,23 +10,29 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.2.3</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.2.5</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.2.3
-- **Fixed SRT input dropping out every few minutes:** HongMix no longer consumes 60 fps live streams about 2.7% too slowly and lets the receive buffer overflow.
-- **The blackbox now says why an SRT link broke:** incidents include buffer, latency, RTT, loss, retransmissions, rate, fps and a verdict, plus the preceding 30 seconds in `srt.txt`.
-- Double-click an SRT input to edit its connection. Recent connections and named favorites can be filled or reconnected from the list, with live link advice and one-click recommended latency.
-- Fixed SRT rate, loss and retransmission statistics being reset by several readers and sometimes showing zero or incorrect values.
-- Real-link and local SRT tests kept the receive buffer stable with 0 drops after the pacing fix. Sender-stop and bandwidth-limit tests produced the expected disconnect and sender-drop verdicts. See [English notes](docs/RELEASE-NOTES-2.2.3.md) or [한국어](docs/RELEASE-NOTES-2.2.3.ko.md).
+### Latest update · 2.2.5
+- **The switcher now runs in a browser:** the web remote mirrors HongMix's Preview, transition controls, Program, input tiles, overlays and Audio Mixer.
+- **Responsive controls for laptops, iPads and phones:** iPad landscape keeps the desktop workflow; portrait and phones use compact bottom tabs.
+- Every input tile has Cut, playback and overlay 1–8 controls, while Program has its own transport and seek bar.
+- Record, Stream and External always ask for confirmation, fixing Stream restarting after a long press. Camera tally is view-only, needs no password and keeps the screen awake.
+- A complete illustrated [English manual](docs/manual/HongMix-Manual.en.md) and [한국어 설명서](docs/manual/HongMix-Manual.ko.md) now cover setup, inputs, switching, audio, outputs, safety, web control and troubleshooting.
+- Automated page checks passed 196/196 and real-app integration checks passed 47/47 with 0 dropped frames. Physical phone and iPad testing is still pending. See [English notes](docs/RELEASE-NOTES-2.2.5.md) or [한국어](docs/RELEASE-NOTES-2.2.5.ko.md).
 
 <table>
   <tr>
-    <td colspan="2" align="center"><img src="docs/screenshots/2.2.1/en-04-srt-settings.png" alt="HongMix 2.2.3 SRT connection settings" width="75%"><br><sub>Recent and saved SRT connections with live link advice</sub></td>
+    <td width="50%" align="center"><img src="docs/manual/images/en-09-web-remote-desktop.png" alt="HongMix 2.2.5 web remote on desktop" width="100%"><br><sub>Desktop web remote · the switcher in a browser</sub></td>
+    <td width="50%" align="center"><img src="docs/manual/images/en-10-web-remote-ipad.png" alt="HongMix 2.2.5 web remote on iPad" width="100%"><br><sub>Responsive iPad layout</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="docs/manual/images/en-11-web-remote-phone.png" alt="HongMix 2.2.5 web remote on phone" width="100%"><br><sub>Phone controls with bottom tabs</sub></td>
+    <td width="50%" align="center"><img src="docs/manual/images/en-12-tally.png" alt="HongMix 2.2.5 camera tally" width="100%"><br><sub>View-only camera tally</sub></td>
   </tr>
 </table>
 
