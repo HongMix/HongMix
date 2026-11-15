@@ -622,8 +622,13 @@ struct RemoteControlSection: View {
                     Text(L("같은 네트워크의 장비 (Companion·Stream Deck·휴대폰)")).tag("lan")
                     Text(L("이 맥에서만")).tag("local")
                 }
-                if apiMode != "local" {
+                .onChange(of: apiMode) { _, _ in engine.applyRemoteControl() }
+                if apiMode == "local" {
+                    Text(L("이 맥에서만: 휴대폰·아이패드·다른 컴퓨터에서는 웹 리모트가 열리지 않습니다. 휴대폰으로 쓰려면 '같은 네트워크의 장비'를 고르세요."))
+                        .font(.caption).foregroundColor(.orange)
+                } else {
                     TextField(L("허용할 IP만 (쉼표로 구분, 비우면 모두)"), text: $apiAllowed)
+                        .onChange(of: apiAllowed) { _, _ in engine.applyRemoteControl() }
                 }
                 SecureField(L("웹/HTTP 비밀번호 (비우면 없음)"), text: $apiPassword)
                 Text(L("다른 웹사이트가 브라우저를 통해 명령을 보내는 것은 항상 차단됩니다. 비밀번호를 정하면 웹 리모트·HTTP API 접속 때 묻습니다(사용자 이름은 아무거나). 카메라 탈리(/tally)는 보기만 할 수 있어 비밀번호 없이 열립니다. TCP 8099(Companion vMix 모듈)는 IP 제한만 적용됩니다. 바꾼 설정은 바로 적용됩니다."))

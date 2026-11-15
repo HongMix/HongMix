@@ -50,6 +50,8 @@ extension WebRemote {
             "anim": WL("애니메이션"), "ovl1": WL("오버레이 1 넣기 / 빼기"), "failed": WL("실패"),
             "noInputs": WL("입력이 없습니다"), "edit": WL("편집"),
             "restart": WL("처음부터"), "play": WL("재생"), "mute": WL("음소거"), "noPreview": WL("Preview 입력 없음"),
+            "qual": WL("화질"), "qSmooth": WL("부드럽게"), "qNormal": WL("보통"), "qSaver": WL("절약"),
+            "h11": WL("화질: 부드럽게는 PREVIEW·PROGRAM을 초당 15장(화면 하나에 약 1~5 Mbps), 보통은 초당 8장(약 0.6~1.5 Mbps), 절약은 초당 2장(약 0.2 Mbps)으로 보냅니다. Wi-Fi가 약하거나 여러 대가 볼 때는 보통이나 절약을 고르세요."),
         ])
     }
 
@@ -79,6 +81,7 @@ svg{width:14px;height:14px;fill:currentColor;vertical-align:-2px}
 .g{color:#5c5}.y{color:#ec4}.bad{color:#f55;font-weight:600}
 .sp{flex:1}
 .seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}.seg button{border:0;border-radius:0;min-height:26px;background:transparent;color:var(--mute);padding:0 9px}.seg .on{background:var(--btnh);color:var(--tx)}
+#qual{min-height:28px;font-size:12px;color:var(--tx)}
 .ic{min-width:28px;padding:0;border-radius:50%;min-height:28px;height:28px}
 #lost{display:none;background:#5a1a1a;padding:8px;text-align:center}
 #main{display:grid;gap:8px;padding:8px}
@@ -179,7 +182,7 @@ body.L-phone .mh{font-size:11px;padding:2px 5px}
 body.L-phone #stats .opt{display:none}
 </style></head><body class="v-sw">
 <div id="top"><span class="brand">HongMix</span><span class="fmt" id="fmt"></span><span id="stats"></span><span class="sp"></span>
-<div class="seg" id="lang"><button data-l="ko">한</button><button data-l="en">EN</button></div><button class="ic" id="helpB" aria-label="?">?</button></div>
+<select id="qual" aria-label="quality"></select><div class="seg" id="lang"><button data-l="ko">한</button><button data-l="en">EN</button></div><button class="ic" id="helpB" aria-label="?">?</button></div>
 <div id="lost"></div>
 <div id="main">
 <section class="mon" id="pvw"><div class="mh"><b>&#9679; PREVIEW</b><span id="pvwN"></span></div><div class="scr"><img id="pvwI" alt=""><div class="none" id="pvwX"></div></div></section>
@@ -214,16 +217,20 @@ const DUR=[0,250,500,750,1000,1500,2000,3000];
 const IC={re:'<svg viewBox="0 0 16 16"><path d="M3 3h2v10H3zM13 3v10L5.5 8z"/></svg>',play:'<svg viewBox="0 0 16 16"><path d="M4 2.5l10 5.5-10 5.5z"/></svg>',
  pause:'<svg viewBox="0 0 16 16"><path d="M4 3h3v10H4zM9 3h3v10H9z"/></svg>',spk:'<svg viewBox="0 0 16 16"><path d="M2 6h3l4-3v10L5 10H2z"/><path d="M11 5.2a4 4 0 0 1 0 5.6M12.8 3.5a6.5 6.5 0 0 1 0 9" stroke="currentColor" stroke-width="1.3" fill="none"/></svg>',
  off:'<svg viewBox="0 0 16 16"><path d="M2 6h3l4-3v10L5 10H2z"/><path d="M11 6l4 4M15 6l-4 4" stroke="currentColor" stroke-width="1.4"/></svg>'};
-let S=null,L='',view=ls('hmView')||'sw',sideP=ls('hmSide')||'au',tSel=+(ls('hmTitle')||0),cdSel=+(ls('hmCd')||0),dirty=false,touching=null,timer=null,busy=false,again=false,failN=0,gridSig='',chSig='',fieldSig='',thumbAt=0,monBusy={};
+const QP={smooth:{fps:15,w:{desk:854,tab:640,phone:480},tiles:2000},normal:{fps:8,w:{desk:640,tab:480,phone:400},tiles:3000},saver:{fps:2,w:{desk:480,tab:400,phone:320},tiles:8000}};
+let qual=ls('hmQual')||'normal';if(!QP[qual])qual='normal';
+let S=null,L='',view=ls('hmView')||'sw',sideP=ls('hmSide')||'au',tSel=+(ls('hmTitle')||0),cdSel=+(ls('hmCd')||0),dirty=false,touching=null,timer=null,busy=false,again=false,failN=0,gridSig='',chSig='',fieldSig='',thumbAt=0;
 if(!['sw','au','ti','more'].includes(view))view='sw';if(!['au','ti'].includes(sideP))sideP='au';
 if(matchMedia('(pointer:coarse)').matches)document.body.classList.add('touch');
 function toast(x){const el=$('toast');el.textContent=x;el.style.opacity=1;clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity=0,2200)}
+// every request gives up after 3 s, so a Wi-Fi drop shows 'connection lost' instead of freezing on old state
+function tfetch(u){const c=new AbortController(),tm=setTimeout(()=>c.abort(),3000);return fetch(u,{cache:'no-store',signal:c.signal}).finally(()=>clearTimeout(tm))}
 function api(fn,p,quiet){let u='/api/?Function='+encodeURIComponent(fn);for(const k in(p||{}))u+='&'+k+'='+encodeURIComponent(p[k]);
- return fetch(u,{cache:'no-store'}).then(r=>{if(!r.ok)return r.text().then(x=>{toast(t('failed')+': '+x);throw 0})}).catch(e=>{if(e!==0)toast(t('lost'));throw e}).finally(()=>{if(!quiet)poll()})}
+ return tfetch(u).then(r=>{if(!r.ok)return r.text().then(x=>{toast(t('failed')+': '+x);throw 0})}).catch(e=>{if(e!==0)toast(t('lost'));throw e}).finally(()=>{if(!quiet)poll()})}
 const run=(fn,p,q)=>api(fn,p,q).catch(()=>{});
 function every(){return L=='desk'||view=='au'?400:700}
 function poll(){if(busy){again=true;return}busy=true;clearTimeout(timer);
- fetch('/remote.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw 0;return r.json()}).then(s=>{S=s;failN=0;$('lost').style.display='none';render()})
+ tfetch('/remote.json').then(r=>{if(!r.ok)throw 0;return r.json()}).then(s=>{S=s;failN=0;$('lost').style.display='none';render()})
  .catch(()=>{if(++failN>=2){$('lost').style.display='block';$('lost').textContent=t('lost')}})
  .finally(()=>{busy=false;if(again){again=false;poll()}else timer=setTimeout(poll,every())})}
 function fmt(s){s=Math.max(0,Math.floor(s||0));const h=Math.floor(s/3600),m=Math.floor(s/60)%60,x=s%60;return(h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0')}
@@ -239,11 +246,11 @@ function layout(){const w=innerWidth,n=w>=1100?'desk':w>=700?'tab':'phone';if(n!
  const p=L=='desk'?sideP:(view=='ti'?'ti':'au');$('pAu').style.display=p=='au'?'block':'none';$('pTi').style.display=p=='ti'?'block':'none';
  document.querySelectorAll('#sideSeg button').forEach(b=>b.classList.toggle('on',b.dataset.p==p));
  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.v==view));$('navMore').style.display=L=='phone'?'':'none'}
-function setView(v){view=v;ls('hmView',v);layout();if(S)render();poll()}
+function setView(v){view=v;ls('hmView',v);layout();streams();if(S)render();poll()}
 function setSide(p){sideP=p;ls('hmSide',p);layout();if(S)render()}
 document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>setView(b.dataset.v));
 document.querySelectorAll('#sideSeg button').forEach(b=>b.onclick=()=>setSide(b.dataset.p));
-addEventListener('resize',()=>{layout();if(S)render()});
+addEventListener('resize',()=>{layout();streams();if(S)render()});
 // ---- texts
 function texts(){document.documentElement.lang=lang;document.querySelectorAll('#lang button').forEach(b=>b.classList.toggle('on',b.dataset.l==lang));
  document.querySelectorAll('#nav button').forEach(b=>b.textContent=t({sw:'switcher',au:'audio',ti:'titles',more:'more'}[b.dataset.v]));
@@ -252,8 +259,10 @@ function texts(){document.documentElement.lang=lang;document.querySelectorAll('#
  $('cdMinus').textContent='-1 '+t('min');$('cdPlus').textContent='+1 '+t('min');$('cdNone').textContent=t('noCd');
  $('apply').textContent=t('apply');$('revert').textContent=t('revert');$('preL').textContent=t('presets');$('animL').textContent=t('anim');$('tovl').textContent=t('ovl1');
  $('tNone').textContent=t('noTitles');$('unsaved').textContent=t('unsaved');$('pvwX').textContent=t('noPreview');
- $('hpT').textContent=t('help');$('hpC').textContent=t('close');const ul=$('hpL');ul.innerHTML='';for(let i=1;i<=10;i++)ul.appendChild(el('li','',t('h'+i)));
+ const qs=$('qual');qs.innerHTML='';[['smooth','qSmooth',15],['normal','qNormal',8],['saver','qSaver',2]].forEach(([v,k,f])=>qs.add(new Option(t('qual')+': '+t(k)+' · '+f+' fps',v)));qs.value=qual;
+ $('hpT').textContent=t('help');$('hpC').textContent=t('close');const ul=$('hpL');ul.innerHTML='';for(let i=1;i<=11;i++)ul.appendChild(el('li','',t('h'+i)));
  gridSig='';chSig='';fieldSig='';if(S)render()}
+$('qual').onchange=e=>{qual=e.target.value;ls('hmQual',qual);thumbAt=0;streams()};
 document.querySelectorAll('#lang button').forEach(b=>b.onclick=()=>{lang=b.dataset.l;ls('hmLang',lang);texts()});
 $('helpB').onclick=()=>$('hp').classList.add('show');$('hpC').onclick=()=>$('hp').classList.remove('show');
 // ---- render
@@ -267,11 +276,13 @@ function top_(){$('fmt').textContent=S.format;const st=$('stats');st.innerHTML='
  add('FPS',S.fps.toFixed(2),'',true);add('Render',S.renderMs.toFixed(1)+' ms','',true);add('Max',S.renderMax.toFixed(1)+' ms','',true);add('Drop',String(S.dropped),S.dropped>0?'y':'');
  for(const l of S.srt){const c=!l.connected||l.drops>0?'bad':l.loss>1?'y':'g';add('',('SRT '+l.n+' ')+(l.connected?Math.round(l.rtt)+' ms · '+l.loss.toFixed(1)+'%'+(l.drops>0?' · '+t('pkts')+' '+l.drops:''):t('srtOff')),c)}}
 function renderOuts(){[['oRec','record'],['oStream','stream'],['oExt','external']].forEach(([id,k])=>{const b=$(id),o=S[k];b.classList.toggle('on2',o.on);b.querySelector('small').textContent=o.on?fmt(o.sec):''})}
-function monImg(img,src,w){if(monBusy[img.id])return;monBusy[img.id]=1;const u='/thumb?source='+src+'&width='+w+'&t='+Date.now();const n=new Image();
- n.onload=()=>{img.src=n.src;img.style.visibility='visible';monBusy[img.id]=0};n.onerror=()=>{img.style.visibility='hidden';monBusy[img.id]=0};n.src=u}
-let monAt=0;
+// live PREVIEW / PROGRAM: one MJPEG stream per monitor, closed while not visible (saves Wi-Fi and HongMix work)
+function setStream(img,src,on){const p=QP[qual],u=on?'/stream.mjpg?source='+src+'&fps='+p.fps+'&w='+p.w[L||'desk']:'';
+ if(img.dataset.u===u)return;img.dataset.u=u;if(u){img.style.visibility='hidden';img.onload=()=>{img.style.visibility='visible'};img.src=u}else{img.removeAttribute('src');img.style.visibility='hidden'}}
+function streams(){const vis=(L=='desk'||view=='sw')&&!document.hidden;setStream($('pgmI'),'program',vis);setStream($('pvwI'),'preview',vis&&!!(S&&S.preview))}
+['pgmI','pvwI'].forEach(id=>{const im=$(id);im.onerror=()=>{const u=im.dataset.u;im.dataset.u='';if(u)setTimeout(streams,2000)}});
 function renderMon(){const a=inp(S.active),p=inp(S.preview);$('pgmN').textContent=a?a.n+' '+a.title:'';$('pvwN').textContent=p?p.n+' '+p.title:'';$('pvwX').style.display=p?'none':'flex';
- const now=Date.now(),w=L=='desk'?640:L=='tab'?480:320;if(now-monAt>(L=='phone'?1000:600)&&!document.hidden){monAt=now;monImg($('pgmI'),'program',w);if(p)monImg($('pvwI'),'preview',w)}
+ streams();
  const tp=$('trp');if(a&&a.media){if(!tp.dataset.b){tp.innerHTML='<button data-a="re">'+IC.re+'</button><button data-a="pp"></button><span class="bar"><i><b></b></i></span><span class="tm"></span>';tp.dataset.b=1;
    tp.querySelector('[data-a=re]').onclick=()=>run('Restart',{Input:S.active});tp.querySelector('[data-a=pp]').onclick=()=>{const x=inp(S.active);run(x&&x.playing?'Pause':'Play',{Input:S.active})};
    tp.querySelector('.bar').onclick=e=>{const x=inp(S.active);if(!x||!x.dur)return;const r=e.currentTarget.getBoundingClientRect();run('SetPosition',{Input:S.active,Value:Math.round(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*x.dur*1000)})}}
@@ -318,7 +329,9 @@ function renderInputs(){const g=$('grid'),sig=S.inputs.map(i=>[i.n,i.title,!!i.m
    const pb=d.querySelector('.pb b');if(pb)pb.style.width=(i.dur?Math.min(100,i.pos/i.dur*100):0)+'%';const tt=d.querySelector('.tt');if(tt)tt.textContent=i.dur?fmt(i.dur-i.pos):''}
   const m=d.querySelector('[data-a=mute]');if(m&&!m.disabled){m.innerHTML=i.muted?IC.off:IC.spk;m.classList.toggle('muted',i.muted)}
   d.querySelectorAll('.ov').forEach(b=>{const c=+b.dataset.c;b.classList.toggle('live',S.overlays[c-1]==n);b.classList.toggle('saved',S.overlays[c-1]!=n&&S.bank[c-1].n==n)})});
- if(Date.now()-thumbAt>3000&&!document.hidden){thumbAt=Date.now();g.querySelectorAll('.tile img').forEach(im=>{im.src='/thumb?input='+im.closest('.tile').dataset.n+'&width=320&t='+thumbAt})}}
+ if(Date.now()-thumbAt>QP[qual].tiles&&!document.hidden&&!thumbQ.length){thumbAt=Date.now();thumbQ=[...g.querySelectorAll('.tile img')];thumbNext();thumbNext()}}
+let thumbQ=[];function thumbNext(){const im=thumbQ.shift();if(!im)return;const n=new Image(),done=()=>{clearTimeout(tm);thumbNext()},tm=setTimeout(done,3000);
+ n.onload=()=>{im.src=n.src;done()};n.onerror=()=>{im.style.visibility='hidden';done()};n.src='/thumb?input='+im.closest('.tile').dataset.n+'&width=320&t='+Date.now()}
 // ---- outputs
 function outBtn(id,k,fn,nm){$(id).onclick=()=>{if(!S)return;const o=S[k];if(!o.has&&!o.on){toast(t('noOut'));return}
  if(o.on)confirmBox(t(nm+'OffQ'),t(nm+'OffB')+' ('+t('running')+' '+fmt(o.sec)+')',t(nm+'OffOK'),true,()=>run('Stop'+fn));
@@ -359,7 +372,7 @@ $('revert').onclick=()=>{$('fields').querySelectorAll('input').forEach(e=>{e.val
 $('prev').onclick=()=>{setDirty(false);run('PreviousTitlePreset',{Input:tSel})};$('next').onclick=()=>{setDirty(false);run('NextTitlePreset',{Input:tSel})};
 $('tin').onclick=()=>run('TitleBeginAnimation',{Input:tSel,Value:'TransitionIn'});$('tout').onclick=()=>run('TitleBeginAnimation',{Input:tSel,Value:'TransitionOut'});
 $('tovl').onclick=()=>{if(S.overlays[0]==tSel)run('OverlayInput1Out');else run('OverlayInput1In',{Input:tSel})};
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
+document.addEventListener('visibilitychange',()=>{streams();if(!document.hidden)poll()});
 document.addEventListener('keydown',e=>{if(e.key=='Escape'){$('cf').classList.remove('show');$('hp').classList.remove('show')}});
 setDirty(false);layout();texts();poll();
 </script></body></html>

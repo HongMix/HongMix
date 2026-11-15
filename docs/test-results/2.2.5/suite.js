@@ -73,7 +73,7 @@ $('next').click();await w(600);s=await st();ok('preset next',s.inputs[6].preset=
 $('tin').click();await w(300);ok('IN',(await lastCall())[1].Value=='TransitionIn');
 $('tovl').click();await w(600);s=await st();ok('Titles overlay 1',s.bank[0].on&&s.bank[0].n==7);$('tovl').click();await w(500);
 // help + language
-$('helpB').click();await w(200);ok('help opens',$('hp').classList.contains('show')&&$('hpL').children.length==10);$('hpC').click();
+$('helpB').click();await w(200);ok('help opens',$('hp').classList.contains('show')&&$('hpL').children.length==11);$('hpC').click();
 document.querySelector('#lang [data-l=en]').click();await w(500);ok('EN switch',$('inT').textContent=='Input'&&document.documentElement.lang=='en');
 document.querySelector('#lang [data-l=ko]').click();await w(300);ok('KO switch',$('inT').textContent=='입력');
 if(L!='desk')setView('sw');await w(300);

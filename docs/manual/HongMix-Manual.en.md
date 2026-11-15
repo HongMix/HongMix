@@ -1,4 +1,4 @@
-# HongMix 2.2.5 User Manual
+# HongMix 2.2.8 User Manual
 
 HongMix is a live production switcher for Apple Silicon Macs. Its layout, keyboard shortcuts and remote API follow vMix, so vMix operators, Bitfocus Companion and Stream Deck setups feel at home.
 
@@ -31,13 +31,13 @@ Everything HongMix needs (FFmpeg, SRT, the NDI runtime and the Chromium web engi
 
 ### Option A: PKG installer (recommended)
 
-1. Double-click **HongMix-2.2.5.pkg**.
+1. Double-click **HongMix-2.2.8.pkg**.
 2. If macOS says the file is from an **unidentified developer**, right-click the file and choose **Open**, then **Open** again. (Alternatively: **System Settings › Privacy & Security**, then **Open Anyway**.)
 3. Click **Continue**, then **Install**. HongMix is installed in **Applications**.
 
 ### Option B: DMG
 
-1. Open **HongMix-2.2.5.dmg**.
+1. Open **HongMix-2.2.8.dmg**.
 2. Drag **HongMix** into the **Applications** folder.
 
 ### First launch
@@ -516,7 +516,7 @@ While streaming or recording, HongMix records signal loss, frame drops, silence,
 
 ## 12. Web remote and tally
 
-New in 2.2.5: the web remote is the switcher moved into a browser, with the same layout and labels as the app. It works on a laptop, an iPad or a phone on the same network.
+New in 2.2.5–2.2.6: the web remote is the switcher moved into a browser, with the same layout and labels as the app. It works on a laptop, an iPad or a phone on the same network.
 
 ### Turn on remote control
 
@@ -549,6 +549,11 @@ The page looks like the app:
 - **REC**, **STREAM** and **EXTERNAL** at the bottom.
 - Top status: **FPS**, **Render**, **Max**, **Drop**, and one item per SRT input (RTT, loss, dropped packets).
 - **한 / EN** switches the language (remembered per device). **?** opens the help.
+- The **Quality** menu (top) sets how smoothly PREVIEW and PROGRAM move and how much network they use (remembered per device):
+  - **Smooth** — 15 frames per second, about 1–5 Mbps per picture. For a few devices on the same Wi-Fi.
+  - **Medium** (default) — 8 frames per second, about 0.6–1.5 Mbps.
+  - **Data saver** — 2 frames per second, about 0.2 Mbps. For weak Wi-Fi or mobile data.
+  - When the pictures aren't on screen (Audio or Title tab on a phone, another app in front), the page stops the video to save network and HongMix work. Many devices watching the same picture cost HongMix one encoder, not one per device.
 
 ### Using it
 
@@ -677,7 +682,14 @@ Allow **Local Network** for HongMix. For another subnet, add the source IPs in *
 4. Make sure you are on 2.2.3 or later: earlier versions could drop SRT inputs after a few minutes at 60 fps.
 
 **The web remote or Companion doesn't connect.**
-Turn on **Enable remote control** in **Settings › Network**. Check **Allow** (not **This Mac only**), the IP list, and that the device is on the same network. Allow **Local Network** for HongMix.
+If the web remote doesn't open on a phone or iPad, check in this order:
+1. Is **Settings › Network › Enable remote control** on?
+2. Is **Allow** set to **Devices on the network**? With **This Mac only**, neither a phone nor a browser on the same Mac can open a `192.168…` address, and the status line shows `localhost · This Mac only`.
+3. Type the address exactly as the **Status** line shows it (for example `http://192.0.2.10:8088`) — `http`, not `https`.
+4. Is the phone on the **same Wi-Fi** as the Mac? Mobile data, guest Wi-Fi or a VPN won't work.
+5. If you filled in **Only these IPs**, the phone's IP must be in the list.
+6. With a password set, the browser asks for it (any user name). The tally (`/tally`) opens without it.
+7. Allow **Local Network** for HongMix; if the macOS firewall is on, allow incoming connections for HongMix.
 
 **Render is high or Drop increases.**
 - Lower **Input thumbnail smoothness** to 6 fps.

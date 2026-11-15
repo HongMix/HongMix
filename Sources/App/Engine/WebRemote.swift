@@ -180,14 +180,16 @@ function sleepOK(){if(lock){lock.release().catch(()=>{});lock=null}if(vid)vid.pa
 function choose(n){sel=n;ls('bmTally',n);sig='';$('pick').style.display=n?'none':'block';$('light').style.display=n?'flex':'none';if(n)keepAwake();else sleepOK();tick()}
 $('back').onclick=e=>{e.stopPropagation();choose(0)};$('light').onclick=keepAwake;
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)keepAwake()});
-function tick(){fetch('/tally.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw 0;return r.json()}).then(s=>{
+// one request at a time, 2-s timeout: an old reply can never overwrite a newer light, a dead link shows 'lost'
+let ticking=false;function tick(){if(ticking)return;ticking=true;const c=new AbortController(),tm=setTimeout(()=>c.abort(),2000);
+ fetch('/tally.json',{cache:'no-store',signal:c.signal}).then(r=>{if(!r.ok)throw 0;return r.json()}).then(s=>{
  if(!sel){const s2=s.inputs.map(i=>i.n+'\u0001'+i.title).join('\u0002')+s.thumbs+lang;if(s2==sig)return;sig=s2;const l=$('list');l.innerHTML='';
   s.inputs.forEach(i=>{const b=document.createElement('button');b.className='in';if(s.thumbs){const im=document.createElement('img');im.alt='';im.onerror=()=>im.style.visibility='hidden';im.src='/thumb?input='+i.n+'&width=240&t='+Date.now();b.appendChild(im)}
    b.appendChild(document.createTextNode(i.n+'. '+i.title));b.onclick=()=>choose(i.n);l.appendChild(b)});return}
  const me=s.inputs.find(i=>i.n==sel),k=me?me.tally:0;
  $('light').className=k==1?'pgm':k==2?'pvw':'off';$('state').textContent=k==1?'ON AIR':k==2?'PREVIEW':'';
  $('num').textContent=sel;$('name').textContent=me?me.title:t('none');
-}).catch(()=>{$('state').textContent=t('lost');$('light').className='off'})}
+}).catch(()=>{$('state').textContent=t('lost');$('light').className='off'}).finally(()=>{clearTimeout(tm);ticking=false})}
 texts();choose(sel);setInterval(tick,250);
 </script></body></html>
 """#

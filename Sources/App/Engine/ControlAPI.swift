@@ -60,6 +60,7 @@ final class HTTPAPIServer {
     weak var engine: SwitcherEngine?
     private var listener: NWListener?
     private let queue = DispatchQueue(label: "HongMix.http")
+    private let thumbQueue = DispatchQueue(label: "HongMix.http.thumbs", qos: .utility)   // JPEG work never delays commands
 
     var isRunning: Bool { listener != nil }
 
@@ -78,10 +79,24 @@ final class HTTPAPIServer {
         listener = nil
     }
 
+    /// Reads until the end of the HTTP headers (requests can arrive in several TCP segments), max 16 KB.
+    private func readRequest(_ conn: NWConnection, _ buf: Data, _ done: @escaping (Data?) -> Void) {
+        conn.receive(minimumIncompleteLength: 1, maximumLength: 16384) { [weak self] data, _, isComplete, error in
+            var b = buf
+            if let d = data { b.append(d) }
+            if b.range(of: Data("\r\n\r\n".utf8)) != nil || b.count >= 16384 { done(b); return }
+            if isComplete || error != nil || data == nil { done(b.isEmpty ? nil : b); return }
+            self?.readRequest(conn, b, done)
+        }
+    }
+
     private func handle(_ conn: NWConnection) {
         guard APIAccess.permits(conn) else { conn.cancel(); return }
         conn.start(queue: queue)
-        conn.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, _, _ in
+        var got = false
+        queue.asyncAfter(deadline: .now() + 10) { if !got { conn.cancel() } }   // never sent a request: close
+        readRequest(conn, Data()) { [weak self] data in
+            got = true
             guard let self = self, let data = data, let text = String(data: data, encoding: .utf8) else {
                 conn.cancel()
                 return
@@ -100,13 +115,19 @@ final class HTTPAPIServer {
                 self.reply(conn, deny.0, "text/plain; charset=utf-8", Data(deny.1.utf8), extra: deny.2)
                 return
             }
+            if path == "/stream.mjpg" {
+                // live PREVIEW / PROGRAM for the web remote (WebStream.swift) — the connection stays open
+                let queryPart = target.contains("?") ? String(target.split(separator: "?", maxSplits: 1)[1]) : ""
+                WebStreamHub.shared.attach(conn, query: APIProcessor.parseQuery(queryPart))
+                return
+            }
             if path == "/thumb" || path == "/thumbnail" {
                 // picture on the main thread, JPEG encoding here (keeps the switcher UI free)
                 let queryPart = target.contains("?") ? String(target.split(separator: "?", maxSplits: 1)[1]) : ""
                 let q = APIProcessor.parseQuery(queryPart)
                 DispatchQueue.main.async {
                     let pb = self.engine.flatMap { WebRemote.thumbBuffer(q, $0) }
-                    self.queue.async {
+                    self.thumbQueue.async {
                         if let pb = pb, let jpg = self.thumbnail(pb, width: Int(q["width"] ?? "") ?? 320) {
                             self.reply(conn, "200 OK", "image/jpeg", jpg, extra: "Cache-Control: no-store\r\n")
                         } else {
@@ -126,7 +147,10 @@ final class HTTPAPIServer {
     /// Blocks other websites from driving the switcher through the operator's browser (cross-site
     /// requests), and asks for the password when one is set.
     static func reject(_ h: [String: String], path: String = "/") -> (String, String, String)? {
-        if h["sec-fetch-site"] == "cross-site" { return ("403 Forbidden", "cross-site request blocked", "") }
+        // only this page itself (same-origin) or a typed address / Companion (none or no header) may send
+        if let site = h["sec-fetch-site"], site != "same-origin", site != "none" {
+            return ("403 Forbidden", "cross-site request blocked", "")
+        }
         if let origin = h["origin"], let host = h["host"] {
             let o = origin.replacingOccurrences(of: "http://", with: "").replacingOccurrences(of: "https://", with: "")
             if o != host { return ("403 Forbidden", "cross-origin request blocked", "") }

@@ -1,0 +1,63 @@
+{"t": 30, "render_avg": 2.26, "render_max": 2.2, "dropped": 0, "cpu": 80.1, "rss_mb": 474, "threads": 88, "conns": 4, "stream": true, "rec": true, "req": 519, "err": 20, "frames": 1070, "cmds": 40, "cmd_err": 0, "streams_opened": 6}
+{"t": 60, "render_avg": 2.25, "render_max": 2.92, "dropped": 0, "cpu": 62.7, "rss_mb": 503, "threads": 88, "conns": 5, "stream": true, "rec": true, "req": 1040, "err": 40, "frames": 2155, "cmds": 83, "cmd_err": 0, "streams_opened": 11}
+{"t": 90, "render_avg": 1.94, "render_max": 2.95, "dropped": 0, "cpu": 43.6, "rss_mb": 510, "threads": 88, "conns": 4, "stream": false, "rec": true, "req": 1559, "err": 62, "frames": 3197, "cmds": 125, "cmd_err": 0, "streams_opened": 13}
+{"t": 120, "render_avg": 2.3, "render_max": 3.2, "dropped": 0, "cpu": 44.1, "rss_mb": 512, "threads": 86, "conns": 5, "stream": false, "rec": true, "req": 2077, "err": 85, "frames": 4014, "cmds": 162, "cmd_err": 0, "streams_opened": 20}
+{"t": 150, "render_avg": 1.54, "render_max": 2.66, "dropped": 0, "cpu": 55.7, "rss_mb": 474, "threads": 88, "conns": 4, "stream": true, "rec": true, "req": 2595, "err": 110, "frames": 4806, "cmds": 203, "cmd_err": 0, "streams_opened": 29}
+{"t": 180, "render_avg": 2.07, "render_max": 3.24, "dropped": 0, "cpu": 67.0, "rss_mb": 480, "threads": 87, "conns": 5, "stream": false, "rec": true, "req": 3118, "err": 134, "frames": 5711, "cmds": 242, "cmd_err": 0, "streams_opened": 36}
+{"t": 210, "render_avg": 1.94, "render_max": 2.95, "dropped": 0, "cpu": 47.3, "rss_mb": 478, "threads": 86, "conns": 4, "stream": false, "rec": true, "req": 3634, "err": 156, "frames": 6669, "cmds": 285, "cmd_err": 0, "streams_opened": 40}
+{"t": 240, "render_avg": 1.85, "render_max": 2.49, "dropped": 0, "cpu": 84.0, "rss_mb": 480, "threads": 90, "conns": 5, "stream": true, "rec": true, "req": 4149, "err": 180, "frames": 7619, "cmds": 322, "cmd_err": 0, "streams_opened": 47}
+{"t": 270, "render_avg": 2.08, "render_max": 5.67, "dropped": 0, "cpu": 64.0, "rss_mb": 512, "threads": 103, "conns": 4, "stream": true, "rec": true, "req": 4672, "err": 197, "frames": 8701, "cmds": 362, "cmd_err": 0, "streams_opened": 50}
+{"t": 300, "render_avg": 1.79, "render_max": 2.19, "dropped": 0, "cpu": 83.6, "rss_mb": 523, "threads": 102, "conns": 5, "stream": true, "rec": true, "req": 5197, "err": 206, "frames": 9844, "cmds": 403, "cmd_err": 0, "streams_opened": 54}
+{"t": 330, "render_avg": 1.34, "render_max": 1.68, "dropped": 0, "cpu": 101.8, "rss_mb": 523, "threads": 103, "conns": 4, "stream": true, "rec": true, "req": 5719, "err": 216, "frames": 10987, "cmds": 448, "cmd_err": 0, "streams_opened": 58}
+{"t": 360, "render_avg": 1.96, "render_max": 2.22, "dropped": 0, "cpu": 74.0, "rss_mb": 525, "threads": 102, "conns": 5, "stream": true, "rec": true, "req": 6247, "err": 226, "frames": 12135, "cmds": 489, "cmd_err": 0, "streams_opened": 62}
+{"t": 391, "render_avg": 2.28, "render_max": 3.16, "dropped": 0, "cpu": 77.5, "rss_mb": 592, "threads": 102, "conns": 4, "stream": true, "rec": true, "req": 6761, "err": 235, "frames": 13208, "cmds": 531, "cmd_err": 0, "streams_opened": 65}
+Exception in thread Thread-11:
+Traceback (most recent call last):
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/threading.py", line 973, in _bootstrap_inner
+    self.run()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)
+  File "/private/tmp/claude-501/-Users-deanhong-Desktop-HongMix/089f262e-2121-4c44-8a55-455c0e1d52dd/scratchpad/w224/soak.py", line 30, in stalled
+    s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_RCVBUF,4096); s.connect(('127.0.0.1',8088))
+ConnectionRefusedError: [Errno 61] Connection refused
+Traceback (most recent call last):
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 1346, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/client.py", line 1257, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/client.py", line 1303, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/client.py", line 1252, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/client.py", line 1012, in _send_output
+    self.send(msg)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/client.py", line 952, in send
+    self.connect()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/client.py", line 923, in connect
+    self.sock = self._create_connection(
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socket.py", line 843, in create_connection
+    raise err
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socket.py", line 831, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 61] Connection refused
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-deanhong-Desktop-HongMix/089f262e-2121-4c44-8a55-455c0e1d52dd/scratchpad/w224/soak.py", line 60, in <module>
+    time.sleep(30); h=health(); print(json.dumps(dict(t=int(time.time()-t0),**h,**stats)),flush=True)
+  File "/private/tmp/claude-501/-Users-deanhong-Desktop-HongMix/089f262e-2121-4c44-8a55-455c0e1d52dd/scratchpad/w224/soak.py", line 45, in health
+    x=urllib.request.urlopen(B+'/api',timeout=5).read().decode()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 214, in urlopen
+    return opener.open(url, data, timeout)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 517, in open
+    response = self._open(req, data)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 534, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 494, in _call_chain
+    result = func(*args)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 1375, in http_open
+    return self.do_open(http.client.HTTPConnection, req)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/urllib/request.py", line 1349, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 61] Connection refused>

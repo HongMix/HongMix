@@ -2023,5 +2023,10 @@
  "설정된 출력이 없습니다. HongMix 앱에서 먼저 추가하세요.": "No output is set up. Add one in the HongMix app first.",
  "입력이 없습니다": "No inputs",
  "편집": "Edit",
- "Preview 입력 없음": "No Preview input"
+ "Preview 입력 없음": "No Preview input",
+ "부드럽게": "Smooth",
+ "절약": "Data saver",
+ "화질: 부드럽게는 PREVIEW·PROGRAM을 초당 15장(화면 하나에 약 1~5 Mbps), 보통은 초당 8장(약 0.6~1.5 Mbps), 절약은 초당 2장(약 0.2 Mbps)으로 보냅니다. Wi-Fi가 약하거나 여러 대가 볼 때는 보통이나 절약을 고르세요.": "Quality: Smooth sends PREVIEW and PROGRAM at 15 frames per second (about 1–5 Mbps per picture), Medium at 8 (about 0.6–1.5 Mbps), Data saver at 2 (about 0.2 Mbps). On weak Wi-Fi or with several viewers, choose Medium or Data saver.",
+ "이 맥에서만: 휴대폰·아이패드·다른 컴퓨터에서는 웹 리모트가 열리지 않습니다. 휴대폰으로 쓰려면 '같은 네트워크의 장비'를 고르세요.": "This Mac only: phones, iPads and other computers can't open the web remote. To use a phone, choose “Devices on the network”.",
+ "허용한 IP만": "only these IPs"
 }

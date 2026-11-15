@@ -375,6 +375,7 @@ final class SwitcherEngine: ObservableObject {
         self.format = format
         self.renderFormat = format
         api.engine = self
+        WebStreamHub.shared.engine = self
         tcpAPI.engine = self
         InputSource.eventSink = { [weak self] input, e in self?.fireTriggers(input, e) }
     }
@@ -464,7 +465,11 @@ final class SwitcherEngine: ObservableObject {
         let ip = HTTPAPIServer.localIPAddress() ?? "localhost"
         let httpOK = api.isRunning || api.start(port: 8088)
         let tcpOK = tcpAPI.isRunning || tcpAPI.start(port: 8099)
-        apiStatus = (httpOK ? "Web/API http://\(ip):8088" : L("HTTP 8088 사용 불가")) +
+        // the address other devices use — "this Mac only" says so instead of showing a LAN address that refuses
+        let addr = APIAccess.mode == "local"
+            ? "Web/API http://localhost:8088 · " + L("이 맥에서만")
+            : "Web/API http://\(ip):8088" + (APIAccess.allowed.isEmpty ? "" : " · " + L("허용한 IP만"))
+        apiStatus = (httpOK ? addr : L("HTTP 8088 사용 불가")) +
             (tcpOK ? " · TCP 8099" : L(" · TCP 8099 사용 불가"))
     }
 

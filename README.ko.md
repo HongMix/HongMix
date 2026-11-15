@@ -10,29 +10,29 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.2.5 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.2.8 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.2.5
-- **브라우저 안에 스위처를 옮겼습니다:** 웹 리모트가 HongMix와 같은 Preview·전환·Program·입력 타일·오버레이·Audio Mixer 흐름을 제공합니다.
-- **노트북·아이패드·휴대폰에 맞춰 자동 배치:** 아이패드 가로는 데스크톱 흐름을 유지하고, 세로·휴대폰은 아래쪽 탭으로 간결하게 바뀝니다.
-- 모든 입력 타일에서 Cut·재생·오버레이 1–8을 바로 조작하고, Program 아래 재생 막대로 송출 중 미디어를 제어합니다.
-- 녹화·송출·External은 항상 확인창을 띄워 길게 누른 뒤 송출이 다시 켜지던 문제를 막았습니다. 카메라 탈리는 보기 전용·비밀번호 없음·화면 꺼짐 방지를 지원합니다.
-- 설치부터 입력·전환·오디오·출력·방송 안전·웹 제어·문제 해결까지 다룬 [한국어 그림 설명서](docs/manual/HongMix-Manual.ko.md)와 [English manual](docs/manual/HongMix-Manual.en.md)을 추가했습니다.
-- 자동 화면 검사 196/196, 실제 앱 연동 검사 47/47, 드롭 프레임 0을 확인했습니다. 실제 휴대폰·아이패드 기기 시험은 남아 있습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.2.5.ko.md) · [English](docs/RELEASE-NOTES-2.2.5.md)
+### 최신 업데이트 · 2.2.8
+- **브라우저에서 Preview와 Program을 실시간으로 봅니다:** 부드럽게(15 fps)·보통(8 fps)·데이터 절약(2 fps)을 선택할 수 있습니다.
+- **불안정한 Wi-Fi에서도 더 안정적입니다:** 연결 끊김을 빠르게 알리고 자동 재연결하며, 사라진 휴대폰 연결을 오래 붙잡지 않습니다.
+- 느린 회선에서 탈리가 이전 상태로 잠깐 돌아가던 현상을 막았습니다. 썸네일 처리를 분리해 Cut 같은 명령이 사진 작업 뒤에서 기다리지 않습니다.
+- 실시간 웹 화면은 최대 16개로 제한하고 요청 보안을 강화했습니다. **이 맥에서만** 모드는 localhost 주소와 휴대폰 접속 불가 안내를 정확히 표시합니다.
+- [한국어 그림 설명서](docs/manual/HongMix-Manual.ko.md)와 [English manual](docs/manual/HongMix-Manual.en.md)에 휴대폰 접속 문제 해결 순서를 추가했습니다.
+- 자동 화면 검사 196/196, 실제 앱 연동 검사 47/47, 10분 부하 시험에서 드롭 프레임 0·명령 실패 0을 확인했습니다. 실제 휴대폰·아이패드 기기 시험은 남아 있습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.2.8.ko.md) · [English](docs/RELEASE-NOTES-2.2.8.md)
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/manual/images/ko-09-web-remote-desktop.png" alt="HongMix 2.2.5 데스크톱 웹 리모트" width="100%"><br><sub>데스크톱 웹 리모트 · 브라우저 안의 스위처</sub></td>
-    <td width="50%" align="center"><img src="docs/manual/images/ko-10-web-remote-ipad.png" alt="HongMix 2.2.5 아이패드 웹 리모트" width="100%"><br><sub>화면 폭에 맞춘 아이패드 배치</sub></td>
+    <td width="50%" align="center"><img src="docs/manual/images/ko-09-web-remote-desktop.png" alt="HongMix 데스크톱 웹 리모트" width="100%"><br><sub>데스크톱 웹 리모트 · 브라우저 안의 스위처</sub></td>
+    <td width="50%" align="center"><img src="docs/manual/images/ko-10-web-remote-ipad.png" alt="HongMix 아이패드 웹 리모트" width="100%"><br><sub>화면 폭에 맞춘 아이패드 배치</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/manual/images/ko-11-web-remote-phone.png" alt="HongMix 2.2.5 휴대폰 웹 리모트" width="100%"><br><sub>아래쪽 탭을 사용한 휴대폰 조작</sub></td>
-    <td width="50%" align="center"><img src="docs/manual/images/ko-12-tally.png" alt="HongMix 2.2.5 카메라 탈리" width="100%"><br><sub>보기 전용 카메라 탈리</sub></td>
+    <td width="50%" align="center"><img src="docs/manual/images/ko-11-web-remote-phone.png" alt="HongMix 휴대폰 웹 리모트" width="100%"><br><sub>아래쪽 탭을 사용한 휴대폰 조작</sub></td>
+    <td width="50%" align="center"><img src="docs/manual/images/ko-12-tally.png" alt="HongMix 카메라 탈리" width="100%"><br><sub>보기 전용 카메라 탈리</sub></td>
   </tr>
 </table>
 

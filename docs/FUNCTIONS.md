@@ -180,7 +180,7 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `BrowserReload / BrowserBack / BrowserForward` | Input | 새로고침, 뒤로, 앞으로. |
 | `BrowserKeyboardEnabled/Disabled, BrowserMouseEnabled/Disabled` | Input | 호환용입니다. 페이지 조작은 입력 메뉴의 '브라우저 창 열기'에서 합니다. |
 
-## 웹 페이지 (HTTP 8088, 2.2.4)
+## 웹 페이지 (HTTP 8088, 2.2.4–2.2.6)
 
 | 주소 | 내용 |
 |---|---|
@@ -188,7 +188,8 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `/tally` | 카메라 탈리(Program 빨강, Preview 초록). **보기 전용이라 HTTP 비밀번호 없이 열립니다**(IP 제한은 적용). 화면 꺼짐 방지: https가 아니어도 동작하도록 무음 영상 재생으로 보완. |
 | `/remote.json` | 웹 리모트가 읽는 상태(JSON). 비밀번호 적용. 파일 경로·주소·키는 들어가지 않습니다. |
 | `/tally.json` | 탈리 상태(입력 번호·이름·0/1/2). 비밀번호 없이 열림. |
-| `/thumb?Input=n&width=240` | 입력 썸네일 JPEG. 비밀번호 적용. |
+| `/stream.mjpg?source=program\|preview&fps=1–20&w=160–1280` | 2.2.6: PREVIEW·PROGRAM 연속 화면(MJPEG, `<img>`로 재생). 같은 화면·설정은 한 번만 인코딩해 여러 기기에 나눠 보내고, 느린 기기는 프레임을 건너뜁니다. 비밀번호 적용. 웹 리모트의 화질: 부드럽게 15 fps · 보통 8 fps · 절약 2 fps. |
+| `/thumb?Input=n&width=240` (또는 `source=program\|preview`) | 입력 썸네일 JPEG. 비밀번호 적용. |
 
 ## TCP 8099 명령
 
