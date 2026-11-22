@@ -10,20 +10,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.2.8</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.0</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.2.8
-- **Live Preview and Program in the browser:** choose Smooth (15 fps), Medium (8 fps) or Data saver (2 fps) for the web remote.
-- **More reliable on unstable Wi-Fi:** lost connections are reported quickly, reconnect automatically and no longer leave stale phone sessions behind.
-- Tally updates are serialized to prevent an older state flashing back on slow links. Thumbnail work is isolated so CUT and other commands stay responsive.
-- Live browser pictures are capped at 16, request handling is hardened, and **This Mac only** now clearly shows a localhost address and phone warning.
-- The illustrated [English manual](docs/manual/HongMix-Manual.en.md) and [한국어 설명서](docs/manual/HongMix-Manual.ko.md) include phone connection troubleshooting.
-- Automated page checks passed 196/196, real-app integration checks passed 47/47 and the 10-minute load run completed with 0 dropped frames and 0 failed commands. Physical phone and iPad testing is still pending. See [English notes](docs/RELEASE-NOTES-2.2.8.md) or [한국어](docs/RELEASE-NOTES-2.2.8.ko.md).
+### Latest update · 2.3.0
+- **H.264 streams and recordings now carry their frame rate in the stream header.**
+- Fixes receivers such as AJA BRIDGE LIVE detecting a 59.94 fps HongMix output as 58.94.
+- The fix was confirmed by the user on an AJA BRIDGE LIVE. Core, translation, checksum, DMG and ad-hoc app-signing checks passed for build 143.
+- There is no interface change, so the existing illustrated [English manual](docs/manual/HongMix-Manual.en.md) and [한국어 설명서](docs/manual/HongMix-Manual.ko.md) remain representative. See [English notes](docs/RELEASE-NOTES-2.3.0.md) or [한국어](docs/RELEASE-NOTES-2.3.0.ko.md).
 
 <table>
   <tr>

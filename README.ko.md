@@ -10,20 +10,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.2.8 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.0 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.2.8
-- **브라우저에서 Preview와 Program을 실시간으로 봅니다:** 부드럽게(15 fps)·보통(8 fps)·데이터 절약(2 fps)을 선택할 수 있습니다.
-- **불안정한 Wi-Fi에서도 더 안정적입니다:** 연결 끊김을 빠르게 알리고 자동 재연결하며, 사라진 휴대폰 연결을 오래 붙잡지 않습니다.
-- 느린 회선에서 탈리가 이전 상태로 잠깐 돌아가던 현상을 막았습니다. 썸네일 처리를 분리해 Cut 같은 명령이 사진 작업 뒤에서 기다리지 않습니다.
-- 실시간 웹 화면은 최대 16개로 제한하고 요청 보안을 강화했습니다. **이 맥에서만** 모드는 localhost 주소와 휴대폰 접속 불가 안내를 정확히 표시합니다.
-- [한국어 그림 설명서](docs/manual/HongMix-Manual.ko.md)와 [English manual](docs/manual/HongMix-Manual.en.md)에 휴대폰 접속 문제 해결 순서를 추가했습니다.
-- 자동 화면 검사 196/196, 실제 앱 연동 검사 47/47, 10분 부하 시험에서 드롭 프레임 0·명령 실패 0을 확인했습니다. 실제 휴대폰·아이패드 기기 시험은 남아 있습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.2.8.ko.md) · [English](docs/RELEASE-NOTES-2.2.8.md)
+### 최신 업데이트 · 2.3.0
+- **H.264 송출·녹화 헤더에 프레임레이트 정보를 기록합니다.**
+- AJA BRIDGE LIVE 같은 수신 장비가 HongMix의 59.94fps 출력을 58.94로 잘못 인식하던 문제를 고쳤습니다.
+- 사용자가 실제 AJA BRIDGE LIVE에서 59.94로 표시되는 것을 확인했습니다. 빌드 143의 코어·번역·체크섬·DMG·애드혹 앱 서명 검사도 통과했습니다.
+- 화면 변경은 없어 기존 [한국어 그림 설명서](docs/manual/HongMix-Manual.ko.md)와 [English manual](docs/manual/HongMix-Manual.en.md)을 그대로 사용할 수 있습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.0.ko.md) · [English](docs/RELEASE-NOTES-2.3.0.md)
 
 <table>
   <tr>

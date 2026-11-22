@@ -1,4 +1,4 @@
-# HongMix 2.2.8 User Manual
+# HongMix 2.3.0 User Manual
 
 HongMix is a live production switcher for Apple Silicon Macs. Its layout, keyboard shortcuts and remote API follow vMix, so vMix operators, Bitfocus Companion and Stream Deck setups feel at home.
 
@@ -31,13 +31,13 @@ Everything HongMix needs (FFmpeg, SRT, the NDI runtime and the Chromium web engi
 
 ### Option A: PKG installer (recommended)
 
-1. Double-click **HongMix-2.2.8.pkg**.
+1. Double-click **HongMix-2.3.0.pkg**.
 2. If macOS says the file is from an **unidentified developer**, right-click the file and choose **Open**, then **Open** again. (Alternatively: **System Settings › Privacy & Security**, then **Open Anyway**.)
 3. Click **Continue**, then **Install**. HongMix is installed in **Applications**.
 
 ### Option B: DMG
 
-1. Open **HongMix-2.2.8.dmg**.
+1. Open **HongMix-2.3.0.dmg**.
 2. Drag **HongMix** into the **Applications** folder.
 
 ### First launch
@@ -680,6 +680,9 @@ Allow **Local Network** for HongMix. For another subnet, add the source IPs in *
 2. Set latency to at least 4× the RTT, and the same on both sides. Click **Use Recommended**.
 3. If it drops again, read the verdict in `~/Movies/HongMix/Incidents/incidents.txt` and `srt.txt`.
 4. Make sure you are on 2.2.3 or later: earlier versions could drop SRT inputs after a few minutes at 60 fps.
+
+**A receiver shows 58.94 instead of 59.94.**
+Update to HongMix 2.3.0 or later. H.264 streams and recordings now carry their frame rate in the stream header.
 
 **The web remote or Companion doesn't connect.**
 If the web remote doesn't open on a phone or iPad, check in this order:

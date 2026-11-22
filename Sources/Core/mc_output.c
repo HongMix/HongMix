@@ -7,6 +7,7 @@
 
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
+#include <libavcodec/bsf.h>
 #include <libavutil/avutil.h>
 #include <libavutil/opt.h>
 #include <libavutil/channel_layout.h>
@@ -120,6 +121,7 @@ typedef struct dq_ent {
 typedef struct osession_s {
     AVFormatContext *oc;
     AVCodecContext *venc, *aenc;
+    AVBSFContext *vbsf;        // h264_metadata: writes the frame rate into the SPS (VideoToolbox leaves it out)
     AVStream *vst, *ast;
     struct SwsContext *sws;
 #ifdef __APPLE__
@@ -170,6 +172,8 @@ typedef struct osession_s {
     int nkeep, ckeep;
     int is_prev;              // old file being finished after a split
 } osession;
+
+static void open_timing_bsf(mc_output *o, osession *s);
 
 typedef struct kpkt { AVPacket *p; AVRational tb; } kpkt;
 
@@ -443,6 +447,7 @@ static void osession_close(mc_output *o, osession *s, int write_trailer, int kee
     free(s->mpath);
     keep_clear(s);
     free(s->keep);
+    if (s->vbsf) av_bsf_free(&s->vbsf);
     if (s->venc) avcodec_free_context(&s->venc);
     if (s->aenc) avcodec_free_context(&s->aenc);
     for (int i = 0; i < MC_MAX_XTRACKS; i++)
@@ -887,7 +892,9 @@ static int osession_open(mc_output *o, osession *s, char *err, int errlen) {
         snprintf(err, errlen, "스트림 생성 실패");
         return -1;
     }
-    avcodec_parameters_from_context(s->vst->codecpar, s->venc);
+    open_timing_bsf(o, s);
+    if (s->vbsf) avcodec_parameters_copy(s->vst->codecpar, s->vbsf->par_out);   // extradata with the timing
+    else avcodec_parameters_from_context(s->vst->codecpar, s->venc);
     avcodec_parameters_from_context(s->ast->codecpar, s->aenc);
     s->vst->time_base = s->venc->time_base;
     s->vst->avg_frame_rate = s->venc->framerate;
@@ -1224,6 +1231,25 @@ void mc_output_dump_delay(mc_output *o) {
     if (o) atomic_store(&o->dump_req, 1);
 }
 
+/* VideoToolbox's H.264 has no VUI timing, so receivers that read the frame rate from the stream
+   header (e.g. AJA BRIDGE LIVE) estimate it from arrival and report 58.94 instead of 59.94.
+   h264_metadata adds timing_info (time_scale / num_units_in_tick = 2 × fps) — header only, the
+   picture data is untouched. On failure the output simply runs without it. */
+static void open_timing_bsf(mc_output *o, osession *s) {
+    if (!s->venc || s->venc->codec_id != AV_CODEC_ID_H264 || !s->venc->codec ||
+        !strstr(s->venc->codec->name, "videotoolbox") || o->cfg.packet_cb) return;
+    const AVBitStreamFilter *f = av_bsf_get_by_name("h264_metadata");
+    AVBSFContext *b = NULL;
+    if (!f || av_bsf_alloc(f, &b) < 0) return;
+    char tick[48];
+    snprintf(tick, sizeof tick, "%d/%d", 2 * o->cfg.fps_num, o->cfg.fps_den);
+    if (avcodec_parameters_from_context(b->par_in, s->venc) < 0 ||
+        av_opt_set(b->priv_data, "tick_rate", tick, 0) < 0) { av_bsf_free(&b); return; }
+    b->time_base_in = s->venc->time_base;
+    if (av_bsf_init(b) < 0) { av_bsf_free(&b); return; }
+    s->vbsf = b;
+}
+
 static int write_packets(mc_output *o, osession *s, AVCodecContext *enc, AVStream *st) {
     AVPacket *pkt = av_packet_alloc();
     int ret = 0;
@@ -1234,6 +1260,15 @@ static int write_packets(mc_output *o, osession *s, AVCodecContext *enc, AVStrea
             break;
         }
         if (ret < 0) break;
+        if (enc == s->venc && s->vbsf) {
+            // 1 packet in, 1 out (header rewrite); a packet the filter rejects is passed through as is
+            AVPacket *raw = av_packet_clone(pkt);
+            if (av_bsf_send_packet(s->vbsf, pkt) < 0 || av_bsf_receive_packet(s->vbsf, pkt) < 0) {
+                av_packet_unref(pkt);
+                if (raw) av_packet_move_ref(pkt, raw);
+            }
+            av_packet_free(&raw);
+        }
         if (o->cfg.packet_cb) {
             // instant replay: hand the encoded frame to the replay store instead of muxing it
             if (st == s->vst)
@@ -1517,7 +1552,8 @@ static int split_begin(mc_output *o, osession *s, const char *path, int64_t cut_
         ok = n->vst && n->ast;
     }
     if (ok) {
-        avcodec_parameters_from_context(n->vst->codecpar, s->venc);   // same encoder, same extradata
+        if (s->vbsf) avcodec_parameters_copy(n->vst->codecpar, s->vbsf->par_out);   // same encoder, same extradata
+        else avcodec_parameters_from_context(n->vst->codecpar, s->venc);
         n->vst->time_base = s->venc->time_base;
         n->vst->avg_frame_rate = s->venc->framerate;
         avcodec_parameters_from_context(n->ast->codecpar, n->aenc);
