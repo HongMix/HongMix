@@ -10,6 +10,7 @@
 #include <vector>
 #include <set>
 #include <mutex>
+#include <atomic>
 #include "include/cef_app.h"
 #include "include/cef_version.h"
 #include "include/cef_application_mac.h"
@@ -53,7 +54,10 @@ int mc_web_available(void) { return 0; }
 const char *mc_web_version(void) { return "내장 브라우저 엔진 없음"; }
 int mc_web_init(void) { return 0; }
 void mc_web_shutdown(void) {}
-mc_web *mc_web_open(const char *, int, int, int, int, mc_web_callbacks) { return nullptr; }
+mc_web *mc_web_open(const char *, int, int, int, int, mc_web_callbacks cb) {
+    if (cb.on_closed) cb.on_closed(cb.user);
+    return nullptr;
+}
 void mc_web_close(mc_web *) {}
 void mc_web_navigate(mc_web *, const char *) {}
 void mc_web_reload(mc_web *) {}
@@ -161,6 +165,12 @@ class Client : public CefClient,
                public CefDisplayHandler {
 public:
     Client(int w, int h, mc_web_callbacks cb) : w_(w), h_(h), cb_(cb) {}
+    // CEF drops its last reference only after every render / audio / status callback has returned, so
+    // this is the one safe moment to let the input go (GitHub #6: a page with audio, e.g. Suno, could
+    // deliver a packet on the audio thread while the input was being torn down).
+    ~Client() override {
+        if (cb_.on_closed) cb_.on_closed(cb_.user);
+    }
 
     CefRefPtr<CefRenderHandler> GetRenderHandler() override { return this; }
     CefRefPtr<CefAudioHandler> GetAudioHandler() override { return this; }
@@ -209,6 +219,10 @@ public:
 
     // ---- life span
     void OnAfterCreated(CefRefPtr<CefBrowser> browser) override {
+        if (closed_) {               // closed before the browser existed: close it now, nobody owns it
+            browser->GetHost()->CloseBrowser(true);
+            return;
+        }
         browser_ = browser;
         browser->GetHost()->SetFocus(true);
         browser->GetHost()->WasResized();
@@ -256,7 +270,7 @@ private:
     std::string pendingURL_;
     int channels_ = 2;
     int rate_ = 48000;
-    bool closed_ = false;
+    std::atomic<bool> closed_{false};   // read on the audio thread
     IMPLEMENT_REFCOUNTING(Client);
 };
 
@@ -368,7 +382,10 @@ void mc_web_shutdown(void) {
 }
 
 mc_web *mc_web_open(const char *url, int width, int height, int fps, int transparent, mc_web_callbacks cb) {
-    if (!mc_web_init()) return nullptr;
+    if (!mc_web_init()) {
+        if (cb.on_closed) cb.on_closed(cb.user);      // no Client: hand `user` back right away
+        return nullptr;
+    }
     mc_web *w = new mc_web();
     w->client = new Client(width, height, cb);
     g_clients.insert(w->client.get());

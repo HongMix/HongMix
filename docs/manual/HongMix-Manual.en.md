@@ -1,4 +1,4 @@
-# HongMix 2.3.0 User Manual
+# HongMix 2.3.1 User Manual
 
 HongMix is a live production switcher for Apple Silicon Macs. Its layout, keyboard shortcuts and remote API follow vMix, so vMix operators, Bitfocus Companion and Stream Deck setups feel at home.
 
@@ -31,13 +31,13 @@ Everything HongMix needs (FFmpeg, SRT, the NDI runtime and the Chromium web engi
 
 ### Option A: PKG installer (recommended)
 
-1. Double-click **HongMix-2.3.0.pkg**.
+1. Double-click **HongMix-2.3.1.pkg**.
 2. If macOS says the file is from an **unidentified developer**, right-click the file and choose **Open**, then **Open** again. (Alternatively: **System Settings › Privacy & Security**, then **Open Anyway**.)
 3. Click **Continue**, then **Install**. HongMix is installed in **Applications**.
 
 ### Option B: DMG
 
-1. Open **HongMix-2.3.0.dmg**.
+1. Open **HongMix-2.3.1.dmg**.
 2. Drag **HongMix** into the **Applications** folder.
 
 ### First launch
@@ -90,7 +90,7 @@ Notes:
 | Double-click | Open the input's settings (for a stream input: its connection settings) |
 | Right-click the title | Fold / unfold the tile; more options in the menu |
 | Drag | Reorder |
-| **×** | Close the input (press **Undo** at the top if you closed it by mistake) |
+| **×** | Ask before closing the input (press **Undo** at the top to restore it). Choose **Don't ask again**, or turn the question back on in **Settings › General › Safety**. |
 | ⏮ / ▶ ❚❚ | Restart, play / pause (media inputs) |
 | **Cut** | Send this input straight to Program |
 | **Loop** | Loop playback on/off |
@@ -649,6 +649,7 @@ Open **Settings** with **⌘,**. Tabs: **Video**, **Network**, **General**, **Ab
 | **Playback › File frame-rate conform (60 ↔ 59.94)** | Plays 60.00 fps files 0.1 % slower in a 59.94 program, removing a frame drop about every 17 s. Audio is conformed too. |
 | **Playback › Input thumbnail smoothness** | 6, 15 or 30 fps for the small tile pictures only. Program, Preview, streaming and recording always run at the full rate. |
 | **Playback › Loop new video inputs** | Default Loop state for newly added videos. |
+| **Safety › Ask before closing an input** | Asks before the tile **×** or menu closes an input. Turn this on again after choosing **Don't ask again**. |
 | **On-Air Safety** | Do Not Disturb at open/quit, Pre-show Check at launch, internet speed test. |
 
 ### Video
@@ -705,7 +706,10 @@ If the web remote doesn't open on a phone or iPad, check in this order:
 Fixed in 2.2.0: the Do Not Disturb state is no longer checked periodically.
 
 **I closed an input by mistake.**
-Click **Undo** at the top.
+Closing from the tile **×** or menu asks first. Click **Undo** at the top to restore the last closed input. If you chose **Don't ask again**, turn the question back on in **Settings › General › Safety**.
+
+**HongMix quit unexpectedly. Where is the crash report?**
+On the next launch, HongMix offers the newest report and can reveal it in Finder. Attach that `.ips` or `.crash` file to your GitHub issue.
 
 **Can I use 60.00 fps files in a 59.94 program?**
 Yes. Turn on **File frame-rate conform** in Settings › General › Playback.

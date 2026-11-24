@@ -10,18 +10,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.0</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.1</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.3.0
-- **H.264 streams and recordings now carry their frame rate in the stream header.**
-- Fixes receivers such as AJA BRIDGE LIVE detecting a 59.94 fps HongMix output as 58.94.
-- The fix was confirmed by the user on an AJA BRIDGE LIVE. Core, translation, checksum, DMG and ad-hoc app-signing checks passed for build 143.
-- There is no interface change, so the existing illustrated [English manual](docs/manual/HongMix-Manual.en.md) and [한국어 설명서](docs/manual/HongMix-Manual.ko.md) remain representative. See [English notes](docs/RELEASE-NOTES-2.3.0.md) or [한국어](docs/RELEASE-NOTES-2.3.0.ko.md).
+### Latest update · 2.3.1
+- **Closing an input with the tile × or menu now asks first**, with **Don't ask again** and a switch in **Settings › General › Safety**.
+- Fixes a rare crash when adding a web page that starts playing sound immediately, such as a Suno overlay.
+- After a crash, the next launch points to the report file to attach to a GitHub issue.
+- Core, translation, checksum, DMG and ad-hoc app-signing checks passed for build 149. See [English notes](docs/RELEASE-NOTES-2.3.1.md) or [한국어](docs/RELEASE-NOTES-2.3.1.ko.md).
 
 <table>
   <tr>

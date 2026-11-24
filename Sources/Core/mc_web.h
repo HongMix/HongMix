@@ -18,6 +18,9 @@ typedef void (*mc_web_cpu_frame_cb)(void *user, const uint8_t *bgra, int width, 
 typedef void (*mc_web_audio_cb)(void *user, const float *const *planes, int channels, int frames, int sample_rate);
 /* 0 loading, 1 loaded, 2 error, 3 title changed; message = URL / error text / title. Main thread. */
 typedef void (*mc_web_status_cb)(void *user, int state, const char *message);
+/* Called exactly once per mc_web_open() call, after the last callback with `user` can run (the browser
+   is fully closed, or opening failed) — release `user` here. Any thread. */
+typedef void (*mc_web_closed_cb)(void *user);
 
 typedef struct {
     mc_web_frame_cb on_frame;
@@ -25,6 +28,7 @@ typedef struct {
     mc_web_audio_cb on_audio;
     mc_web_status_cb on_status;
     void *user;
+    mc_web_closed_cb on_closed;
 } mc_web_callbacks;
 
 int mc_web_available(void);            /* engine compiled in and framework present in the app */

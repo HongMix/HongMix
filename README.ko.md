@@ -10,18 +10,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.0 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.1 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.3.0
-- **H.264 송출·녹화 헤더에 프레임레이트 정보를 기록합니다.**
-- AJA BRIDGE LIVE 같은 수신 장비가 HongMix의 59.94fps 출력을 58.94로 잘못 인식하던 문제를 고쳤습니다.
-- 사용자가 실제 AJA BRIDGE LIVE에서 59.94로 표시되는 것을 확인했습니다. 빌드 143의 코어·번역·체크섬·DMG·애드혹 앱 서명 검사도 통과했습니다.
-- 화면 변경은 없어 기존 [한국어 그림 설명서](docs/manual/HongMix-Manual.ko.md)와 [English manual](docs/manual/HongMix-Manual.en.md)을 그대로 사용할 수 있습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.0.ko.md) · [English](docs/RELEASE-NOTES-2.3.0.md)
+### 최신 업데이트 · 2.3.1
+- **입력 타일의 ×나 메뉴로 입력을 닫을 때 한 번 더 확인**하며, **다시 묻지 않기**와 **설정 › 일반 › 실수 방지**에서 다시 켜기를 지원합니다.
+- Suno처럼 바로 소리가 나는 웹 페이지를 입력으로 추가할 때 드물게 앱이 종료되던 문제를 고쳤습니다.
+- 충돌 후 다음 실행 때 GitHub 이슈에 첨부할 보고서 파일을 안내합니다.
+- 빌드 149의 코어·번역·체크섬·DMG·애드혹 앱 서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.1.ko.md) · [English](docs/RELEASE-NOTES-2.3.1.md)
 
 <table>
   <tr>

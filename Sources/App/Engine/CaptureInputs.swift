@@ -662,7 +662,13 @@ final class BrowserInput: InputSource {
         guard mc_web_available() != 0 else { return false }
         let w = Int32(max(320, config.browserWidth)), h = Int32(max(180, config.browserHeight))
         var cb = mc_web_callbacks()
-        cb.user = Unmanaged.passUnretained(self).toOpaque()
+        // The engine keeps this input alive until its browser is fully closed (on_closed), so a frame or
+        // an audio packet arriving during teardown never reaches a freed object.
+        cb.user = Unmanaged.passRetained(self).toOpaque()
+        cb.on_closed = { user in
+            guard let user = user else { return }
+            DispatchQueue.main.async { Unmanaged<BrowserInput>.fromOpaque(user).release() }
+        }
         cb.on_frame = { user, surf, w, h in
             guard let user = user, let surf = surf else { return }
             Unmanaged<BrowserInput>.fromOpaque(user).takeUnretainedValue().engineFrame(surf, Int(w), Int(h))

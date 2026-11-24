@@ -48,6 +48,12 @@ enum UISnapshots {
             // "inputmonitor-<n>": open the monitor window of input n (captured from the screen — it shows video)
             // "props-<n>-<tab>": Input Settings of input n on a tab (3 = Position, 6 = Layers) — 2.1.4
             let parts = name.lowercased().split(separator: "-")
+            // "closeinput-<n>": the ✕ confirmation for input n as a real sheet on the switcher (answer it
+            // with the DismissSheet API: 1 = Close, 2 = Cancel) — 2.3.1
+            if parts.count == 2, parts[0] == "closeinput", let n = Int(parts[1]), n >= 1, n <= engine.inputs.count {
+                InputCloseConfirm.close(engine.inputs[n - 1], engine: engine)
+                return nil
+            }
             // "editor-<n>": the source / connection editor of input n (SRT list, link advice) — 2.2.1
             // "new-<kind>": the Add Input source editor for a new input of that kind (manual screenshots) — 2.2.5
             if parts.count == 2, parts[0] == "new", let k = InputKind.allCases.first(where: { $0.rawValue.lowercased() == parts[1] }) {

@@ -779,7 +779,8 @@ enum APIProcessor {
         case "showfocusapproval": FocusGuard.shared.askApproval()   // HongMix test hook (screenshots): the approval sheet
         case "startupcheck", "showstartupcheck": StartupCheckWindow.show(engine: e)
         case "dismisssheet":         // HongMix test hook: Value=1|2 — answers the sheet on the main window (button 1 / 2)
-            guard let w = FullscreenOutput.switcherWindow, let sh = w.attachedSheet else { return "No sheet" }
+            guard let w = FullscreenOutput.switcherWindow?.attachedSheet != nil ? FullscreenOutput.switcherWindow
+                    : NSApp.windows.first(where: { $0.attachedSheet != nil }), let sh = w.attachedSheet else { return "No sheet" }
             w.endSheet(sh, returnCode: value == "2" ? .alertSecondButtonReturn : .alertFirstButtonReturn)
         case "snapshotallwindows":   // HongMix test hook: Value=folder — PNG of every visible HongMix window
             return snapshotAllWindows(value) ? nil : "Snapshot failed"

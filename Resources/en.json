@@ -2028,5 +2028,14 @@
  "절약": "Data saver",
  "화질: 부드럽게는 PREVIEW·PROGRAM을 초당 15장(화면 하나에 약 1~5 Mbps), 보통은 초당 8장(약 0.6~1.5 Mbps), 절약은 초당 2장(약 0.2 Mbps)으로 보냅니다. Wi-Fi가 약하거나 여러 대가 볼 때는 보통이나 절약을 고르세요.": "Quality: Smooth sends PREVIEW and PROGRAM at 15 frames per second (about 1–5 Mbps per picture), Medium at 8 (about 0.6–1.5 Mbps), Data saver at 2 (about 0.2 Mbps). On weak Wi-Fi or with several viewers, choose Medium or Data saver.",
  "이 맥에서만: 휴대폰·아이패드·다른 컴퓨터에서는 웹 리모트가 열리지 않습니다. 휴대폰으로 쓰려면 '같은 네트워크의 장비'를 고르세요.": "This Mac only: phones, iPads and other computers can't open the web remote. To use a phone, choose “Devices on the network”.",
- "허용한 IP만": "only these IPs"
+ "허용한 IP만": "only these IPs",
+ "실수 방지": "Safety",
+ "입력을 닫을 때 확인": "Ask before closing an input",
+ "입력 타일의 ✕나 메뉴로 닫을 때 한 번 더 묻습니다. 닫은 입력은 위쪽 Undo로 되돌릴 수 있습니다.": "Asks once more when you close an input with its tile ✕ or menu. A closed input can be restored with Undo at the top.",
+ "입력 '%@'을(를) 닫을까요?": "Close input “%@”?",
+ "닫은 입력은 위쪽 Undo로 되돌릴 수 있습니다.": "You can restore it with Undo at the top.",
+ "다시 묻지 않기": "Don't ask again",
+ "HongMix가 지난번에 예기치 않게 종료되었습니다": "HongMix quit unexpectedly last time",
+ "충돌 보고서가 저장되어 있습니다. GitHub 이슈에 이 파일을 첨부해 주시면 원인을 찾는 데 큰 도움이 됩니다.\n\n%@": "A crash report was saved. Attaching this file to a GitHub issue helps us find the cause.\n\n%@",
+ "보고서 보기": "Show Report"
 }

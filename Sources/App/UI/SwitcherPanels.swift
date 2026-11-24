@@ -745,7 +745,7 @@ struct InputBox: View {
                         }
                     }
                     Divider()
-                    Button(L("입력 닫기"), role: .destructive) { engine.requestRemove(input) }
+                    Button(L("입력 닫기"), role: .destructive) { InputCloseConfirm.close(input, engine: engine) }
                 } label: {
                     Image(systemName: "gearshape.fill").font(.system(size: 10))
                         .foregroundColor(input.category > 0 ? InputCategory.color(input.category) : .primary)
@@ -910,7 +910,7 @@ struct InputBox: View {
 
             // Row 1: Close · Restart · Play/Pause · Cut · Loop  (Quick Play removed)
             HStack(spacing: 3) {
-                tileIcon("xmark", help: L("입력 닫기")) { engine.requestRemove(input) }
+                tileIcon("xmark", help: L("입력 닫기")) { InputCloseConfirm.close(input, engine: engine) }
                 tileIcon("backward.end.fill", enabled: transport, help: L("처음부터 (Restart)")) { input.restart() }
                 tileIcon(input.playing ? "pause.fill" : "play.fill", enabled: transport,
                          help: input.playing ? L("일시정지") : L("재생")) { input.playing.toggle() }

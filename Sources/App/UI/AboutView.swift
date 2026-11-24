@@ -8,6 +8,7 @@ struct GeneralSettings: View {
     @AppStorage(AppSkin.defaultsKey) private var appSkin = AppSkin.current.rawValue
     @AppStorage(InputConfig.newVideoLoopKey) private var newVideoLoop = false
     @AppStorage(InputTileRate.key) private var tileFPS = 6
+    @AppStorage(InputCloseConfirm.key) private var confirmClose = true
     @ObservedObject private var focus = FocusGuard.shared
     @ViewState private var showCheck = SystemCheck.showAtLaunch
 
@@ -29,6 +30,11 @@ struct GeneralSettings: View {
                 .pickerStyle(.radioGroup)
                 .onChange(of: appSkin) { _, _ in AppSkin.reload() }
                 Text(L("Monochrome: 흑백 화면에 색은 의미에만 (Program 빨강 · Preview 초록), 상단·하단 바는 유리 재질. 기본: 기존 HongMix 화면 (Output 초록 · Preview 주황)."))
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            Section(L("실수 방지")) {
+                Toggle(L("입력을 닫을 때 확인"), isOn: $confirmClose)
+                Text(L("입력 타일의 ✕나 메뉴로 닫을 때 한 번 더 묻습니다. 닫은 입력은 위쪽 Undo로 되돌릴 수 있습니다."))
                     .font(.caption).foregroundColor(.secondary)
             }
             Section(L("재생 설정")) {
