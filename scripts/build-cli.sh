@@ -128,6 +128,12 @@ sed -e 's/$(EXECUTABLE_NAME)/HongMix/' -e 's/$(PRODUCT_BUNDLE_IDENTIFIER)/com.ho
     Resources/Info.plist > "$APP/Contents/Info.plist"
 cp Sources/Shaders/Mixer.metal "$APP/Contents/Resources/"
 [ -f Resources/en.json ] && cp Resources/en.json "$APP/Contents/Resources/"
+# English and Korean localizations: macOS uses them for its own menus (Edit, Window, Services…) and the
+# open / save panels — without them every Mac showed those in Korean (GitHub #7).
+for L in en ko; do
+  mkdir -p "$APP/Contents/Resources/$L.lproj"
+  printf '"CFBundleName" = "HongMix";\n' > "$APP/Contents/Resources/$L.lproj/InfoPlist.strings"
+done
 cp Resources/caption-terms-ko.txt Resources/caption-corrections-ko.csv "$APP/Contents/Resources/" 2>/dev/null
 cp "Resources/HongMix Focus.shortcut" "$APP/Contents/Resources/" 2>/dev/null
 [ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"

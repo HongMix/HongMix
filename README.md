@@ -10,18 +10,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.1</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.2</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.3.1
-- **Closing an input with the tile × or menu now asks first**, with **Don't ask again** and a switch in **Settings › General › Safety**.
-- Fixes a rare crash when adding a web page that starts playing sound immediately, such as a Suno overlay.
-- After a crash, the next launch points to the report file to attach to a GitHub issue.
-- Core, translation, checksum, DMG and ad-hoc app-signing checks passed for build 149. See [English notes](docs/RELEASE-NOTES-2.3.1.md) or [한국어](docs/RELEASE-NOTES-2.3.1.ko.md).
+### Latest update · 2.3.2
+- **System menus and open-file panels now follow the HongMix language setting**, fixing Korean macOS-provided items on English and other-language Macs.
+- **NextPicture** and **PreviousPicture** are now available in **Settings › Shortcuts** for PDF and Photos inputs.
+- Leave the shortcut input empty to control the slides on Program, falling back to Preview.
+- Core, translation, bundle-language, checksum, DMG and ad-hoc app-signing checks passed for build 151. See [English notes](docs/RELEASE-NOTES-2.3.2.md) or [한국어](docs/RELEASE-NOTES-2.3.2.ko.md).
 
 <table>
   <tr>

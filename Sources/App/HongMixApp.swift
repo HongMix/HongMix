@@ -120,6 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashNotice.checkOnLaunch()          // a crash last time: offer the report for a bug report
+        AppLanguage.syncSystemLanguage()      // system menus / file panels in the HongMix language (GitHub #7)
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleQuitEvent(_:withReplyEvent:)),
                                                      forEventClass: AEEventClass(kCoreEventClass),
                                                      andEventID: AEEventID(kAEQuitApplication))

@@ -19,6 +19,16 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     static func set(_ l: AppLanguage) {
         current = l
         UserDefaults.standard.set(l.rawValue, forKey: defaultsKey)
+        syncSystemLanguage()
+    }
+
+    /// macOS's own parts of the app (Edit / Window / Services menus, open & save panels) follow
+    /// "AppleLanguages"; keep it on the HongMix language so they match the rest (from the next launch).
+    static func syncSystemLanguage() {
+        let d = UserDefaults.standard
+        if (d.array(forKey: "AppleLanguages") as? [String])?.first != current.rawValue {
+            d.set([current.rawValue], forKey: "AppleLanguages")
+        }
     }
 
     static let english: [String: String] = {

@@ -704,7 +704,10 @@ enum APIProcessor {
             }
         // ===== Photos / PDF Slides (SlideInputs.swift): vMix NextPicture / PreviousPicture (SelectIndex above)
         case "nextpicture", "previouspicture":
-            guard let s = input as? SlideDeckInput else { return input == nil ? needInput() : "Input is not Photos / PDF Slides" }
+            // no Input (e.g. a keyboard shortcut left on "none"): the Photos / PDF input on Program, else in Preview
+            let target = input ?? [e.programID, e.previewID].compactMap { $0.flatMap { e.input(withID: $0) } }
+                .first { $0 is SlideDeckInput }
+            guard let s = target as? SlideDeckInput else { return target == nil ? needInput() : "Input is not Photos / PDF Slides" }
             if fn == "nextpicture" { s.next() } else { s.previous() }
         case "virtualsetpresenter":    // HongMix extension: Input (Virtual Set), Value=presenter input (empty/0 = none)
             guard let v = input as? VirtualSetInput else { return input == nil ? needInput() : "Input is not a Virtual Set" }

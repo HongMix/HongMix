@@ -1,4 +1,4 @@
-# HongMix 2.3.1 사용 설명서
+# HongMix 2.3.2 사용 설명서
 
 HongMix는 Apple Silicon 맥용 라이브 프로덕션 스위처입니다. 화면 구성·단축키·원격 API가 vMix와 같아서 vMix 사용자, Bitfocus Companion, Stream Deck 환경을 그대로 쓸 수 있습니다.
 
@@ -31,13 +31,13 @@ FFmpeg, SRT, NDI 런타임, Chromium 웹 엔진이 모두 앱 안에 들어 있�
 
 ### 방법 A: PKG 설치 파일 (권장)
 
-1. **HongMix-2.3.1.pkg**를 더블클릭합니다.
+1. **HongMix-2.3.2.pkg**를 더블클릭합니다.
 2. "확인되지 않은 개발자" 경고가 뜨면 파일을 우클릭 → **열기** → **열기**를 누릅니다. (또는 **시스템 설정 › 개인정보 보호 및 보안**에서 **그래도 열기**)
 3. **계속** → **설치**를 누릅니다. **응용 프로그램** 폴더에 HongMix가 설치됩니다.
 
 ### 방법 B: DMG
 
-1. **HongMix-2.3.1.dmg**를 엽니다.
+1. **HongMix-2.3.2.dmg**를 엽니다.
 2. **HongMix**를 **Applications** 폴더로 드래그합니다.
 
 ### 처음 실행
@@ -133,7 +133,7 @@ Finder에서 끌어다 놓는 것이 가장 빠릅니다.
 - **Video**: 입력 하나에 파일 하나. 옵션: **반복 재생 (Loop)**, Auto Play, Auto Pause, Auto Restart, 하드웨어 디코더(VideoToolbox).
 - **List**: 파일을 여러 개 고르면 한 입력에서 위에서부터 차례로 재생합니다. 나중에 입력 설정의 **목록** 탭에서 추가·삭제·순서 변경·섞기·더블클릭 재생·리스트 반복을 설정합니다.
 - **Image**: PNG(투명 지원), JPG 등. 투명 PNG는 오버레이 로고로 쓰기 좋습니다.
-- **Photos**, **PDF Slides**: PowerPoint·Keynote·Google Slides는 PDF로 내보낸 뒤 추가하세요.
+- **Photos**, **PDF Slides**: PowerPoint·Keynote·Google Slides는 PDF로 내보낸 뒤 추가하세요. **설정 › 단축키**에서 **NextPicture** / **PreviousPicture**를 지정하며, **입력**을 비우면 Program에 송출 중인 슬라이드(없으면 Preview)를 넘깁니다.
 
 MP4, MOV(ProRes 4444 알파 포함), MXF, TS, MKV, AVI, MP3, WAV 등을 지원합니다. 확장자만으로 내부 코덱 지원이 보장되지는 않습니다. 새 동영상 입력은 **Loop**가 꺼진 상태로 시작합니다 (기본값은 **설정 › 일반 › 재생 설정 › 새 영상 입력 기본 루프**에서 바꿉니다).
 

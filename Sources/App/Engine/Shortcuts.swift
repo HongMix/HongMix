@@ -39,7 +39,8 @@ final class ShortcutManager: ObservableObject {
         "OverlayInputAllOff", "FadeToBlack",
         "StartStopRecording", "StartStopStreaming", "StartStopExternal", "StartStopMultiCorder", "Fullscreen",
         "Snapshot", "AudioOn", "AudioOff", "Audio", "MasterAudio", "SetVolumeFade",
-        "Play", "Pause", "PlayPause", "Restart", "SetText", "StartCountdown", "StopCountdown",
+        "Play", "Pause", "PlayPause", "Restart", "NextPicture", "PreviousPicture",
+        "SetText", "StartCountdown", "StopCountdown",
         "DataSourceNextRow", "DataSourcePreviousRow", "DataSourceSelectRow",
     ]
 

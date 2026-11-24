@@ -10,18 +10,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.1 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.2 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.3.1
-- **입력 타일의 ×나 메뉴로 입력을 닫을 때 한 번 더 확인**하며, **다시 묻지 않기**와 **설정 › 일반 › 실수 방지**에서 다시 켜기를 지원합니다.
-- Suno처럼 바로 소리가 나는 웹 페이지를 입력으로 추가할 때 드물게 앱이 종료되던 문제를 고쳤습니다.
-- 충돌 후 다음 실행 때 GitHub 이슈에 첨부할 보고서 파일을 안내합니다.
-- 빌드 149의 코어·번역·체크섬·DMG·애드혹 앱 서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.1.ko.md) · [English](docs/RELEASE-NOTES-2.3.1.md)
+### 최신 업데이트 · 2.3.2
+- **시스템 메뉴와 파일 열기 창이 HongMix 언어 설정을 따릅니다.** 영어·다른 언어 맥에서 macOS가 그리는 항목이 한국어로 나오던 문제를 고쳤습니다.
+- PDF·사진 입력용 **NextPicture**와 **PreviousPicture**를 **설정 › 단축키**에서 선택할 수 있습니다.
+- 단축키의 입력을 비우면 Program에 송출 중인 슬라이드, 없으면 Preview 슬라이드를 넘깁니다.
+- 빌드 151의 코어·번역·번들 언어·체크섬·DMG·애드혹 앱 서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.2.ko.md) · [English](docs/RELEASE-NOTES-2.3.2.md)
 
 <table>
   <tr>
