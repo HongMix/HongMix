@@ -1,4 +1,4 @@
-# HongMix 2.3.2 User Manual
+# HongMix 2.3.3 User Manual
 
 HongMix is a live production switcher for Apple Silicon Macs. Its layout, keyboard shortcuts and remote API follow vMix, so vMix operators, Bitfocus Companion and Stream Deck setups feel at home.
 
@@ -31,13 +31,13 @@ Everything HongMix needs (FFmpeg, SRT, the NDI runtime and the Chromium web engi
 
 ### Option A: PKG installer (recommended)
 
-1. Double-click **HongMix-2.3.2.pkg**.
+1. Double-click **HongMix-2.3.3.pkg**.
 2. If macOS says the file is from an **unidentified developer**, right-click the file and choose **Open**, then **Open** again. (Alternatively: **System Settings › Privacy & Security**, then **Open Anyway**.)
 3. Click **Continue**, then **Install**. HongMix is installed in **Applications**.
 
 ### Option B: DMG
 
-1. Open **HongMix-2.3.2.dmg**.
+1. Open **HongMix-2.3.3.dmg**.
 2. Drag **HongMix** into the **Applications** folder.
 
 ### First launch
@@ -133,7 +133,7 @@ Or use Add Input:
 - **Video**: one file per input. Options: **Loop**, Auto Play, Auto Pause, Auto Restart, hardware decoding (VideoToolbox).
 - **List**: select several files; they play from top to bottom in one input. Manage them later in the input's **List** tab (add, remove, reorder, shuffle, double-click to play an item, loop the list).
 - **Image**: PNG (with transparency), JPG and others. Transparent PNGs work well as logos on overlays.
-- **Photos**, **PDF Slides**: export PowerPoint, Keynote or Google Slides to PDF first. Assign **NextPicture** / **PreviousPicture** in **Settings › Shortcuts**; leave **Input** empty to control the slides on Program (or Preview if Program has none).
+- **Photos**, **PDF and PowerPoint Slides**: add PDF, PPT, PPTX, Keynote or ODP files directly. HongMix converts presentation files with macOS Quick Look, so Office or Keynote is not required. Hidden slides are skipped; animations and transitions are not kept. Use the controls below Preview / Program, the **‹ n / N ›** strip on the input tile, the web remote, or **NextPicture** / **PreviousPicture** shortcuts. Leave the shortcut **Input** empty to control Program, falling back to Preview.
 
 Supported formats include MP4, MOV (including ProRes 4444 with alpha), MXF, TS, MKV, AVI, MP3 and WAV. A file extension alone does not guarantee that every codec inside it is supported. New video inputs start with **Loop** off (change the default in **Settings › General › Playback › Loop new video inputs**).
 

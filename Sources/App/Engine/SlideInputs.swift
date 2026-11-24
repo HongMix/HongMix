@@ -1056,7 +1056,7 @@ final class PhotosInput: SlideDeckInput {
     override func restart() { select(0) }
 }
 
-/// PDF Slides (vMix "PowerPoint"): pages of a PDF exported from Keynote / PowerPoint / Google Slides.
+/// PDF Slides (vMix "PowerPoint"): pages of a PDF, or of a PowerPoint / Keynote deck converted by SlideConverter (2.3.3).
 final class PDFSlidesInput: SlideDeckInput {
     override var emptyStatus: String { L("PDF 파일을 선택하세요") }
 
@@ -1065,7 +1065,14 @@ final class PDFSlidesInput: SlideDeckInput {
     }
 
     override func loadSource(path: String, settings: SlideSettings, previous: SlideSource?) -> (SlideSource?, String?) {
-        guard let s = PDFSlideSource(path: path) else { return (nil, L("PDF를 열 수 없음")) }
+        var file = path
+        if SlideConverter.isDeck(path) {         // PowerPoint / Keynote / OpenDocument → PDF (2.3.3)
+            DispatchQueue.main.async { self.postStatus(Int32(MC_STATE_CONNECTING), L("프레젠테이션을 PDF로 변환하는 중…")) }
+            let (pdf, err) = SlideConverter.pdf(for: path)
+            guard let pdf else { return (nil, err) }
+            file = pdf
+        }
+        guard let s = PDFSlideSource(path: file) else { return (nil, L("PDF를 열 수 없음")) }
         return (s, nil)
     }
 }

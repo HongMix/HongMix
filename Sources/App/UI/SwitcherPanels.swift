@@ -907,6 +907,7 @@ struct InputBox: View {
             inputMonitor.help(L("클릭: Preview · 더블클릭: Input Settings"))
 
             listNowPlaying
+            if let deck = input as? SlideDeckInput { TileSlideStrip(deck: deck) }
 
             // Row 1: Close · Restart · Play/Pause · Cut · Loop  (Quick Play removed)
             HStack(spacing: 3) {
@@ -1519,5 +1520,30 @@ struct VerticalMeter: View {
                     }
             }
         }
+    }
+}
+
+/// Input tile of a PDF / PowerPoint / Photos input: ◀ n / N ▶ like a player's controls (2.3.3).
+private struct TileSlideStrip: View {
+    @ObservedObject var deck: SlideDeckInput
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Button { deck.previous() } label: { Image(systemName: "chevron.left").frame(width: 22, height: 16) }
+                .help(L("이전 슬라이드 (PreviousPicture)"))
+            Text(deck.count > 0 ? "\(deck.currentIndex + 1) / \(deck.count)" : "– / –")
+                .fontWeight(.semibold).monospacedDigit().foregroundColor(Theme.buttonText)
+            if deck is PhotosInput {
+                Text(deck.currentName).lineLimit(1).truncationMode(.middle).foregroundColor(.secondary)
+            }
+            Spacer(minLength: 0)
+            Button { deck.next() } label: { Image(systemName: "chevron.right").frame(width: 22, height: 16) }
+                .help(L("다음 슬라이드 (NextPicture)"))
+        }
+        .font(.system(size: 10))
+        .buttonStyle(.borderless)
+        .padding(.horizontal, 6)
+        .frame(height: 20)
+        .background(Theme.panel.opacity(0.9))
     }
 }

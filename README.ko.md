@@ -10,27 +10,27 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.2 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.3 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.3.2
-- **시스템 메뉴와 파일 열기 창이 HongMix 언어 설정을 따릅니다.** 영어·다른 언어 맥에서 macOS가 그리는 항목이 한국어로 나오던 문제를 고쳤습니다.
-- PDF·사진 입력용 **NextPicture**와 **PreviousPicture**를 **설정 › 단축키**에서 선택할 수 있습니다.
-- 단축키의 입력을 비우면 Program에 송출 중인 슬라이드, 없으면 Preview 슬라이드를 넘깁니다.
-- 빌드 151의 코어·번역·번들 언어·체크섬·DMG·애드혹 앱 서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.2.ko.md) · [English](docs/RELEASE-NOTES-2.3.2.md)
+### 최신 업데이트 · 2.3.3
+- **Preview·Program 아래와 모든 슬라이드 입력 타일에 넘기기 버튼**을 추가하고, 휴대폰·태블릿 웹 리모컨의 Program에도 큰 버튼을 표시합니다.
+- PDF 슬라이드 입력에 PowerPoint·Keynote 파일을 그대로 추가합니다. macOS 미리보기로 변환하므로 Office를 설치할 필요가 없습니다.
+- 원본을 다시 저장하면 현재 페이지를 유지한 채 다시 변환하며 숨긴 슬라이드는 건너뜁니다.
+- 빌드 157의 실제 앱 변환·조작, 웹 리모컨, 코어·번역·체크섬·DMG·애드혹 서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.3.ko.md) · [English](docs/RELEASE-NOTES-2.3.3.md)
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/manual/images/ko-09-web-remote-desktop.png" alt="HongMix 데스크톱 웹 리모트" width="100%"><br><sub>데스크톱 웹 리모트 · 브라우저 안의 스위처</sub></td>
-    <td width="50%" align="center"><img src="docs/manual/images/ko-10-web-remote-ipad.png" alt="HongMix 아이패드 웹 리모트" width="100%"><br><sub>화면 폭에 맞춘 아이패드 배치</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/ko-slides-preview.png" alt="Preview 아래와 입력 타일의 슬라이드 버튼" width="100%"><br><sub>메인 스위처의 슬라이드 조작</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/ko-slides-editor.png" alt="PDF·PowerPoint 슬라이드 편집 화면" width="100%"><br><sub>Office 없이 PowerPoint·Keynote 파일 사용</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/manual/images/ko-11-web-remote-phone.png" alt="HongMix 휴대폰 웹 리모트" width="100%"><br><sub>아래쪽 탭을 사용한 휴대폰 조작</sub></td>
-    <td width="50%" align="center"><img src="docs/manual/images/ko-12-tally.png" alt="HongMix 카메라 탈리" width="100%"><br><sub>보기 전용 카메라 탈리</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/ko-web-phone.png" alt="휴대폰 웹 리모컨의 슬라이드 버튼" width="100%"><br><sub>휴대폰 웹 리모컨 슬라이드 조작</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/ko-web-tablet.png" alt="태블릿 웹 리모컨의 슬라이드 버튼" width="100%"><br><sub>태블릿 웹 리모컨 슬라이드 조작</sub></td>
   </tr>
 </table>
 

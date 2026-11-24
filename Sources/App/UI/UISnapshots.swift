@@ -60,6 +60,13 @@ enum UISnapshots {
                 return window(InputEditorSheet(kind: k, editing: nil).environmentObject(engine)
                                 .frame(width: 820, height: 640), size: NSSize(width: 820, height: 640), title: "Snapshot props")
             }
+            // "editorview-<n>": the same editor drawn offscreen to `path` (no live video in it, e.g. PDF / PowerPoint
+            // slides) — works with the display asleep — 2.3.3
+            if parts.count == 2, parts[0] == "editorview", let n = Int(parts[1]), n >= 1, n <= engine.inputs.count {
+                let i = engine.inputs[n - 1]
+                return view(InputEditorSheet(kind: i.kind, editing: i).environmentObject(engine)
+                                .frame(width: 820, height: 640), size: NSSize(width: 820, height: 640), to: path)
+            }
             if parts.count == 2, parts[0] == "editor", let n = Int(parts[1]), n >= 1, n <= engine.inputs.count {
                 let i = engine.inputs[n - 1]
                 return window(InputEditorSheet(kind: i.kind, editing: i).environmentObject(engine)

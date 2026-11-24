@@ -9,7 +9,10 @@ struct TransportBar: View {
 
     var body: some View {
         Group {
-            if let i = input, i.supportsTransport {
+            if let d = input as? SlideDeckInput {
+                // PDF / PowerPoint / Photos: ◀ Previous · n / N · Next ▶ (2.3.3)
+                IsolatedHost(id: d.id) { SlideControls(deck: d) }
+            } else if let i = input, i.supportsTransport {
                 // Own hosting view: the playhead/timecode change ~20×/s, and in the main window's
                 // SwiftUI graph every change re-ran layout for the whole switcher (main-thread stalls).
                 IsolatedHost(id: i.id) { TransportControls(input: i) }
@@ -180,5 +183,52 @@ struct IsolatedHost<Content: View>: NSViewRepresentable {
         guard context.coordinator.id != id else { return }
         context.coordinator.id = id
         v.rootView = content()
+    }
+}
+
+/// Under the Preview / Output monitor for PDF / PowerPoint / Photos inputs: step through the slides
+/// right there — check the next slide in Preview before the cut, or turn the slide on air (2.3.3).
+struct SlideControls: View {
+    @ObservedObject var deck: SlideDeckInput
+
+    var body: some View {
+        HStack(spacing: 6) {
+            stepButton("backward.end.fill", text: nil, help: L("첫 슬라이드")) { deck.select(0) }
+            stepButton("chevron.left", text: L("이전"), help: L("이전 슬라이드 (PreviousPicture)")) { deck.previous() }
+            Text(deck.count > 0 ? "\(deck.currentIndex + 1) / \(deck.count)" : "– / –")
+                .font(.system(size: 12, weight: .bold).monospacedDigit())
+                .foregroundColor(.white)
+                .frame(minWidth: 64)
+            stepButton("chevron.right", text: L("다음"), help: L("다음 슬라이드 (NextPicture)"), trailing: true) { deck.next() }
+            if deck.supportsTransport {          // Photos: automatic slideshow on / off
+                stepButton(deck.playing ? "pause.fill" : "play.fill", text: nil,
+                           help: deck.playing ? L("자동 넘김 멈춤") : L("자동 넘김")) { deck.playing.toggle() }
+            }
+            if deck is PhotosInput {            // file name; a PDF page has no name of its own
+                Text(deck.currentName)
+                    .font(.system(size: 10)).foregroundColor(.secondary)
+                    .lineLimit(1).truncationMode(.middle)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 6)
+    }
+
+    private func stepButton(_ icon: String, text: String?, help: String, trailing: Bool = false,
+                            _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if !trailing { Image(systemName: icon).font(.system(size: 10, weight: .bold)) }
+                if let text { Text(text).font(.system(size: 11, weight: .semibold)) }
+                if trailing { Image(systemName: icon).font(.system(size: 10, weight: .bold)) }
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, text == nil ? 0 : 10)
+            .frame(minWidth: 26, minHeight: 20)
+            .background(Theme.button)
+            .clipShape(RoundedRectangle(cornerRadius: 3))
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 }

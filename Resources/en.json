@@ -2037,5 +2037,20 @@
  "다시 묻지 않기": "Don't ask again",
  "HongMix가 지난번에 예기치 않게 종료되었습니다": "HongMix quit unexpectedly last time",
  "충돌 보고서가 저장되어 있습니다. GitHub 이슈에 이 파일을 첨부해 주시면 원인을 찾는 데 큰 도움이 됩니다.\n\n%@": "A crash report was saved. Attaching this file to a GitHub issue helps us find the cause.\n\n%@",
- "보고서 보기": "Show Report"
+ "보고서 보기": "Show Report",
+ "PDF·PowerPoint 슬라이드": "PDF and PowerPoint Slides",
+ "PDF와 PowerPoint(PPT·PPTX)·Keynote 파일을 그대로 쓸 수 있습니다. PowerPoint·Keynote는 맥의 미리보기 엔진으로 PDF로 바꿔서 보여 주며(애니메이션·화면 전환 효과는 빠짐), 원본을 다시 저장하면 같은 페이지를 유지한 채 바로 반영됩니다. 넘기기: Preview·Program 아래 ‹ 이전 · 다음 › 버튼, 입력 타일의 ‹ ›, 웹 리모컨, 단축키 NextPicture·PreviousPicture, MIDI, API. Google 슬라이드는 PDF나 PPTX로 내려받아 쓰세요.": "Use PDF, PowerPoint (PPT, PPTX) and Keynote files as they are. PowerPoint and Keynote files are turned into PDF with the Mac's Quick Look engine (animations and slide transitions are not kept); saving the original again updates the slides and keeps the current page. Change slides with the ‹ Previous · Next › buttons under Preview and Program, ‹ › on the input tile, the web remote, the NextPicture / PreviousPicture shortcuts, MIDI or the API. For Google Slides, download the deck as PDF or PPTX.",
+ "프레젠테이션을 PDF로 변환하는 중…": "Converting the presentation to PDF…",
+ "이전 슬라이드 (PreviousPicture)": "Previous slide (PreviousPicture)",
+ "다음 슬라이드 (NextPicture)": "Next slide (NextPicture)",
+ "첫 슬라이드": "First slide",
+ "자동 넘김 멈춤": "Stop slideshow",
+ "자동 넘김": "Play slideshow",
+ "프레젠테이션 파일을 열 수 없음": "Can't open the presentation file",
+ "macOS 미리보기를 실행할 수 없음": "Can't run macOS Quick Look",
+ "프레젠테이션 변환 시간이 초과됨": "Converting the presentation took too long",
+ "이 프레젠테이션은 macOS 미리보기로 열 수 없습니다. PowerPoint·Keynote에서 PDF로 내보내서 쓰세요.": "macOS Quick Look can't open this presentation. Export it as PDF from PowerPoint or Keynote and use the PDF.",
+ "이 프레젠테이션에서 슬라이드를 찾지 못했습니다. PowerPoint·Keynote에서 PDF로 내보내서 쓰세요.": "No slides were found in this presentation. Export it as PDF from PowerPoint or Keynote and use the PDF.",
+ "이전 슬라이드": "Previous slide",
+ "다음 슬라이드": "Next slide"
 }

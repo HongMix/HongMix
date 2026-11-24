@@ -1086,7 +1086,7 @@ enum APIProcessor {
         case "photos" where isDirectory(arg):  // vMix Photos: a folder as a slideshow
             c = InputConfig(kind: .photos, name: (arg as NSString).lastPathComponent)
             c.slides.path = arg
-        case "pdf", "slides", "powerpoint":    // PDF Slides (vMix PowerPoint; export the deck as PDF)
+        case "pdf", "slides", "powerpoint":    // PDF Slides (vMix PowerPoint): a PDF, or a PowerPoint / Keynote deck (2.3.3)
             c = InputConfig(kind: .pdfSlides, name: ((arg as NSString).lastPathComponent as NSString).deletingPathExtension)
             c.slides.path = arg
         case "virtualset":                     // Value=VirtualSet|background picture (presenter: VirtualSetPresenter)

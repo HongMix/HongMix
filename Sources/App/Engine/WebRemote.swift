@@ -48,6 +48,10 @@ enum WebRemote {
                 d["pos"] = num(i.position, 10)
                 d["dur"] = num(i.duration, 10)
             }
+            if let deck = i as? SlideDeckInput {  // PDF / PowerPoint / Photos: 1-based slide, count (2.3.3)
+                d["slide"] = deck.count > 0 ? deck.currentIndex + 1 : 0
+                d["slides"] = deck.count
+            }
             if let t = i as? TitleInput {
                 let doc = t.document
                 d["fields"] = doc.fields.filter { $0.kind == .text && ($0.mode == .plain || $0.mode == .ticker) }

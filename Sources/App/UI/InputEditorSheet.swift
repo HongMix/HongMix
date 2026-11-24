@@ -974,11 +974,11 @@ struct InputEditorSheet: View {
     }
 
     @ViewBuilder private var pdfSection: some View {
-        Section(L("PDF 슬라이드")) {
+        Section(L("PDF·PowerPoint 슬라이드")) {
             HStack {
                 TextField(L("파일"), text: $cfg.slides.path)
                 Button(L("찾아보기…")) {
-                    if let p = pickFile(types: [.pdf]) {
+                    if let p = pickFile(types: [.pdf] + SlideConverter.deckExtensions.compactMap { UTType(filenameExtension: $0) }) {
                         cfg.slides.path = p
                         if !nameEdited { cfg.name = ((p as NSString).lastPathComponent as NSString).deletingPathExtension }
                     }
@@ -986,7 +986,7 @@ struct InputEditorSheet: View {
             }
             if !cfg.slides.path.isEmpty { PDFThumbStrip(path: cfg.slides.path, deck: editing as? SlideDeckInput) }
             slideCommonRows
-            Text(L("PowerPoint·Keynote·Google 슬라이드는 PDF로 내보내서 쓰세요. 파일을 다시 저장하면 같은 페이지를 유지한 채 바로 반영됩니다. 넘기기: 단축키(설정 › 단축키에서 NextPicture 지정), NextPicture/PreviousPicture API, MIDI."))
+            Text(L("PDF와 PowerPoint(PPT·PPTX)·Keynote 파일을 그대로 쓸 수 있습니다. PowerPoint·Keynote는 맥의 미리보기 엔진으로 PDF로 바꿔서 보여 주며(애니메이션·화면 전환 효과는 빠짐), 원본을 다시 저장하면 같은 페이지를 유지한 채 바로 반영됩니다. 넘기기: Preview·Program 아래 ‹ 이전 · 다음 › 버튼, 입력 타일의 ‹ ›, 웹 리모컨, 단축키 NextPicture·PreviousPicture, MIDI, API. Google 슬라이드는 PDF나 PPTX로 내려받아 쓰세요."))
                 .font(.caption).foregroundColor(.secondary)
         }
     }

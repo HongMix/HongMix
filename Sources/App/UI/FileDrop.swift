@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 /// Finder → HongMix: dropping files creates inputs by type (or replaces a tile's source).
 ///  • video / audio → Video input (one per file; ⌥ Option with several files → one List input)
-///  • image → Image · folder of pictures → Photos · PDF → PDF Slides
+///  • image → Image · folder of pictures → Photos · PDF / PowerPoint / Keynote → PDF Slides
 enum FileDrop {
     static let dropTypes: [UTType] = [.fileURL, .utf8PlainText, .plainText]
 
@@ -37,7 +37,7 @@ enum FileDrop {
             c.slides.path = u.path
             return c
         }
-        if u.pathExtension.lowercased() == "pdf" {
+        if u.pathExtension.lowercased() == "pdf" || SlideConverter.isDeck(u.path) {
             var c = InputConfig(kind: .pdfSlides, name: name)
             c.slides.path = u.path
             return c

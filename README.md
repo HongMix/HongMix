@@ -10,27 +10,27 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.2</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.3</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.3.2
-- **System menus and open-file panels now follow the HongMix language setting**, fixing Korean macOS-provided items on English and other-language Macs.
-- **NextPicture** and **PreviousPicture** are now available in **Settings › Shortcuts** for PDF and Photos inputs.
-- Leave the shortcut input empty to control the slides on Program, falling back to Preview.
-- Core, translation, bundle-language, checksum, DMG and ad-hoc app-signing checks passed for build 151. See [English notes](docs/RELEASE-NOTES-2.3.2.md) or [한국어](docs/RELEASE-NOTES-2.3.2.ko.md).
+### Latest update · 2.3.3
+- **Slide controls below Preview / Program and on every slide input tile**, plus large Program controls in the phone and tablet web remote.
+- Add PowerPoint and Keynote files directly to PDF Slides; HongMix converts them with macOS Quick Look, with no Office installation required.
+- Saving the source deck converts it again and keeps the current page; hidden slides are skipped.
+- Real-app conversion and controls, web remote tests, core, translation, checksums, DMG and ad-hoc signing passed for build 157. See [English notes](docs/RELEASE-NOTES-2.3.3.md) or [한국어](docs/RELEASE-NOTES-2.3.3.ko.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/manual/images/en-09-web-remote-desktop.png" alt="HongMix web remote on desktop" width="100%"><br><sub>Desktop web remote · the switcher in a browser</sub></td>
-    <td width="50%" align="center"><img src="docs/manual/images/en-10-web-remote-ipad.png" alt="HongMix web remote on iPad" width="100%"><br><sub>Responsive iPad layout</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/en-slides-preview.png" alt="Slide controls below Preview and on the input tile" width="100%"><br><sub>Slide controls in the main switcher</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/en-slides-editor.png" alt="PDF and PowerPoint Slides editor" width="100%"><br><sub>PowerPoint and Keynote files without Office</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/manual/images/en-11-web-remote-phone.png" alt="HongMix web remote on phone" width="100%"><br><sub>Phone controls with bottom tabs</sub></td>
-    <td width="50%" align="center"><img src="docs/manual/images/en-12-tally.png" alt="HongMix camera tally" width="100%"><br><sub>View-only camera tally</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/en-web-phone.png" alt="Slide buttons in the phone web remote" width="100%"><br><sub>Phone web remote slide controls</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/en-web-tablet.png" alt="Slide buttons in the tablet web remote" width="100%"><br><sub>Tablet web remote slide controls</sub></td>
   </tr>
 </table>
 
