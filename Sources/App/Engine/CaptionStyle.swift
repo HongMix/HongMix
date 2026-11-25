@@ -31,7 +31,7 @@ struct CaptionStyle: Codable, Equatable {
     var showDraft = true
     var fontName = "Apple SD Gothic Neo"
     var translationOnly = false
-    /// Lines of translation under the original while translating (the original keeps `lines` − 1).
+    /// Lines of translation under the original while translating (the original keeps `lines`).
     var translationLines = 2
 
     init() {}
@@ -200,7 +200,9 @@ enum CaptionRenderer {
         let padX = 9 * k, padY = 4 * k, gap = CGFloat(st.rowGap) * k
         let sx = CGFloat(max(50, st.scaleX)) / 100
         let avail = max(20, (b.width - 2 * padX) / sx)
-        let topLimit = b.minY + labelReserve(st, k: k) + 5 * k
+        // The set number of lines always shows: when they don't fit the caption area it grows upward
+        // (rows used to be dropped silently, so raising the line count seemed to do nothing) — 2.3.6
+        let topLimit = min(b.minY, H * 0.03) + labelReserve(st, k: k) + 5 * k
         var y = b.maxY
         var out: [Placed] = []
         for row in f.rows.reversed() {
@@ -223,7 +225,11 @@ enum CaptionRenderer {
     static func drawChrome(_ st: CaptionStyle, rowsVisible: Bool, firstRow: CGRect? = nil, in cg: CGContext, W: CGFloat, H: CGFloat) {
         guard rowsVisible else { return }
         let k = H / 1080
-        let b = box(st, W: W, H: H)
+        var b = box(st, W: W, H: H)
+        if let f = firstRow, f.minY - 4 * k < b.minY + labelReserve(st, k: k) {   // rows grew above the area
+            let top = f.minY - 4 * k - labelReserve(st, k: k)
+            b = CGRect(x: b.minX, y: top, width: b.width, height: b.maxY - top)
+        }
         let bg = color(st.bgColor, alpha: st.bgOpacity / 100)
         if st.background == "box" {
             cg.setFillColor(bg)

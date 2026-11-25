@@ -10,23 +10,23 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.5</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.6</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.3.5
-- **Final center panel:** transition tabs and duration, large stacked CUT · AUTO · Quick Play, a horizontal T-bar, round Overlay 1–8 keys and a separate stinger.
-- Stingers now play once even if the clip loops, clear at the real end, and clips no longer lose their final half-second.
-- Display output stays on air when its saved monitor is absent. Translated captions use two readable lines held for at least three seconds.
-- Real-app stinger, Display and caption checks plus core, translation, checksums, DMG and ad-hoc signing passed for build 165. See [English notes](docs/RELEASE-NOTES-2.3.5.md) or [한국어](docs/RELEASE-NOTES-2.3.5.ko.md).
+### Latest update · 2.3.6
+- Translated live captions now change together with their original instead of appearing first.
+- **Caption lines** sets the original line count and **Translation lines** sets the translated line count independently.
+- The caption area grows upward when the configured rows need more room instead of silently dropping rows.
+- Synthetic-sentence app checks plus core, translation, checksums, DMG and ad-hoc signing passed for build 168. Continuous live-microphone speech was not tested. See [English notes](docs/RELEASE-NOTES-2.3.6.md) or [한국어](docs/RELEASE-NOTES-2.3.6.ko.md).
 
 <table>
   <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.6/en-captions.png" alt="HongMix 2.3.6 showing three original caption lines with two translated lines" width="100%"><br><sub>Original and translation change together</sub></td>
     <td width="50%" align="center"><img src="docs/screenshots/2.3.5/en-main.png" alt="HongMix 2.3.5 main switcher with final center panel" width="100%"><br><sub>Final center panel · large operator controls</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.5/en-center-column.png" alt="HongMix 2.3.5 center panel detail" width="100%"><br><sub>AUTO with centered effect and time</sub></td>
   </tr>
   <tr>
     <td width="50%" align="center"><img src="docs/screenshots/2.3.4/en-main.png" alt="Two-line translated captions" width="100%"><br><sub>Readable two-line translation</sub></td>

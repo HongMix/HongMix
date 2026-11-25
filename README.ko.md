@@ -10,23 +10,23 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.5 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.6 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.3.5
-- **최종 센터 패널:** 트랜지션 탭·시간, 한 줄씩 큰 CUT · AUTO · Quick Play, 가로 T-바, 원형 Overlay 1–8과 별도 스팅어.
-- Loop 영상도 스팅어는 한 번만 재생되고 실제 끝에서 빠집니다. 일반 영상도 마지막 약 0.5초가 잘리지 않습니다.
-- 저장한 모니터가 없어도 Display 출력이 유지됩니다. 번역 자막은 읽기 쉬운 두 줄로 최소 3초 표시됩니다.
-- 빌드 165의 실제 앱 스팅어·Display·자막과 코어·번역·체크섬·DMG·애드혹 서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.5.ko.md) · [English](docs/RELEASE-NOTES-2.3.5.md)
+### 최신 업데이트 · 2.3.6
+- 번역 자막이 원문보다 먼저 나오지 않고 원문과 같이 바뀍니다.
+- **자막 줄 수**는 원문, **번역 줄 수**는 번역에 각각 독립적으로 적용됩니다.
+- 설정한 줄이 자막 영역에 다 들어가지 않으면 줄을 버리지 않고 영역을 위로 늘립니다.
+- 빌드 168의 합성 시험 문장 앱 검사와 코어·번역·체크섬·DMG·애드혹 서명 검사를 통과했습니다. 실제 마이크 연속 발화는 시험하지 못했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.6.ko.md) · [English](docs/RELEASE-NOTES-2.3.6.md)
 
 <table>
   <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.6/ko-captions.png" alt="원문 자막 세 줄과 번역 자막 두 줄을 표시한 HongMix 2.3.6" width="100%"><br><sub>원문과 번역이 같이 바뀍</sub></td>
     <td width="50%" align="center"><img src="docs/screenshots/2.3.5/ko-main.png" alt="최종 센터 패널이 있는 HongMix 2.3.5 메인 화면" width="100%"><br><sub>최종 센터 패널 · 큰 방송 조작 버튼</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.5/ko-center-column.png" alt="HongMix 2.3.5 센터 패널 상세" width="100%"><br><sub>AUTO 효과와 시간을 두 줄 중앙 정렬</sub></td>
   </tr>
   <tr>
     <td width="50%" align="center"><img src="docs/screenshots/2.3.4/ko-main.png" alt="두 줄 번역 자막" width="100%"><br><sub>읽기 쉬운 번역 자막 두 줄</sub></td>

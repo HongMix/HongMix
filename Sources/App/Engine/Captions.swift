@@ -43,7 +43,10 @@ final class CaptionEngine: ObservableObject {
         didSet {
             save(); busIndex = settings.bus
             if settings.style != oldValue.style { revealedUpTo = (currentBase + 1) * 1000; rebuildRows() }
-            if settings.translateTo != oldValue.translateTo { translationBroken = false; translationText = ""; translateGen += 1; pendingTranslation = nil }
+            if settings.translateTo != oldValue.translateTo || settings.language != oldValue.language {
+                translationBroken = false; translationText = ""; translateGen += 1; pendingTranslation = nil
+                pairCache = [:]; pairCacheOrder = []; resetPairs()
+            }
             if settings.correctionsPath != oldValue.correctionsPath || settings.useGlossary != oldValue.useGlossary {
                 loadCorrections()
             }
@@ -427,7 +430,7 @@ final class CaptionEngine: ObservableObject {
     private func textChanged(_ text: String) {
         let t = CaptionEngine.tail(text)
         publish(t, lastTranslation)
-        guard !translateTarget.isEmpty, !translationBroken else { return }
+        guard !translateTarget.isEmpty, !translationBroken, settings.style.translationOnly else { return }
         // A translation takes ~1–2 s and the recogniser revises its text several times a second. Cancelling the
         // running one for every revision meant nothing was ever shown while someone kept talking — so let it
         // finish, show it, then translate the newest text.
@@ -448,7 +451,7 @@ final class CaptionEngine: ObservableObject {
             if gen == self.translateGen, let tr = tr { self.showTranslation(tr) }
             if let next = self.pendingTranslation, !self.translationBroken {
                 self.pendingTranslation = nil
-                self.startTranslation(next)
+                if self.settings.style.translationOnly { self.startTranslation(next) } else { self.requestPairTranslation(next) }
             }
         }
     }
@@ -525,6 +528,7 @@ final class CaptionEngine: ObservableObject {
         pendingTranslation = nil
         heldTranslation = nil
         translationShownAt = .distantPast
+        resetPairs()
         rebuildRows()
     }
 
@@ -547,18 +551,12 @@ final class CaptionEngine: ObservableObject {
                 let draft = st.showDraft && k == cur.count - 1
                 rows.append(CaptionRow(id: currentBase * 1000 + k, text: l, kind: draft ? .draft : .final))
             }
-            rows = paced(rows, lines: max(1, st.lines))
-            var keep = max(1, st.lines)
-            if !translateTarget.isEmpty, !translationText.isEmpty, !rows.isEmpty {
-                // original: `lines` − 1 rows, then the last `translationLines` lines of the translation under it
-                let tr = CaptionStyle.wrap(translationText, units: st.lineUnits).suffix(max(1, st.translationLines))
-                rows = Array(rows.suffix(max(1, st.lines - 1)))
-                keep = rows.count + tr.count
-                for (k, l) in tr.enumerated() {
-                    rows.append(CaptionRow(id: -(translationShownGen * 1000 + k + 1), text: l, kind: .translation))
-                }
+            if translateTarget.isEmpty {
+                rows = Array(paced(rows, lines: max(1, st.lines)).suffix(max(1, st.lines)))
+            } else {
+                // translating: the pair hold sets the pace (line pacing on top of it only added delay)
+                rows = pairedRows(Array(rows.suffix(max(1, st.lines))), st)
             }
-            rows = Array(rows.suffix(keep))
         }
         let frame = CaptionFrame(rows: rows, style: st)
         guard let e = engine else { return }
@@ -566,6 +564,101 @@ final class CaptionEngine: ObservableObject {
         currentFrame = frame
         CaptionEngine.latestFrame = frame
     }
+    // MARK: paired translation (2.3.6)
+    // The original and its translation change together: the original lines on screen wait until their
+    // translation is ready, then both are shown. Before, the translation was made from the newest recognised
+    // text while the original was still paced, so the translation often appeared before its original.
+
+    private struct PairCandidate { var seq: Int; var text: String; var rows: [CaptionRow]; var at: Date }
+    private var candidates: [PairCandidate] = []
+    private var candidateSeq = 0
+    private var pairCache: [String: String] = [:]
+    private var pairCacheOrder: [String] = []
+    private var shownPairSeq = 0
+    private var shownPairRows: [CaptionRow] = []
+    private var shownPairTranslation = ""
+    private var shownPairAt = Date.distantPast
+    private var pairRebuildScheduled = false
+    /// Least time between two caption updates while translating (the minimum time per line, at least 1.5 s).
+    private var pairHold: Double { max(1.5, settings.minLineSeconds) }
+
+    private func pairedRows(_ original: [CaptionRow], _ st: CaptionStyle) -> [CaptionRow] {
+        let text = original.map(\.text).joined(separator: " ")
+        if text.isEmpty {
+            shownPairRows = []; shownPairTranslation = ""
+            return []
+        }
+        if candidates.last?.text != text {
+            candidateSeq += 1
+            candidates.append(PairCandidate(seq: candidateSeq, text: text, rows: original, at: Date()))
+            if candidates.count > 16 { candidates.removeFirst(candidates.count - 16) }
+            requestPairTranslation(text)
+        } else if let i = candidates.indices.last {
+            candidates[i].rows = original       // same words, newer row ids / kinds
+        }
+        let now = Date()
+        var next: PairCandidate?
+        var nextTranslation = ""
+        if let c = candidates.last(where: { pairCache[$0.text] != nil }), c.seq > shownPairSeq {
+            next = c; nextTranslation = pairCache[c.text] ?? ""
+        } else if let newest = candidates.last, newest.seq > shownPairSeq,
+                  translationBroken || now.timeIntervalSince(newest.at) > 4 {
+            next = newest                           // translation unavailable or stalled: show the original alone
+        }
+        if let n = next {
+            let wait = pairHold - now.timeIntervalSince(shownPairAt)
+            if wait <= 0 || shownPairRows.isEmpty {
+                shownPairSeq = n.seq
+                shownPairRows = n.rows
+                if nextTranslation != shownPairTranslation { translationShownGen += 1 }
+                shownPairTranslation = nextTranslation
+                translationText = nextTranslation
+                shownPairAt = now
+                publish(lastText, nextTranslation)
+            } else if !pairRebuildScheduled {
+                pairRebuildScheduled = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
+                    self?.pairRebuildScheduled = false
+                    self?.rebuildRows()
+                }
+            }
+        }
+        var rows = shownPairRows
+        for (k, l) in CaptionStyle.wrap(shownPairTranslation, units: st.lineUnits).suffix(max(1, st.translationLines)).enumerated() {
+            rows.append(CaptionRow(id: -(translationShownGen * 1000 + k + 1), text: l, kind: .translation))
+        }
+        return rows
+    }
+
+    private func requestPairTranslation(_ text: String) {
+        guard pairCache[text] == nil, !translationBroken else { return }
+        if translating { pendingTranslation = text; return }
+        translating = true
+        let gen = translateGen
+        translate(text) { [weak self] tr in
+            guard let self else { return }
+            self.translating = false
+            if gen == self.translateGen, let tr {
+                self.pairCache[text] = tr
+                self.pairCacheOrder.append(text)
+                if self.pairCacheOrder.count > 40 { self.pairCache[self.pairCacheOrder.removeFirst()] = nil }
+                self.rebuildRows()
+            }
+            if let next = self.pendingTranslation {
+                self.pendingTranslation = nil
+                if self.settings.style.translationOnly { self.startTranslation(next) } else { self.requestPairTranslation(next) }
+            }
+        }
+    }
+
+    private func resetPairs() {
+        candidates = []
+        shownPairRows = []
+        shownPairTranslation = ""
+        shownPairSeq = candidateSeq
+        shownPairAt = .distantPast
+    }
+
     /// Reading pace: a new line may push the oldest line off screen at most every `minLineSeconds`
     /// (lines appear at once while there is room). A long backlog catches up so captions never lag far behind.
     private func paced(_ all: [CaptionRow], lines: Int) -> [CaptionRow] {

@@ -1,4 +1,4 @@
-HongMix 2.3.5 — User Manual (English)
+HongMix 2.3.6 — User Manual (English)
 ================================================================
 A live production switcher for Apple Silicon Macs, with a vMix-style layout, shortcuts and API.
 Made by Hong Seunghoon (홍승훈) · 2026-10-28 · Korea
@@ -9,14 +9,14 @@ Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)
 Requirements: an Apple Silicon Mac (M1 and later), macOS 14 or later.
 Everything (FFmpeg, SRT, NDI runtime, Chromium web engine) is bundled inside the app — nothing else to install.
 
-[Option A — recommended] Double-click HongMix-2.3.5.pkg
+[Option A — recommended] Double-click HongMix-2.3.6.pkg
   1) If macOS says "unidentified developer": right-click the file → Open → Open
      (or System Settings → Privacy & Security → "Open Anyway").
   2) Continue → Install. HongMix is installed in Applications.
   3) First launch: if macOS warns, right-click HongMix in Applications → Open → Open (once).
      (HongMix is not notarized by Apple yet, so macOS asks once.)
 
-[Option B] Open HongMix-2.3.5.dmg → drag HongMix into Applications
+[Option B] Open HongMix-2.3.6.dmg → drag HongMix into Applications
   - If warned on first launch, right-click the app → Open (once).
 
 On first use macOS asks for permissions:
@@ -228,8 +228,9 @@ Settings (⌘,) → General → 언어 / Language: 한국어 / English. Switches
 
 [Live captions (CC)] [CC] at the bottom
   Recognises the programme audio (Master or bus A–G) on this Mac and shows it in a caption input — Korean, English,
-  Spanish, Japanese and more. Translation uses 1–4 lines (default 2) below the original and each result stays
-  at least 3 seconds. Download the macOS translation languages once.
+  Spanish, Japanese and more. Caption lines sets the original rows and Translation lines (1–4, default 2) sets
+  the translated rows below them. Both change together; the area grows upward when the rows need more room.
+  Download the macOS translation languages once.
   [Add Caption Input] → put the new 'Live Captions' input on an overlay. An .srt file is saved to ~/Movies/HongMix.
   Allow 'Speech Recognition' the first time.
 

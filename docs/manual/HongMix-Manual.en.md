@@ -1,4 +1,4 @@
-# HongMix 2.3.5 User Manual
+# HongMix 2.3.6 User Manual
 
 HongMix is a live production switcher for Apple Silicon Macs. Its layout, keyboard shortcuts and remote API follow vMix, so vMix operators, Bitfocus Companion and Stream Deck setups feel at home.
 
@@ -31,13 +31,13 @@ Everything HongMix needs (FFmpeg, SRT, the NDI runtime and the Chromium web engi
 
 ### Option A: PKG installer (recommended)
 
-1. Double-click **HongMix-2.3.5.pkg**.
+1. Double-click **HongMix-2.3.6.pkg**.
 2. If macOS says the file is from an **unidentified developer**, right-click the file and choose **Open**, then **Open** again. (Alternatively: **System Settings › Privacy & Security**, then **Open Anyway**.)
 3. Click **Continue**, then **Install**. HongMix is installed in **Applications**.
 
 ### Option B: DMG
 
-1. Open **HongMix-2.3.5.dmg**.
+1. Open **HongMix-2.3.6.dmg**.
 2. Drag **HongMix** into the **Applications** folder.
 
 ### First launch
@@ -463,7 +463,7 @@ To close a full-screen output: **Esc**, double-click or right-click. If a displa
 3. Click **Add Caption Input** and put the new **Live Captions** input on an overlay.
 4. Click **Start Captions**. Allow **Speech Recognition** the first time.
 
-Recognition runs on the Mac. Choose a caption style (right column, cinema, band or custom), minimum line time and **Translation lines** (1–4, default 2). Translations appear below the original and remain visible for at least three seconds. An `.srt` file is saved to `~/Movies/HongMix`. On macOS 26 or later, a newer on-device engine is used.
+Recognition runs on the Mac. Choose a caption style (right column, cinema, band or custom) and minimum line time. **Caption lines** sets the number of original-language rows and **Translation lines** (1–4, default 2) sets the translated rows below them. The original and translation change together; if the configured rows do not fit, the caption area grows upward. An `.srt` file is saved to `~/Movies/HongMix`. On macOS 26 or later, a newer on-device engine is used.
 
 ---
 

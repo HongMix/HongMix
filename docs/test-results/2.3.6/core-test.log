@@ -1,0 +1,21 @@
+FFmpeg 9.0.2 · GPL version 3 or later
+UYVY round-trip max error (chroma subsampled): 18
+  [rec] state=1 녹화 준비 중…
+  [rec] state=2 녹화 중
+[aac @ 0x77bcfdc000] Qavg: 368.119
+record: encoder=h264_videotoolbox frames=85 dropped=0 bytes=534407
+file audio queue: current=1027.9 ms peak=3814.2 ms late_chunks=1 max_late=1.6 ms
+  [rec] state=4 중지됨
+file input: video frames=86 (640x360) audio frames=142646 metadata_audio_track=yes
+  [srt-out] state=1 연결 중…
+  [srt-out] state=1 SRT 리스너 — 수신 측 접속 대기 중…
+  [srt-out] state=2 송출 중
+[aac @ 0x77bcc94380] Qavg: 388.011
+[aac @ 0x77bcc94380] 1 frames left in the queue on closing
+srt out: frames=149 kbps=256
+  [srt-out] state=4 중지됨
+srt in: video frames=132 (640x360) audio frames=229376
+core test: PASS
+video encoder used: h264_videotoolbox
+stream|codec_name=h264|width=640|height=360
+stream|codec_name=aac
