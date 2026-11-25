@@ -2052,5 +2052,15 @@
  "이 프레젠테이션은 macOS 미리보기로 열 수 없습니다. PowerPoint·Keynote에서 PDF로 내보내서 쓰세요.": "macOS Quick Look can't open this presentation. Export it as PDF from PowerPoint or Keynote and use the PDF.",
  "이 프레젠테이션에서 슬라이드를 찾지 못했습니다. PowerPoint·Keynote에서 PDF로 내보내서 쓰세요.": "No slides were found in this presentation. Export it as PDF from PowerPoint or Keynote and use the PDF.",
  "이전 슬라이드": "Previous slide",
- "다음 슬라이드": "Next slide"
+ "다음 슬라이드": "Next slide",
+ "번역 줄 수": "Translation lines",
+ "번역을 켜면 원문은 (자막 줄 수 − 1)줄, 그 아래 번역이 이 줄 수만큼 나옵니다. 번역은 최소 3초씩 유지됩니다.": "With translation on, the original takes (caption lines − 1) lines and the translation this many lines below it. Each translation stays on screen for at least 3 seconds.",
+ "컷 — 바로 넘김 (Space)": "Cut — switch instantly (Space)",
+ "선택한 트랜지션으로 넘김 (%@ · %@ ms)": "Switch with the selected transition (%@ · %@ ms)",
+ "Quick Play — 첫 번째 트랜지션으로 넘김 (Return)": "Quick Play — switch with the first transition (Return)",
+ "트랜지션 %@ — 클릭: AUTO·T-바에 사용 · 우클릭: 효과 바꾸기 · 바로 실행 ⌥%@": "Transition %@ — click: use for AUTO and the T-bar · right-click: change the effect · run now ⌥%@",
+ "효과 바꾸기": "Change effect",
+ "전환 시간 (0–5초)": "Transition time (0–5 s)",
+ "스팅어 실행": "Run stinger",
+ "T-바 — 오른쪽 끝까지 밀면 선택한 트랜지션으로 수동 전환": "T-bar — push all the way right to switch manually with the selected transition"
 }

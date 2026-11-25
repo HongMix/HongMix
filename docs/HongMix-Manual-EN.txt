@@ -1,4 +1,4 @@
-HongMix 2.3.3 — User Manual (English)
+HongMix 2.3.5 — User Manual (English)
 ================================================================
 A live production switcher for Apple Silicon Macs, with a vMix-style layout, shortcuts and API.
 Made by Hong Seunghoon (홍승훈) · 2026-10-28 · Korea
@@ -9,14 +9,14 @@ Contact: github.com/HongMix/HongMix/issues (feedback & bug reports)
 Requirements: an Apple Silicon Mac (M1 and later), macOS 14 or later.
 Everything (FFmpeg, SRT, NDI runtime, Chromium web engine) is bundled inside the app — nothing else to install.
 
-[Option A — recommended] Double-click HongMix-2.3.3.pkg
+[Option A — recommended] Double-click HongMix-2.3.5.pkg
   1) If macOS says "unidentified developer": right-click the file → Open → Open
      (or System Settings → Privacy & Security → "Open Anyway").
   2) Continue → Install. HongMix is installed in Applications.
   3) First launch: if macOS warns, right-click HongMix in Applications → Open → Open (once).
      (HongMix is not notarized by Apple yet, so macOS asks once.)
 
-[Option B] Open HongMix-2.3.3.dmg → drag HongMix into Applications
+[Option B] Open HongMix-2.3.5.dmg → drag HongMix into Applications
   - If warned on first launch, right-click the app → Open (once).
 
 On first use macOS asks for permissions:
@@ -65,7 +65,7 @@ New in 2.2.3
 
 2. Layout (same as vMix)
 ----------------------------------------------------------------
-  [ Preview (orange) | transitions · T-bar · FTB | Output (green) ]
+  [ Preview | transition tabs · CUT · AUTO · Quick Play · T-bar · overlays · Stinger · FTB | Output ]
   [ inputs ................................ | audio mixer ]
   [ Add Input · Record · External · Stream · MultiCorder · Fullscreen · Overlay · Schedule … ]
 
@@ -91,9 +91,10 @@ New in 2.2.3
   ⌘W           Close the current tool window or sheet (not the switcher or Display output)
 Settings (⌘,) → Shortcuts lets you map any key to any function (vMix default set included).
 
-- Four transition buttons: button = run, ▾ = effect (Fade/Merge/Wipe/Fly …), number = duration (ms).
-- T-bar: push up for a manual transition with the first effect.
-- Stinger 1·2: transitions with transparent animations (ProRes 4444 MOV …); set media and cut point in ▾.
+- Transition tabs choose the slot used by AUTO and the horizontal T-bar; right-click changes its effect.
+- Set the selected effect and 0–5 s duration, then use the large stacked CUT, AUTO or Quick Play buttons.
+- Round Overlay 1–8 keys and a separate Stinger picker/button sit below the horizontal T-bar.
+- Stinger plays once even when the media input loops, and clears at the real end. API: SetStinger.
 
 
 4. Adding inputs
@@ -227,7 +228,8 @@ Settings (⌘,) → General → 언어 / Language: 한국어 / English. Switches
 
 [Live captions (CC)] [CC] at the bottom
   Recognises the programme audio (Master or bus A–G) on this Mac and shows it in a caption input — Korean, English,
-  Spanish, Japanese and more. Optional translation line (download the macOS translation languages once).
+  Spanish, Japanese and more. Translation uses 1–4 lines (default 2) below the original and each result stays
+  at least 3 seconds. Download the macOS translation languages once.
   [Add Caption Input] → put the new 'Live Captions' input on an overlay. An .srt file is saved to ~/Movies/HongMix.
   Allow 'Speech Recognition' the first time.
 

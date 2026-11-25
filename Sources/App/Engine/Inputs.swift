@@ -235,6 +235,7 @@ final class FFmpegInput: CallbackInput {
         return 1
     }
 
+    private var endSeenAt: CFTimeInterval?
     override func pollPosition() {
         guard supportsTransport else { return }
         var pos: Int64 = 0, dur: Int64 = 0
@@ -259,7 +260,18 @@ final class FFmpegInput: CallbackInput {
         }
         if abs(position - p) > 0.05 { position = p }
         if duration != d { duration = d }
-        if finished != 0 && playing && queuedListIndex == nil && CACurrentMediaTime() > restartGraceUntil {
+        // The demuxer reaches the end while ~0.5 s of frames are still queued for display. Pausing at that
+        // moment froze every clip (and stinger) before its last frames: wait until the last frame is shown,
+        // or 1 s at most (2.3.5).
+        var tailShown = true
+        if finished != 0 && playing && !isList {
+            let now = CACurrentMediaTime()
+            if endSeenAt == nil { endSeenAt = now }
+            tailShown = (d > 0 && p >= d - 0.1) || now - (endSeenAt ?? now) > 1.0
+        } else if finished == 0 {
+            endSeenAt = nil
+        }
+        if finished != 0 && playing && tailShown && queuedListIndex == nil && CACurrentMediaTime() > restartGraceUntil {
             if isList && (playlistIndex + 1 < playlist.count || looping) {
                 nextItem()            // List input: next file
             } else {

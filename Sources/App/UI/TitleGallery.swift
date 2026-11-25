@@ -27,7 +27,7 @@ struct TitleGallery: View {
 
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 10) {
-                    if category == L("전체") || category == L("내 템플릿") {
+                    if category == "전체" || category == "내 템플릿" {   // tags are the Korean keys (in English too)
                         ForEach(library.templates, id: \.name) { doc in
                             tile(doc, title: "★ " + doc.name)
                                 .contextMenu {
@@ -36,7 +36,7 @@ struct TitleGallery: View {
                                 }
                         }
                     }
-                    ForEach(TitleTemplate.allCases.filter { category == L("전체") || $0.category.rawValue == category }) { t in
+                    ForEach(TitleTemplate.allCases.filter { category == "전체" || $0.category.rawValue == category }) { t in
                         tile(TitleDocument(template: t), title: t.label)
                     }
                 }

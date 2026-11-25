@@ -102,6 +102,12 @@ enum APIProcessor {
             e.transition(slot: n)
             return nil
         }
+        if fn == "setstinger" {      // Input = media input for Stinger 1, Value = cut point in ms (optional) — 2.3.5
+            guard let i = input, i.kind == .media else { return "Input = a media (video) input" }
+            e.stingers[0].inputID = i.id
+            if let ms = Int(value) { e.stingers[0].cutPointMs = max(0, ms) }
+            return nil
+        }
         if let n = numberSuffix(fn, "stinger") {
             guard n == 1 else { return "Only Stinger1 is available" }
             if let i = input { e.setPreview(i.id) }
@@ -758,6 +764,8 @@ enum APIProcessor {
             FullscreenOutput.shared.testToggleSystemFullScreen()
         case "outputwindowexit":       // Esc on the output window
             FullscreenOutput.shared.testExit()
+        case "testscreenschanged":     // test hook: macOS "screen parameters changed" (Dock, wake, plug…) — 2.3.4
+            NotificationCenter.default.post(name: NSApplication.didChangeScreenParametersNotification, object: NSApp)
         // ===== Monitor outputs (HongMix): Value = monitor number[,source]; source Output|Preview|Clean|MultiView|Off|input
         case "setmonitoroutput", "monitoroutput":
             let p = value.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }

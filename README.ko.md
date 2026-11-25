@@ -10,27 +10,27 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.3 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.5 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.3.3
-- **Preview·Program 아래와 모든 슬라이드 입력 타일에 넘기기 버튼**을 추가하고, 휴대폰·태블릿 웹 리모컨의 Program에도 큰 버튼을 표시합니다.
-- PDF 슬라이드 입력에 PowerPoint·Keynote 파일을 그대로 추가합니다. macOS 미리보기로 변환하므로 Office를 설치할 필요가 없습니다.
-- 원본을 다시 저장하면 현재 페이지를 유지한 채 다시 변환하며 숨긴 슬라이드는 건너뜁니다.
-- 빌드 157의 실제 앱 변환·조작, 웹 리모컨, 코어·번역·체크섬·DMG·애드혹 서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.3.ko.md) · [English](docs/RELEASE-NOTES-2.3.3.md)
+### 최신 업데이트 · 2.3.5
+- **최종 센터 패널:** 트랜지션 탭·시간, 한 줄씩 큰 CUT · AUTO · Quick Play, 가로 T-바, 원형 Overlay 1–8과 별도 스팅어.
+- Loop 영상도 스팅어는 한 번만 재생되고 실제 끝에서 빠집니다. 일반 영상도 마지막 약 0.5초가 잘리지 않습니다.
+- 저장한 모니터가 없어도 Display 출력이 유지됩니다. 번역 자막은 읽기 쉬운 두 줄로 최소 3초 표시됩니다.
+- 빌드 165의 실제 앱 스팅어·Display·자막과 코어·번역·체크섬·DMG·애드혹 서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.5.ko.md) · [English](docs/RELEASE-NOTES-2.3.5.md)
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/ko-slides-preview.png" alt="Preview 아래와 입력 타일의 슬라이드 버튼" width="100%"><br><sub>메인 스위처의 슬라이드 조작</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/ko-slides-editor.png" alt="PDF·PowerPoint 슬라이드 편집 화면" width="100%"><br><sub>Office 없이 PowerPoint·Keynote 파일 사용</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.5/ko-main.png" alt="최종 센터 패널이 있는 HongMix 2.3.5 메인 화면" width="100%"><br><sub>최종 센터 패널 · 큰 방송 조작 버튼</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.5/ko-center-column.png" alt="HongMix 2.3.5 센터 패널 상세" width="100%"><br><sub>AUTO 효과와 시간을 두 줄 중앙 정렬</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/ko-web-phone.png" alt="휴대폰 웹 리모컨의 슬라이드 버튼" width="100%"><br><sub>휴대폰 웹 리모컨 슬라이드 조작</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/ko-web-tablet.png" alt="태블릿 웹 리모컨의 슬라이드 버튼" width="100%"><br><sub>태블릿 웹 리모컨 슬라이드 조작</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.4/ko-main.png" alt="두 줄 번역 자막" width="100%"><br><sub>읽기 쉬운 번역 자막 두 줄</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/ko-web-phone.png" alt="휴대폰 웹 리모컨 슬라이드 조작" width="100%"><br><sub>2.3.3의 슬라이드 조작</sub></td>
   </tr>
 </table>
 

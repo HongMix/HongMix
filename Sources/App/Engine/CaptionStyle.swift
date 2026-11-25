@@ -31,6 +31,8 @@ struct CaptionStyle: Codable, Equatable {
     var showDraft = true
     var fontName = "Apple SD Gothic Neo"
     var translationOnly = false
+    /// Lines of translation under the original while translating (the original keeps `lines` − 1).
+    var translationLines = 2
 
     init() {}
     init(from decoder: Decoder) throws {
@@ -52,6 +54,7 @@ struct CaptionStyle: Codable, Equatable {
         labelX = c.value(.labelX, d.labelX); labelY = c.value(.labelY, d.labelY)
         animationMs = c.value(.animationMs, d.animationMs); showDraft = c.value(.showDraft, d.showDraft)
         fontName = c.value(.fontName, d.fontName); translationOnly = c.value(.translationOnly, d.translationOnly)
+        translationLines = c.value(.translationLines, d.translationLines)
     }
 
     /// Line width in display units (Hangul / CJK = 2, Latin = 1).
@@ -233,7 +236,7 @@ enum CaptionRenderer {
         if st.labelShow, !st.labelText.isEmpty {
             let size = CGFloat(st.labelSize) * k
             let lf = font(st, size: size)
-            let line = CTLineCreateWithAttributedString(NSAttributedString(string: st.labelText, attributes: [
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: AppLanguage.captionLabel(st.labelText), attributes: [
                 NSAttributedString.Key(kCTFontAttributeName as String): lf,
                 NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: 1, alpha: 1)]))
             let tw = CTLineGetBoundsWithOptions(line, .useOpticalBounds).width

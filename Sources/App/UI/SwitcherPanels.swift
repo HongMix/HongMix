@@ -69,60 +69,284 @@ private struct OverlayChannelButton: View {
     }
 }
 
-// MARK: - Transition column (Quick Play, Cut, 4 transition buttons, T-bar, FTB)
+// MARK: - Transition column (2.3.4): transition tabs + length, CUT / AUTO / Quick Play, T-bar,
+// Overlay 1–8, Stinger, FTB. HongMix orange marks the transition AUTO and the T-bar will use.
 
 struct TransitionColumn: View {
     @EnvironmentObject var engine: SwitcherEngine
 
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 8) {
             Spacer().frame(height: 22)
-            FlatButton(title: "Quick Play", active: engine.transitioning, activeColor: Theme.accent, height: 34,
-                       fontSize: 13, weight: .bold, style: .outline) {
-                engine.transition(slot: 1)
-            }
-            .help("Return")
-            FlatButton(title: AppSkin.isMono ? "CUT" : "Cut", height: 34, fontSize: 13, weight: .heavy, style: .primary) { engine.cut() }
-                .help("Space")
-
-            ForEach(0..<4, id: \.self) { i in
-                TransitionSlotRow(index: i)
-            }
-            StingerButton(slot: 1)
-
-            // vMix-style overlay bank: each channel recalls its saved input, independent of Preview.
-            VStack(spacing: 3) {
-                Text(L("OVERLAY 1–8"))
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                ForEach(0..<2, id: \.self) { row in
-                    HStack(spacing: 3) {
-                        ForEach(1...4, id: \.self) { col in
-                            let channel = row * 4 + col
-                            let active = engine.overlayOn[channel - 1]
-                            let savedInput = engine.input(withID: engine.overlayIDs[channel - 1])
-                            OverlayChannelButton(channel: channel, active: active, height: 20, fontSize: 9) {
-                                engine.toggleOverlayChannel(channel)
-                            }
-                            .disabled(savedInput == nil)
-                            .help(savedInput.map { Lf("Overlay %@ · 저장된 입력: %@", "\(channel)", $0.name) }
-                                  ?? Lf("Overlay %@ · 입력 타일에서 소스를 먼저 지정하세요", "\(channel)"))
-                        }
-                    }
+            TransitionTabs()
+            TransitionLength()
+            VStack(spacing: 6) {         // one row each: the buttons take the free height (2.3.5)
+                BigTakeButton(title: "CUT", sub: nil, fill: Theme.primaryFill, text: .black) { engine.cut() }
+                    .help(L("컷 — 바로 넘김 (Space)"))
+                let sel = engine.transitionSlots[max(0, min(3, engine.autoSlot))]
+                BigTakeButton(title: "AUTO", sub: "\(sel.type.label) \(TransitionLength.seconds(sel.durationMs))", fill: Theme.brand,
+                              text: Color(red: 0.16, green: 0.07, blue: 0.02), active: engine.transitioning) {
+                    engine.transition(slot: engine.autoSlot + 1)
                 }
+                .help(Lf("선택한 트랜지션으로 넘김 (%@ · %@ ms)", sel.type.label, "\(sel.durationMs)"))
+                BigTakeButton(title: "Quick Play", sub: nil, fill: Theme.quickPlay,
+                              text: Color(red: 0.84, green: 0.87, blue: 1.0)) {
+                    engine.transition(slot: 1)
+                }
+                .help(L("Quick Play — 첫 번째 트랜지션으로 넘김 (Return)"))
             }
-
-            // one slim T-bar centred in the column, FTB underneath
-            TBar(value: Binding(get: { engine.tbar }, set: { engine.setTBar($0) }))
-                .frame(width: 56)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            FlatButton(title: "FTB", active: engine.ftbOn, height: 30, fontSize: 12, weight: .bold) {
+            .frame(maxHeight: 3 * 72 + 12)
+            HTBar(value: Binding(get: { engine.tbar }, set: { engine.setTBar($0) }))
+                .frame(height: 24)
+            OverlayBank()
+            StingerRow(slot: 1)
+            FlatButton(title: "FTB", active: engine.ftbOn, height: 26, fontSize: 12, weight: .bold) {
                 engine.toggleFTB()
             }
             .help("Fade To Black (⇧⌘B)")
         }
         .padding(.bottom, 2)
+    }
+}
+
+/// The four transitions as tabs: click = the one AUTO / T-bar use, right-click = change its effect.
+private struct TransitionTabs: View {
+    @EnvironmentObject var engine: SwitcherEngine
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<4, id: \.self) { i in
+                let on = engine.autoSlot == i
+                Button { engine.autoSlot = i } label: {
+                    Text(engine.transitionSlots[i].type.label)
+                        .font(.system(size: 10, weight: .semibold))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .foregroundColor(on ? Color(red: 0.16, green: 0.07, blue: 0.02) : Color(white: 0.75))
+                        .frame(maxWidth: .infinity, minHeight: 22)
+                        .background(on ? Theme.brand : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    ForEach(TransitionType.allCases) { t in
+                        Button((engine.transitionSlots[i].type == t ? "✓ " : "") + t.label) { engine.transitionSlots[i].type = t }
+                    }
+                }
+                .help(Lf("트랜지션 %@ — 클릭: AUTO·T-바에 사용 · 우클릭: 효과 바꾸기 · 바로 실행 ⌥%@", "\(i + 1)", "\(i + 1)"))
+            }
+        }
+        .padding(2)
+        .background(Theme.panelDark)
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+}
+
+/// Effect and length of the selected transition.
+private struct TransitionLength: View {
+    @EnvironmentObject var engine: SwitcherEngine
+
+    var body: some View {
+        let i = max(0, min(3, engine.autoSlot))
+        let slot = engine.transitionSlots[i]
+        VStack(spacing: 2) {
+            HStack(spacing: 4) {
+                Menu {
+                    ForEach(TransitionType.allCases) { t in
+                        Button((slot.type == t ? "✓ " : "") + t.label) { engine.transitionSlots[i].type = t }
+                    }
+                } label: {
+                    HStack(spacing: 2) {
+                        Text(slot.type.label)
+                        Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold))
+                    }
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help(L("효과 바꾸기"))
+                Spacer(minLength: 0)
+                Text(Self.seconds(slot.durationMs))
+                    .font(.system(size: 10, weight: .bold).monospacedDigit())
+                    .foregroundColor(Theme.brand)
+            }
+            Slider(value: Binding(get: { Double(slot.durationMs) },
+                                  set: { engine.transitionSlots[i].durationMs = Int(($0 / 50).rounded() * 50) }),
+                   in: 0...5000)
+                .controlSize(.mini)
+                .tint(Theme.brand)
+                .help(L("전환 시간 (0–5초)"))
+        }
+    }
+}
+
+extension TransitionLength {
+    /// 500 → "0.5 s", 1000 → "1 s", 1250 → "1.25 s"
+    static func seconds(_ ms: Int) -> String {
+        var t = String(format: "%.2f", Double(ms) / 1000)
+        while t.hasSuffix("0") { t.removeLast() }
+        if t.hasSuffix(".") { t.removeLast() }
+        return t + " s"
+    }
+}
+
+/// CUT / AUTO / Quick Play — three equal take buttons.
+private struct BigTakeButton: View {
+    let title: String
+    let sub: String?
+    let fill: Color
+    let text: Color
+    var active = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Text(title)
+                    .font(.system(size: 16, weight: .heavy))
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                if let sub {
+                    Text(sub).font(.system(size: 11, weight: .medium)).lineLimit(1).minimumScaleFactor(0.7).opacity(0.85)
+                }
+            }
+            .multilineTextAlignment(.center)
+            .foregroundColor(text)
+            .frame(maxWidth: .infinity, minHeight: 34, maxHeight: 72)
+            .background(fill.opacity(active ? 0.75 : 1))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.white.opacity(active ? 0.9 : 0), lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Overlay 1–8 as round keys in each channel's colour (filled when on air).
+private struct OverlayBank: View {
+    @EnvironmentObject var engine: SwitcherEngine
+
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text(L("오버레이")).font(.system(size: 9, weight: .bold)).foregroundColor(.secondary)
+                Spacer()
+            }
+            ForEach(0..<2, id: \.self) { row in
+                HStack(spacing: 5) {
+                    ForEach(1...4, id: \.self) { col in
+                        let channel = row * 4 + col
+                        let active = engine.overlayOn[channel - 1]
+                        let savedInput = engine.input(withID: engine.overlayIDs[channel - 1])
+                        let color = Theme.overlayChannel(channel)
+                        Button { engine.toggleOverlayChannel(channel) } label: {
+                            Text("\(channel)")
+                                .font(.system(size: 11, weight: .heavy).monospacedDigit())
+                                .foregroundColor(active ? .white : color.opacity(savedInput == nil ? 0.45 : 1))
+                                .frame(width: 30, height: 30)
+                                .background(Circle().fill(active ? color : Color.clear))
+                                .overlay(Circle().stroke(color.opacity(savedInput == nil ? 0.35 : 0.9), lineWidth: 1.5))
+                        }
+                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity)
+                        .disabled(savedInput == nil)
+                        .help(savedInput.map { Lf("Overlay %@ · 저장된 입력: %@", "\(channel)", $0.name) }
+                              ?? Lf("Overlay %@ · 입력 타일에서 소스를 먼저 지정하세요", "\(channel)"))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Stinger: small picker (media input, cut point) + the STINGER button.
+private struct StingerRow: View {
+    @EnvironmentObject var engine: SwitcherEngine
+    let slot: Int
+
+    var body: some View {
+        let cfg = engine.stingers[slot - 1]
+        let name = engine.input(withID: cfg.inputID)?.name
+        HStack(spacing: 4) {
+            Menu {
+                Section(L("미디어 입력")) {
+                    ForEach(engine.inputs.filter { $0.kind == .media }) { i in
+                        Button((cfg.inputID == i.id ? "✓ " : "") + i.name) { engine.stingers[slot - 1].inputID = i.id }
+                    }
+                }
+                Section(L("컷 지점")) {
+                    ForEach([250, 500, 750, 1000, 1500, 2000], id: \.self) { ms in
+                        Button((cfg.cutPointMs == ms ? "✓ " : "") + "\(ms) ms") { engine.stingers[slot - 1].cutPointMs = ms }
+                    }
+                }
+            } label: {
+                HStack(spacing: 2) {
+                    Text(name ?? "Stinger \(slot)").lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold))
+                }
+                .font(.system(size: 10))
+                .foregroundColor(Theme.buttonText)
+                .padding(.horizontal, 6)
+                .frame(height: 24)
+                .background(Theme.button)
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .help(name.map { Lf("%@ · 컷 지점 %@ms", "\($0)", "\(cfg.cutPointMs)") } ?? L("미디어 입력을 지정하세요 (▾)"))
+            let on = engine.stingerActive == slot
+            let pink = Theme.overlayChannel(5)
+            Button { engine.stinger(slot) } label: {
+                Text("STINGER")
+                    .font(.system(size: 10, weight: .heavy))
+                    .foregroundColor(on ? .white : pink)
+                    .frame(width: 62, height: 24)
+                    .background(on ? pink : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).stroke(pink, lineWidth: 1.5))
+            }
+            .buttonStyle(.plain)
+            .disabled(name == nil)
+            .help(L("스팅어 실행"))
+        }
+    }
+}
+
+/// Horizontal T-bar (0 at left … 1 at right). Reaching the end completes the transition.
+struct HTBar: View {
+    @Binding var value: Double
+    private final class Latch { var on = false }
+    private let latch = Latch()
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            let handleW: CGFloat = 16
+            let x = (w - handleW) * CGFloat(value)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.black.opacity(0.55)).frame(height: 6)
+                Capsule().fill(Theme.brand.opacity(0.45)).frame(width: max(0, x + handleW / 2), height: 6)
+                RoundedRectangle(cornerRadius: 4).fill(Theme.brand)
+                    .frame(width: handleW, height: h)
+                    .offset(x: x)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { g in
+                        if latch.on { return }
+                        let v = Double(max(0, min(1, (g.location.x - handleW / 2) / max(1, w - handleW))))
+                        value = v
+                        if v >= 0.999 { latch.on = true }
+                    }
+                    .onEnded { _ in latch.on = false }
+            )
+        }
+        .help(L("T-바 — 오른쪽 끝까지 밀면 선택한 트랜지션으로 수동 전환"))
     }
 }
 

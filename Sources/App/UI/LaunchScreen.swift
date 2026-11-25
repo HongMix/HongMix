@@ -66,7 +66,7 @@ final class LaunchModel: ObservableObject {
                         after(pace) {
                             let off = !APIAccess.enabled
                             let ok = off || engine.apiStatus.contains("8088")
-                            let tcp = engine.apiStatus.contains("TCP 8099") && !engine.apiStatus.contains("8099 사용")
+                            let tcp = engine.apiStatus.contains("TCP 8099") && !engine.apiStatus.contains(L(" · TCP 8099 사용 불가"))
                                 && !engine.apiStatus.contains("8099 unavailable")
                             self.set(4, ok ? .done : .warning,
                                      off ? L("원격 제어 꺼짐 (설정 › 네트워크)") : ok ? (tcp ? L("HTTP 8088 · TCP 8099 대기 중") : L("HTTP 8088 대기 중 · TCP 8099 사용 불가"))

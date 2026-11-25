@@ -10,27 +10,27 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.3</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.5</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.3.3
-- **Slide controls below Preview / Program and on every slide input tile**, plus large Program controls in the phone and tablet web remote.
-- Add PowerPoint and Keynote files directly to PDF Slides; HongMix converts them with macOS Quick Look, with no Office installation required.
-- Saving the source deck converts it again and keeps the current page; hidden slides are skipped.
-- Real-app conversion and controls, web remote tests, core, translation, checksums, DMG and ad-hoc signing passed for build 157. See [English notes](docs/RELEASE-NOTES-2.3.3.md) or [한국어](docs/RELEASE-NOTES-2.3.3.ko.md).
+### Latest update · 2.3.5
+- **Final center panel:** transition tabs and duration, large stacked CUT · AUTO · Quick Play, a horizontal T-bar, round Overlay 1–8 keys and a separate stinger.
+- Stingers now play once even if the clip loops, clear at the real end, and clips no longer lose their final half-second.
+- Display output stays on air when its saved monitor is absent. Translated captions use two readable lines held for at least three seconds.
+- Real-app stinger, Display and caption checks plus core, translation, checksums, DMG and ad-hoc signing passed for build 165. See [English notes](docs/RELEASE-NOTES-2.3.5.md) or [한국어](docs/RELEASE-NOTES-2.3.5.ko.md).
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/en-slides-preview.png" alt="Slide controls below Preview and on the input tile" width="100%"><br><sub>Slide controls in the main switcher</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/en-slides-editor.png" alt="PDF and PowerPoint Slides editor" width="100%"><br><sub>PowerPoint and Keynote files without Office</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.5/en-main.png" alt="HongMix 2.3.5 main switcher with final center panel" width="100%"><br><sub>Final center panel · large operator controls</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.5/en-center-column.png" alt="HongMix 2.3.5 center panel detail" width="100%"><br><sub>AUTO with centered effect and time</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/en-web-phone.png" alt="Slide buttons in the phone web remote" width="100%"><br><sub>Phone web remote slide controls</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/en-web-tablet.png" alt="Slide buttons in the tablet web remote" width="100%"><br><sub>Tablet web remote slide controls</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.4/en-main.png" alt="Two-line translated captions" width="100%"><br><sub>Readable two-line translation</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/en-web-phone.png" alt="Slide controls in the phone web remote" width="100%"><br><sub>Slide controls from 2.3.3</sub></td>
   </tr>
 </table>
 

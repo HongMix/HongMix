@@ -682,8 +682,8 @@ final class OutputChannel: ObservableObject, Identifiable {
 
     private func fail(_ msg: String) -> String {
         state = Int32(MC_STATE_ERROR)
-        message = msg
-        return msg
+        message = AppLanguage.localizedStatus(msg)
+        return message
     }
 
     func stop(waitForClose: Bool = false) {

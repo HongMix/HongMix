@@ -194,6 +194,10 @@ final class SwitcherEngine: ObservableObject {
         TransitionSlot(type: .fly, durationMs: 1000),
     ]
     var defaultTransition: TransitionSlot { transitionSlots[0] }
+    /// Transition the AUTO button and the T-bar use (0–3), picked on the transition tabs. Persisted.
+    @Published var autoSlot: Int = min(3, max(0, UserDefaults.standard.integer(forKey: "autoTransitionSlot"))) {
+        didSet { UserDefaults.standard.set(autoSlot, forKey: "autoTransitionSlot") }
+    }
     @Published var stingers: [StingerConfig] = [StingerConfig()]
     @Published private(set) var stingerActive: Int? = nil
     @Published var busSources: [BusSource] = [.preview, .multiview, .clean] {
@@ -952,7 +956,7 @@ final class SwitcherEngine: ObservableObject {
         tbar = Double(v)
         var completed = false
         var began = false
-        let type = defaultTransition.type
+        let type = transitionSlots[max(0, min(3, autoSlot))].type
         withState { s in
             if v >= 0.999 {
                 if s.manualT != nil {
@@ -997,6 +1001,10 @@ final class SwitcherEngine: ObservableObject {
             ok = true
         }
         guard ok else { return }
+        // A looping stinger never reached its end: it stayed on top of Program for 30 s and kept
+        // playing afterwards. Play it once, then stop it (2.3.5).
+        stingerRestoreLoop = (sid, s.looping)
+        if s.looping { s.looping = false }
         s.video.clear()
         s.restart()
         s.playing = true
@@ -1004,10 +1012,18 @@ final class SwitcherEngine: ObservableObject {
         transitioning = true
     }
 
+    private var stingerRestoreLoop: (UUID, Bool)?
+    private var stingerStoppedAt: CFTimeInterval?
     private func finishStinger() {
         withState { $0.stinger = nil }
         stingerActive = nil
         transitioning = false
+        if let (id, loop) = stingerRestoreLoop, let s = input(withID: id) {
+            if s.supportsTransport { s.playing = false }
+            if s.looping != loop { s.looping = loop }
+        }
+        stingerRestoreLoop = nil
+        stingerStoppedAt = nil
     }
 
     // Overlay channels (1-based)
@@ -1458,7 +1474,12 @@ final class SwitcherEngine: ObservableObject {
             stateLock.unlock()
             if let st = st, let s = input(withID: st.id) {
                 let elapsed = CACurrentMediaTime() - st.start
-                let ended = elapsed > 0.5 && (!s.playing || (s.duration > 0 && s.position >= s.duration - 0.06))
+                // The decoder reports "finished" while its last ~0.5 s of frames are still queued: wait for the
+                // last frame (position) — or 0.6 s after it stopped when the length is unknown (2.3.5).
+                if s.playing { stingerStoppedAt = nil } else if stingerStoppedAt == nil { stingerStoppedAt = CACurrentMediaTime() }
+                let atEnd = s.duration > 0 && s.position >= s.duration - 0.06
+                let stoppedLong = stingerStoppedAt.map { CACurrentMediaTime() - $0 > (s.duration > 0 ? 1.0 : 0.6) } ?? false
+                let ended = elapsed > 0.5 && (atEnd || stoppedLong)
                 if st.cutDone && !programChangeHandled {
                     programChangeHandled = true
                     let old = previewID

@@ -963,7 +963,7 @@ class InputSource: ObservableObject, Identifiable {
     func postStatus(_ state: Int32, _ message: String) {
         DispatchQueue.main.async {
             self.state = state
-            self.status = message
+            self.status = AppLanguage.localizedStatus(message)
         }
     }
 

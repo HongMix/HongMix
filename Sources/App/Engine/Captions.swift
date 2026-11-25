@@ -445,16 +445,41 @@ final class CaptionEngine: ObservableObject {
         translate(t) { [weak self] tr in
             guard let self = self else { return }
             self.translating = false
-            if gen == self.translateGen, let tr = tr {
-                self.translationText = tr
-                self.rebuildRows()
-                self.publish(self.lastText, tr)
-            }
+            if gen == self.translateGen, let tr = tr { self.showTranslation(tr) }
             if let next = self.pendingTranslation, !self.translationBroken {
                 self.pendingTranslation = nil
                 self.startTranslation(next)
             }
         }
+    }
+
+    /// A translation stays on screen at least this long, so it can be read before the next one replaces it
+    /// (the recogniser revises its text several times a second and each revision is translated again).
+    private var translationHold: Double { max(3.0, settings.minLineSeconds) }
+    private var translationShownAt = Date.distantPast
+    private var translationShownGen = 0
+    private var heldTranslation: String?
+    private var holdScheduled = false
+    private func showTranslation(_ tr: String) {
+        let wait = translationHold - Date().timeIntervalSince(translationShownAt)
+        if wait <= 0 { applyTranslation(tr); return }
+        heldTranslation = tr                       // newest result wins when the hold ends
+        guard !holdScheduled else { return }
+        holdScheduled = true
+        let gen = translateGen
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
+            guard let self else { return }
+            self.holdScheduled = false
+            if gen == self.translateGen, let h = self.heldTranslation { self.applyTranslation(h) }
+            self.heldTranslation = nil
+        }
+    }
+    private func applyTranslation(_ tr: String) {
+        if tr != translationText { translationShownGen += 1 }
+        translationText = tr
+        translationShownAt = Date()
+        rebuildRows()
+        publish(lastText, tr)
     }
 
     // MARK: rows (line-by-line captions)
@@ -498,6 +523,8 @@ final class CaptionEngine: ObservableObject {
         translationText = ""
         translateGen += 1           // a translation still running belongs to the cleared text
         pendingTranslation = nil
+        heldTranslation = nil
+        translationShownAt = .distantPast
         rebuildRows()
     }
 
@@ -521,13 +548,19 @@ final class CaptionEngine: ObservableObject {
                 rows.append(CaptionRow(id: currentBase * 1000 + k, text: l, kind: draft ? .draft : .final))
             }
             rows = paced(rows, lines: max(1, st.lines))
-            if !translateTarget.isEmpty, !translationText.isEmpty, !rows.isEmpty,
-               let last = CaptionStyle.wrap(translationText, units: st.lineUnits).last {
+            var keep = max(1, st.lines)
+            if !translateTarget.isEmpty, !translationText.isEmpty, !rows.isEmpty {
+                // original: `lines` − 1 rows, then the last `translationLines` lines of the translation under it
+                let tr = CaptionStyle.wrap(translationText, units: st.lineUnits).suffix(max(1, st.translationLines))
                 rows = Array(rows.suffix(max(1, st.lines - 1)))
-                rows.append(CaptionRow(id: -(currentBase * 1000 + 999), text: last, kind: .translation))
+                keep = rows.count + tr.count
+                for (k, l) in tr.enumerated() {
+                    rows.append(CaptionRow(id: -(translationShownGen * 1000 + k + 1), text: l, kind: .translation))
+                }
             }
+            rows = Array(rows.suffix(keep))
         }
-        let frame = CaptionFrame(rows: Array(rows.suffix(max(1, st.lines))), style: st)
+        let frame = CaptionFrame(rows: rows, style: st)
         guard let e = engine else { return }
         for case let t as TitleInput in e.inputs where t.document.template == .liveCaptions { t.setCaptionFrame(frame) }
         currentFrame = frame
@@ -580,6 +613,7 @@ final class CaptionEngine: ObservableObject {
         if finals.count > 12 { finals.removeFirst(finals.count - 12) }
         lastSpeech = Date()
         rebuildRows()
+        textChanged(text)               // translated too, so the translation lines can be checked (2.3.4)
         testClearWork?.cancel()
         let w = DispatchWorkItem { [weak self] in
             guard let self, !self.running else { return }

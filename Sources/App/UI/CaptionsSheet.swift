@@ -151,6 +151,8 @@ struct CaptionStyleSection: View {
             }
             .pickerStyle(.segmented)
             NumberField(L("자막 줄 수"), value: b(\.lines, custom: true), in: 1...6, unit: L("줄"), step: 1)
+            NumberField(L("번역 줄 수"), value: b(\.translationLines), in: 1...4, unit: L("줄"), step: 1)
+                .help(L("번역을 켜면 원문은 (자막 줄 수 − 1)줄, 그 아래 번역이 이 줄 수만큼 나옵니다. 번역은 최소 3초씩 유지됩니다."))
             NumberField(L("한 줄 글자 수"), value: b(\.lineChars, custom: true), in: 6...40, unit: L("자 (한글)"), step: 1)
             NumberField(L("글자 크기"), value: intB(\.fontSize, custom: true), in: 16...96, unit: L("px (1080 기준)"), step: 1)
             DecimalField(L("자간"), value: b(\.letterSpacing), in: -4...16, unit: "px", step: 0.5, digits: 1)

@@ -39,6 +39,19 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     }()
 }
 
+extension AppLanguage {
+    /// Status text that may come from the C core in Korean ("재생", "SRT 연결 실패: …"): translated when
+    /// HongMix is in English; text that is already English is left alone.
+    static func localizedStatus(_ s: String) -> String {
+        guard current == .en, s.unicodeScalars.contains(where: { (0xAC00...0xD7A3).contains($0.value) }) else { return s }
+        return L(s)
+    }
+    /// The caption label left at its default ("AI 자막" / "AI Captions") follows the HongMix language.
+    static func captionLabel(_ s: String) -> String {
+        s == "AI 자막" || s == "AI captions" || s == "AI Captions" ? L("AI 자막") : s
+    }
+}
+
 /// Localised string (key = the Korean source text).
 func L(_ s: String) -> String {
     guard AppLanguage.current == .en else { return s }

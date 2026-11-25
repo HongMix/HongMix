@@ -1,4 +1,4 @@
-# HongMix 2.3.3 User Manual
+# HongMix 2.3.5 User Manual
 
 HongMix is a live production switcher for Apple Silicon Macs. Its layout, keyboard shortcuts and remote API follow vMix, so vMix operators, Bitfocus Companion and Stream Deck setups feel at home.
 
@@ -31,13 +31,13 @@ Everything HongMix needs (FFmpeg, SRT, the NDI runtime and the Chromium web engi
 
 ### Option A: PKG installer (recommended)
 
-1. Double-click **HongMix-2.3.3.pkg**.
+1. Double-click **HongMix-2.3.5.pkg**.
 2. If macOS says the file is from an **unidentified developer**, right-click the file and choose **Open**, then **Open** again. (Alternatively: **System Settings › Privacy & Security**, then **Open Anyway**.)
 3. Click **Continue**, then **Install**. HongMix is installed in **Applications**.
 
 ### Option B: DMG
 
-1. Open **HongMix-2.3.3.dmg**.
+1. Open **HongMix-2.3.5.dmg**.
 2. Drag **HongMix** into the **Applications** folder.
 
 ### First launch
@@ -214,12 +214,14 @@ The basic idea: prepare in **PREVIEW**, then send to **PROGRAM**.
 
 | Control | Action |
 |---|---|
-| **Quick Play** | Runs transition 1 (a 0.5 s fade by default). Shortcut **Return**. |
+| Transition tabs | Select the slot used by **AUTO** and the T-bar; right-click to change its effect. **⌥1–4** still run a slot directly. |
+| Effect and duration | Choose the selected slot's effect and set 0–5 seconds with the slider. |
 | **CUT** | Instant switch from Preview to Program. |
-| Transition buttons 1–4 | Button = run. **▾** = choose the effect (Fade, Merge, Wipe, Slide, Fly, CrossZoom, Zoom …). Number = duration in ms. |
-| **OVERLAY 1–8** | Toggle each overlay channel (see [chapter 5](#5-overlays-18)). |
-| Stinger | A transition with an animation on top (for example a ProRes 4444 MOV with alpha). Click to run; use its **▾** menu to choose the media input and the cut point. |
-| **T-bar** | Drag for a manual transition with the first effect. The transition completes when you reach the end. |
+| **AUTO** | Switch with the selected effect and duration, shown on the second line. |
+| **Quick Play** | Runs transition 1 (a 0.5 s fade by default). Shortcut **Return**. |
+| Horizontal **T-bar** | Push right for a manual switch with the selected transition. |
+| **OVERLAY 1–8** | Round keys toggle each overlay channel (see [chapter 5](#5-overlays-18)). |
+| Stinger | Choose a media input and cut point, then run it. The clip always plays once, even if Loop is enabled, and clears at its real end. API: `SetStinger Input=… Value=cut-point-ms`. |
 | **FTB** | Fade To Black (audio fades too). Press again to come back. |
 
 ### Keyboard shortcuts
@@ -457,11 +459,11 @@ To close a full-screen output: **Esc**, double-click or right-click. If a displa
 ### Live captions
 
 1. Choose **Tools › Captions…**.
-2. Choose the audio source (Master or a bus A–G) and the **Spoken language**. Optionally add a translation line.
+2. Choose the audio source (Master or a bus A–G) and the **Spoken language**. Optionally enable translation.
 3. Click **Add Caption Input** and put the new **Live Captions** input on an overlay.
 4. Click **Start Captions**. Allow **Speech Recognition** the first time.
 
-Recognition runs on the Mac. Choose a caption style (right column, cinema, band or custom) and a minimum line time. An `.srt` file is saved to `~/Movies/HongMix`. On macOS 26 or later, a newer on-device engine is used.
+Recognition runs on the Mac. Choose a caption style (right column, cinema, band or custom), minimum line time and **Translation lines** (1–4, default 2). Translations appear below the original and remain visible for at least three seconds. An `.srt` file is saved to `~/Movies/HongMix`. On macOS 26 or later, a newer on-device engine is used.
 
 ---
 

@@ -98,6 +98,9 @@ final class FullscreenOutput: NSObject {
     }
     /// The chosen monitor was unplugged while showing: reopen when it comes back.
     private var reopenWhenBack = false
+    /// The output is showing on the chosen monitor itself — not on a stand-in because that monitor was not
+    /// connected when it opened. Only then does "the chosen monitor is gone" close it.
+    private var onChosenDisplay = false
     private var reconnectObserver: NSObjectProtocol?
 
     static func displayID(of s: NSScreen) -> CGDirectDisplayID {
@@ -121,6 +124,13 @@ final class FullscreenOutput: NSObject {
     var displayLabel: String {
         if displayID == 0 { return L("자동") }
         return FullscreenOutput.screens().first { $0.id == displayID }?.name ?? L("연결 안 됨")
+    }
+
+    /// The chosen monitor, if it is connected (nil for automatic or when it is unplugged).
+    private func chosenScreen() -> NSScreen? {
+        guard displayID != 0 else { return nil }
+        if !displayKey.isEmpty { return MonitorIdentity.screen(forKey: displayKey) }
+        return NSScreen.screens.first { FullscreenOutput.displayID(of: $0) == displayID }
     }
 
     private func targetScreen() -> NSScreen? {
@@ -199,6 +209,7 @@ final class FullscreenOutput: NSObject {
         let appScreen = FullscreenOutput.switcherWindow?.screen
         coversAppScreen = mode == .fullscreen && (screen == appScreen || NSScreen.screens.count == 1)
         fillDisplayID = fill.map { FullscreenOutput.displayID(of: $0) }
+        onChosenDisplay = chosenScreen().map { $0 == screen } ?? false
 
         let initial = mode == .window
             ? (windowFrame ?? NSRect(x: screen.visibleFrame.midX - 480, y: screen.visibleFrame.midY - 270, width: 960, height: 540))
@@ -293,11 +304,19 @@ final class FullscreenOutput: NSObject {
         engine.lastMessage = L("풀스크린 디스플레이가 다시 연결되어 출력을 다시 열었습니다")
     }
 
+    /// macOS posts screen-parameter changes for many reasons (Dock / menu bar hiding, full-screen apps,
+    /// wake, resolution), not only plugging. Before this fix any of them closed the output whenever the saved
+    /// monitor was absent — also when the output had opened on a stand-in screen because that monitor was
+    /// not connected, so the window or fullscreen output "turned itself off" after a while.
     private func screensChanged() {
         guard let w = window, let engine = engine else { return }
-        let chosenGone = !displayKey.isEmpty ? MonitorIdentity.screen(forKey: displayKey) == nil
-            : !NSScreen.screens.contains(where: { FullscreenOutput.displayID(of: $0) == displayID })
-        if displayID != 0, chosenGone {
+        let chosen = chosenScreen()
+        if displayID != 0, chosen == nil, onChosenDisplay, activeMode == .window, fillDisplayID == nil {
+            // output window: macOS moves it to a remaining screen — keep it on air
+            onChosenDisplay = false
+            return
+        }
+        if displayID != 0, chosen == nil, onChosenDisplay {
             let reopen = activeMode == .fullscreen && fillDisplayID == nil
             hide()          // the chosen display was unplugged
             reopenWhenBack = reopen
@@ -305,9 +324,11 @@ final class FullscreenOutput: NSObject {
                                         : L("풀스크린 디스플레이가 분리되어 풀스크린을 닫았습니다")
             return
         }
+        if displayID != 0, chosen == nil, fillDisplayID == nil { return }   // on a stand-in screen: leave it there
         if let s = targetScreen(), activeMode == .fullscreen, fillDisplayID == nil, s != w.screen {
             w.setFrame(s.frame, display: true)
         }
+        if let chosen, w.screen == chosen { onChosenDisplay = true }
         let fillScreen = fillDisplayID.flatMap { id in NSScreen.screens.first { FullscreenOutput.displayID(of: $0) == id } }
         if fillDisplayID != nil && fillScreen == nil {
             exitPressed()   // the filled display was unplugged: back to the output window
@@ -370,6 +391,7 @@ final class FullscreenOutput: NSObject {
             NSApp.presentationOptions = []
         }
         coversAppScreen = false
+        onChosenDisplay = false
         activeMode = .window
         fillDisplayID = nil
         if let o = screenObserver { NotificationCenter.default.removeObserver(o) }

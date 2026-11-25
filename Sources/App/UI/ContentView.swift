@@ -89,6 +89,10 @@ enum Theme {
     static var accent: Color { AppSkin.isMono ? Color(white: 0.36) : Color(red: 0.20, green: 0.50, blue: 0.85) }
     /// Monochrome primary action (CUT): white fill, black text.
     static let primaryFill = Color(white: 0.96)
+    /// HongMix orange (the logo): AUTO, the selected transition, the T-bar.
+    static let brand = Color(red: 1.0, green: 0.48, blue: 0.18)
+    /// Quick Play blue.
+    static let quickPlay = Color(red: 0.17, green: 0.20, blue: 0.42)
     static let hairline = Color.white.opacity(0.08)
     /// Corner radius: Monochrome uses softer Apple-style corners.
     static var radius: CGFloat { AppSkin.isMono ? 6 : 3 }
