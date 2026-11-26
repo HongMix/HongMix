@@ -27,10 +27,11 @@ struct FlatButton: View {
                 .minimumScaleFactor(0.7)
                 .foregroundColor(primary ? .black : Theme.buttonText)
                 .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
-                .background(active ? activeColor : (primary ? Theme.primaryFill : (outline ? Color.clear : Theme.button)))
+                .background(active ? activeColor : (primary ? Theme.primaryFill : (outline ? Color.clear : (AppLook.hardware ? HWLook.key : Theme.button))))
                 .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
                     .stroke(outline ? Color.white.opacity(0.6) : .clear, lineWidth: 1.5))
                 .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                .hmBevel(cornerRadius: Theme.radius)
         }
         .buttonStyle(.plain)
     }
@@ -81,7 +82,7 @@ struct TransitionColumn: View {
             TransitionTabs()
             TransitionLength()
             VStack(spacing: 6) {         // one row each: the buttons take the free height (2.3.5)
-                BigTakeButton(title: "CUT", sub: nil, fill: Theme.primaryFill, text: .black) { engine.cut() }
+                BigTakeButton(title: "CUT", sub: nil, fill: AppLook.hardware ? HWLook.cream : Theme.primaryFill, text: .black) { engine.cut() }
                     .help(L("컷 — 바로 넘김 (Space)"))
                 let sel = engine.transitionSlots[max(0, min(3, engine.autoSlot))]
                 BigTakeButton(title: "AUTO", sub: "\(sel.type.label) \(TransitionLength.seconds(sel.durationMs))", fill: Theme.brand,
@@ -114,17 +115,19 @@ private struct TransitionTabs: View {
     @EnvironmentObject var engine: SwitcherEngine
 
     var body: some View {
-        HStack(spacing: 2) {
+        let hw = AppLook.hardware
+        HStack(spacing: hw ? 1 : 2) {
             ForEach(0..<4, id: \.self) { i in
                 let on = engine.autoSlot == i
                 Button { engine.autoSlot = i } label: {
                     Text(engine.transitionSlots[i].type.label)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: hw ? 11 : 10, weight: hw ? .bold : .semibold))
                         .lineLimit(1).minimumScaleFactor(0.7)
-                        .foregroundColor(on ? Color(red: 0.16, green: 0.07, blue: 0.02) : Color(white: 0.75))
-                        .frame(maxWidth: .infinity, minHeight: 22)
-                        .background(on ? Theme.brand : Color.clear)
+                        .foregroundColor(on ? Color(red: 0.16, green: 0.07, blue: 0.02) : Color(white: hw ? 0.82 : 0.75))
+                        .frame(maxWidth: .infinity, minHeight: hw ? 24 : 22)
+                        .background(on ? Theme.brand : (hw ? HWLook.key : Color.clear))
                         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        .hmBevel(cornerRadius: 5)
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
@@ -135,9 +138,45 @@ private struct TransitionTabs: View {
                 .help(Lf("트랜지션 %@ — 클릭: AUTO·T-바에 사용 · 우클릭: 효과 바꾸기 · 바로 실행 ⌥%@", "\(i + 1)", "\(i + 1)"))
             }
         }
-        .padding(2)
-        .background(Theme.panelDark)
-        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .padding(hw ? 0 : 2)
+        .background(hw ? Color.black.opacity(0.6) : Theme.panelDark)
+        .clipShape(RoundedRectangle(cornerRadius: hw ? 6 : 7, style: .continuous))
+    }
+}
+
+/// Hardware-look colours of the transition column.
+enum HWLook {
+    static let key = Color(white: 0.19)
+    static let cream = Color(red: 0.91, green: 0.88, blue: 0.85)
+}
+
+/// Hardware-look slider: dark groove, silver thumb.
+private struct GrooveSlider: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+
+    var body: some View {
+        GeometryReader { g in
+            let thumbW: CGFloat = 26, w = g.size.width
+            let f = (value - range.lowerBound) / max(0.0001, range.upperBound - range.lowerBound)
+            let x = (w - thumbW) * CGFloat(max(0, min(1, f)))
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.black.opacity(0.75)).frame(height: 7)
+                    .overlay(Capsule().stroke(Color.white.opacity(0.06), lineWidth: 1))
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(white: 0.92), Color(white: 0.68)], startPoint: .top, endPoint: .bottom))
+                    .frame(width: thumbW, height: 14)
+                    .shadow(color: .black.opacity(0.6), radius: 1.5, y: 1.5)
+                    .offset(x: x)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { d in
+                let t = Double((d.location.x - thumbW / 2) / max(1, w - thumbW))
+                value = range.lowerBound + max(0, min(1, t)) * (range.upperBound - range.lowerBound)
+            })
+        }
+        .frame(height: 16)
     }
 }
 
@@ -155,12 +194,26 @@ private struct TransitionLength: View {
                         Button((slot.type == t ? "✓ " : "") + t.label) { engine.transitionSlots[i].type = t }
                     }
                 } label: {
-                    HStack(spacing: 2) {
-                        Text(slot.type.label)
-                        Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold))
+                    if AppLook.hardware {
+                        HStack(spacing: 6) {
+                            Text(slot.type.label)
+                            Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold))
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color(white: 0.85))
+                        .padding(.horizontal, 8)
+                        .frame(height: 22)
+                        .background(HWLook.key)
+                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                        .hmBevel(cornerRadius: 5)
+                    } else {
+                        HStack(spacing: 2) {
+                            Text(slot.type.label)
+                            Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold))
+                        }
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
                     }
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
                 }
                 .menuStyle(.button)
                 .buttonStyle(.plain)
@@ -169,15 +222,19 @@ private struct TransitionLength: View {
                 .help(L("효과 바꾸기"))
                 Spacer(minLength: 0)
                 Text(Self.seconds(slot.durationMs))
-                    .font(.system(size: 10, weight: .bold).monospacedDigit())
+                    .font(.system(size: AppLook.hardware ? 14 : 10, weight: .bold).monospacedDigit())
                     .foregroundColor(Theme.brand)
             }
-            Slider(value: Binding(get: { Double(slot.durationMs) },
-                                  set: { engine.transitionSlots[i].durationMs = Int(($0 / 50).rounded() * 50) }),
-                   in: 0...5000)
-                .controlSize(.mini)
-                .tint(Theme.brand)
-                .help(L("전환 시간 (0–5초)"))
+            let ms = Binding(get: { Double(slot.durationMs) },
+                             set: { engine.transitionSlots[i].durationMs = Int(($0 / 50).rounded() * 50) })
+            Group {
+                if AppLook.hardware {
+                    GrooveSlider(value: ms, range: 0...5000)
+                } else {
+                    Slider(value: ms, in: 0...5000).controlSize(.mini).tint(Theme.brand)
+                }
+            }
+            .help(L("전환 시간 (0–5초)"))
         }
     }
 }
@@ -216,6 +273,7 @@ private struct BigTakeButton: View {
             .frame(maxWidth: .infinity, minHeight: 34, maxHeight: 72)
             .background(fill.opacity(active ? 0.75 : 1))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .hmBevel(cornerRadius: 10)
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(Color.white.opacity(active ? 0.9 : 0), lineWidth: 2))
         }
@@ -245,8 +303,12 @@ private struct OverlayBank: View {
                                 .font(.system(size: 11, weight: .heavy).monospacedDigit())
                                 .foregroundColor(active ? .white : color.opacity(savedInput == nil ? 0.45 : 1))
                                 .frame(width: 30, height: 30)
-                                .background(Circle().fill(active ? color : Color.clear))
+                                .background(Circle().fill(active ? color : (AppLook.hardware ? Color(white: 0.15) : Color.clear)))
+                                .overlay(Circle().fill(AppLook.hardware ? LinearGradient(colors: [.white.opacity(active ? 0.22 : 0.05), .black.opacity(active ? 0.15 : 0.2)],
+                                                                                         startPoint: .top, endPoint: .bottom)
+                                                                        : LinearGradient(colors: [.clear], startPoint: .top, endPoint: .bottom)))
                                 .overlay(Circle().stroke(color.opacity(savedInput == nil ? 0.35 : 0.9), lineWidth: 1.5))
+                                .shadow(color: .black.opacity(AppLook.hardware ? 0.55 : 0), radius: 1.5, y: 1.5)
                         }
                         .buttonStyle(.plain)
                         .frame(maxWidth: .infinity)
@@ -290,8 +352,9 @@ private struct StingerRow: View {
                 .foregroundColor(Theme.buttonText)
                 .padding(.horizontal, 6)
                 .frame(height: 24)
-                .background(Theme.button)
+                .background(AppLook.hardware ? HWLook.key : Theme.button)
                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .hmBevel(cornerRadius: 5)
             }
             .menuStyle(.button)
             .buttonStyle(.plain)
@@ -324,14 +387,24 @@ struct HTBar: View {
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
-            let handleW: CGFloat = 16
+            let hw = AppLook.hardware
+            let handleW: CGFloat = hw ? 26 : 16
             let x = (w - handleW) * CGFloat(value)
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.black.opacity(0.55)).frame(height: 6)
-                Capsule().fill(Theme.brand.opacity(0.45)).frame(width: max(0, x + handleW / 2), height: 6)
-                RoundedRectangle(cornerRadius: 4).fill(Theme.brand)
-                    .frame(width: handleW, height: h)
-                    .offset(x: x)
+                if hw {
+                    Capsule().fill(Color.black.opacity(0.75)).frame(height: h * 0.55)
+                        .overlay(Capsule().stroke(Color.white.opacity(0.06), lineWidth: 1))
+                    RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Theme.brand)
+                        .frame(width: handleW, height: h)
+                        .hmBevel(cornerRadius: 5)
+                        .offset(x: x)
+                } else {
+                    Capsule().fill(Color.black.opacity(0.55)).frame(height: 6)
+                    Capsule().fill(Theme.brand.opacity(0.45)).frame(width: max(0, x + handleW / 2), height: 6)
+                    RoundedRectangle(cornerRadius: 4).fill(Theme.brand)
+                        .frame(width: handleW, height: h)
+                        .offset(x: x)
+                }
             }
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
@@ -774,6 +847,8 @@ enum InputCategory {
         let n = UserDefaults.standard.string(forKey: "categoryName\(i)") ?? ""
         return n.isEmpty ? defaultNames[max(0, min(6, i))] : n
     }
+    /// The category tab open in the input bar (0 = ALL). New inputs added while a tab is open land in it.
+    static var current: Int { max(0, min(6, UserDefaults.standard.integer(forKey: "inputCategory"))) }
 }
 
 struct CategoryBar: View {
@@ -783,6 +858,7 @@ struct CategoryBar: View {
     @ViewState private var searching = false
     @ViewState private var renaming: Int? = nil
     @ViewState private var newName = ""
+    @ViewState private var dropTarget: Int? = nil
 
     var body: some View {
         VStack(spacing: 4) {
@@ -800,6 +876,7 @@ struct CategoryBar: View {
                     .frame(width: 26, height: 24)
                     .background(search.isEmpty ? Theme.button : Theme.accent)
                     .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                    .hmBevel(cornerRadius: Theme.radius)
             }
             .buttonStyle(.plain)
             .help(L("입력 이름/번호로 찾기"))
@@ -827,9 +904,32 @@ struct CategoryBar: View {
                 .background(InputCategory.color(k).opacity(category == k ? 1 : 0.55))
                 .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).stroke(Color.white, lineWidth: category == k ? 2 : 0))
                 .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                .hmBevel(cornerRadius: Theme.radius)
+                .scaleEffect(dropTarget == k ? 1.15 : 1)
+                .animation(.easeOut(duration: 0.1), value: dropTarget)
         }
         .buttonStyle(.plain)
-        .help(k == 0 ? L("모든 입력") : Lf("%@ 카테고리 (우클릭: 이름 바꾸기 · 입력 우클릭 메뉴에서 지정)", InputCategory.name(k)))
+        // a dragged input tile (its UUID string) dropped on a tab gets that category; on ALL it loses it
+        .onDrop(of: [.utf8PlainText, .plainText], isTargeted: Binding(get: { dropTarget == k },
+                                                                    set: { dropTarget = $0 ? k : (dropTarget == k ? nil : dropTarget) })) { providers in
+            assign(providers, to: k)
+        }
+        .help(k == 0 ? L("모든 입력 (입력을 여기로 끌면 카테고리 해제)")
+                     : Lf("%@ 카테고리 (입력을 여기로 끌어서 지정 · 우클릭: 이름 바꾸기)", InputCategory.name(k)))
+    }
+
+    private func assign(_ providers: [NSItemProvider], to k: Int) -> Bool {
+        guard let p = providers.first(where: { $0.canLoadObject(ofClass: NSString.self) }) else { return false }
+        _ = p.loadObject(ofClass: NSString.self) { s, _ in
+            guard let s = s as? String, let id = UUID(uuidString: s) else { return }
+            DispatchQueue.main.async {
+                guard let input = engine.inputs.first(where: { $0.id == id }) else { return }
+                input.category = k
+                engine.lastMessage = k == 0 ? Lf("%@: 카테고리 해제", input.name)
+                                            : Lf("%@ → %@", input.name, InputCategory.name(k))
+            }
+        }
+        return true
     }
 }
 
@@ -930,6 +1030,9 @@ struct InputBox: View {
                 Circle().fill(stateColor).frame(width: 7, height: 7)
                     .help(input.status)
                 Menu {
+                    if let t = input as? TitleInput, t.document.template == .liveCaptions {
+                        Button(L("실시간 자막 설정…")) { sheet = SheetRequest(kind: input.kind, editing: input, mode: .captions) }
+                    }
                     if input.kind == .title {
                         Button(L("타이틀 편집…")) { sheet = SheetRequest(kind: input.kind, editing: input, mode: .title) }
                     }
@@ -1118,6 +1221,7 @@ struct InputBox: View {
                 .frame(width: 24, height: 22)
                 .background(active ? Theme.live : Theme.button)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                .hmBevel(cornerRadius: Theme.radius)
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
@@ -1158,6 +1262,7 @@ struct InputBox: View {
                         .frame(width: 24, height: 34)
                         .background(input.muted ? Theme.live : Theme.button)
                         .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                        .hmBevel(cornerRadius: Theme.radius)
                 }
                 .buttonStyle(.plain)
                 .help(input.muted ? L("오디오 켜기") : L("오디오 끄기"))
@@ -1188,6 +1293,8 @@ struct AudioMixerPanel: View {
     @EnvironmentObject var engine: SwitcherEngine
     @Binding var sheet: SheetRequest?
     @Binding var inputStripsCollapsed: Bool
+    /// Docked mixer only: opens it as a separate window
+    var onPopOut: (() -> Void)? = nil
     @ViewState private var showAudioOutputs = false
     @AppStorage("audioMetersCollapsed") private var metersCollapsed = false
 
@@ -1238,6 +1345,16 @@ struct AudioMixerPanel: View {
                 .toggleStyle(.button)
                 .controlSize(.small)
                 .help(L("헤드폰 모니터. Solo가 켜져 있으면 Solo 신호를 듣습니다."))
+                if let onPopOut {
+                    Button(action: onPopOut) {
+                        Image(systemName: "macwindow.badge.plus")
+                            .font(.system(size: 11, weight: .semibold))
+                            .frame(width: 26, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L("Audio Mixer를 별도 창으로 열기 (창을 닫으면 다시 여기로)"))
+                }
                 Button { withAnimation(.easeInOut(duration: 0.18)) { inputStripsCollapsed.toggle() } } label: {
                     Image(systemName: inputStripsCollapsed ? "chevron.left" : "chevron.right")
                         .font(.system(size: 10, weight: .bold))
@@ -1347,13 +1464,15 @@ struct BusChannelStrip: View {
         let b = index
         ChannelStrip(title: "Bus " + AudioBus.all[b], volume: $engine.busSettings[b].volume,
                      muted: $engine.busSettings[b].muted, meter: { mixer.busMeter(b) }, highlight: nil) {
-            HStack(spacing: 2) {
-                FlatButton(title: "M", active: engine.busSettings[b].sendToMaster, activeColor: Theme.accent,
-                           height: 20, fontSize: 9, weight: .bold) { engine.busSettings[b].sendToMaster.toggle() }
+            HStack(spacing: MixerLook.gap) {
+                MixerKey(color: engine.busSettings[b].sendToMaster ? MixerLook.blue : MixerLook.key,
+                         action: { engine.busSettings[b].sendToMaster.toggle() }) { Text("M") }
                     .help(L("Master로 보내기 (BusXSendToMaster)"))
-                FlatButton(title: "S", active: engine.busSettings[b].solo, activeColor: .yellow, height: 20,
-                           fontSize: 10, weight: .bold) { engine.busSettings[b].solo.toggle() }
-                    .help(L("Solo (헤드폰)"))
+                MixerKey(color: engine.busSettings[b].solo ? .yellow : MixerLook.key,
+                         action: { engine.busSettings[b].solo.toggle() }) {
+                    Text("S").foregroundColor(engine.busSettings[b].solo ? .black : .white)
+                }
+                .help(L("Solo (헤드폰)"))
             }
         }
         .contextMenu {
@@ -1468,6 +1587,7 @@ private struct BusManagerRow: View {
                         .frame(width: 46, height: 22)
                         .background(on ? Theme.accent : Theme.button)
                         .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                        .hmBevel(cornerRadius: Theme.radius)
                 }
                 .buttonStyle(.plain)
             }
@@ -1491,27 +1611,21 @@ struct InputChannelStrip: View {
                      meter: { mixer.meter(for: id) }, highlight: hl, meterSupported: input.hasAudio,
                      audioState: state, onAudioState: { press(state) },
                      meterDim: { !mixer.reachesMaster(id) }) {
-            VStack(spacing: 2) {
-                HStack(spacing: 2) {
+            VStack(spacing: MixerLook.gap) {
+                HStack(spacing: MixerLook.gap) {
                     busButton("M")
-                    ForEach(engine.visibleBuses.prefix(2), id: \.self) { b in busButton(AudioBus.all[b]) }
-                    if engine.visibleBuses.isEmpty { Color.clear.frame(maxWidth: .infinity, maxHeight: 20) }
+                    ForEach(engine.visibleBuses.prefix(MixerLook.inlineBuses), id: \.self) { b in busButton(AudioBus.all[b]) }
+                    if !AppLook.hardware && engine.visibleBuses.isEmpty { Color.clear.frame(maxWidth: .infinity, maxHeight: 20) }
                 }
-                HStack(spacing: 2) {
-                    FlatButton(title: "S", active: input.solo, activeColor: .yellow, height: 20, fontSize: 10,
-                               weight: .bold) { input.solo.toggle() }
-                        .help(L("Solo (헤드폰)"))
-                    Button {
-                        input.audioFollowsVideo.toggle()
-                    } label: {
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity, minHeight: 20, maxHeight: 20)
-                            .background(input.audioFollowsVideo ? (AppSkin.isMono ? Color(white: 0.36) : Theme.program) : Theme.button)
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                HStack(spacing: MixerLook.gap) {
+                    MixerKey(color: input.solo ? .yellow : MixerLook.key, height: 22, action: { input.solo.toggle() }) {
+                        Text("S").foregroundColor(input.solo ? .black : .white)
                     }
-                    .buttonStyle(.plain)
+                    .help(L("Solo (헤드폰)"))
+                    MixerKey(color: input.audioFollowsVideo ? MixerLook.green : MixerLook.key, height: 22,
+                             action: { input.audioFollowsVideo.toggle() }) {
+                        Image(systemName: "arrow.right")
+                    }
                     .help(L("Follow: 비디오가 Output에 있을 때만 오디오 On (Audio Auto)"))
                     Menu {
                         ForEach(["A", "B", "C", "D", "E", "F", "G"], id: \.self) { bus in
@@ -1524,13 +1638,14 @@ struct InputChannelStrip: View {
                         Divider()
                         Button(L("오디오 설정…"), action: openSettings)
                     } label: {
-                        Image(systemName: "gearshape.fill").font(.system(size: 9))
+                        Image(systemName: "gearshape.fill").font(.system(size: 12))
                     }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
-                    .frame(maxWidth: .infinity, minHeight: 20, maxHeight: 20)
-                    .background(extraBuses.isEmpty ? Theme.button : Theme.accent)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                    .frame(maxWidth: .infinity, minHeight: AppLook.hardware ? 22 : 20, maxHeight: AppLook.hardware ? 22 : 20)
+                    .background(extraBuses.isEmpty ? MixerLook.key : MixerLook.blue)
+                    .clipShape(RoundedRectangle(cornerRadius: AppLook.hardware ? 5 : Theme.radius, style: .continuous))
+                    .hmBevel(cornerRadius: 5)
                     .help(extraBuses.isEmpty ? L("버스 A~G 보내기, Audio Settings") : Lf("버스 %@ · Audio Settings", "\(extraBuses)"))
                 }
             }
@@ -1547,14 +1662,14 @@ struct InputChannelStrip: View {
     }
 
     private func busButton(_ bus: String) -> some View {
-        FlatButton(title: bus, active: input.onBus(bus), activeColor: Theme.accent, height: 20, fontSize: 10,
-                   weight: .bold) { input.setBus(bus, !input.onBus(bus)) }
+        MixerKey(color: input.onBus(bus) ? MixerLook.blue : MixerLook.key, height: 24,
+                 action: { input.setBus(bus, !input.onBus(bus)) }) { Text(bus) }
             .help(bus == "M" ? "Master" : "Bus \(bus)")
     }
 
     /// buses this input uses that have no inline button
     private var extraBuses: String {
-        let inline = Set(engine.visibleBuses.prefix(2).map { AudioBus.all[$0] })
+        let inline = Set(engine.visibleBuses.prefix(MixerLook.inlineBuses).map { AudioBus.all[$0] })
         return ["A", "B", "C", "D", "E", "F", "G"].filter { input.onBus($0) && !inline.contains($0) }.joined()
     }
 }
@@ -1604,6 +1719,58 @@ enum InputAudioState: Equatable {
     }
 }
 
+/// Mixer hardware look (the user's channel-strip design): colours shared by the strip parts.
+enum MixerLook {
+    static var hw: Bool { AppLook.hardware }
+    static var blue: Color { hw ? Color(red: 0.13, green: 0.40, blue: 0.84) : Theme.accent }
+    static var green: Color { hw ? Color(red: 0.20, green: 0.55, blue: 0.15) : (AppSkin.isMono ? Color(white: 0.36) : Theme.program) }
+    static var red: Color { hw ? Color(red: 0.78, green: 0.16, blue: 0.14) : Theme.live }
+    static var key: Color { hw ? Color(white: 0.24) : Theme.button }
+    static let panelTop = Color(white: 0.16), panelBottom = Color(white: 0.11)
+    /// spacing between the strip keys
+    static var gap: CGFloat { hw ? 6 : 2 }
+    /// buses with their own key next to M
+    static var inlineBuses: Int { hw ? 1 : 2 }
+}
+
+/// Square-ish hardware key of the strip (M, A, S, →, ⚙): rounded, raised, coloured when on.
+struct MixerKey<Label: View>: View {
+    var color: Color = MixerLook.key
+    var height: CGFloat = 24
+    let action: () -> Void
+    @ViewBuilder let label: () -> Label
+
+    var body: some View {
+        let hw = AppLook.hardware
+        let r: CGFloat = hw ? 5 : Theme.radius
+        Button(action: action) {
+            label()
+                .font(.system(size: hw ? 12 : 10, weight: hw ? .heavy : .bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity, minHeight: hw ? height : 20, maxHeight: hw ? height : 20)
+                .background(color)
+                .clipShape(RoundedRectangle(cornerRadius: r, style: .continuous))
+                .hmBevel(cornerRadius: r)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Small countersunk screw head (strip corners, name plate).
+private struct Screw: View {
+    var size: CGFloat = 7
+    var body: some View {
+        Circle()
+            .fill(LinearGradient(colors: [Color(white: 0.42), Color(white: 0.16)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay(ZStack {
+                Rectangle().frame(width: size * 0.62, height: 1)
+                Rectangle().frame(width: 1, height: size * 0.62)
+            }.foregroundColor(.black.opacity(0.75)))
+            .overlay(Circle().stroke(Color.black.opacity(0.7), lineWidth: 0.5))
+            .frame(width: size, height: size)
+    }
+}
+
 struct ChannelStrip<Accessory: View>: View {
     let title: String
     @Binding var volume: Float
@@ -1633,6 +1800,11 @@ struct ChannelStrip<Accessory: View>: View {
     }
 
     var body: some View {
+        if AppLook.hardware { hardwareBody } else { classicBody }
+    }
+
+    // the clean look HongMix had before (Settings › General › Hardware look off)
+    private var classicBody: some View {
         VStack(spacing: 4) {
             Text(title)
                 .font(.system(size: 10, weight: .semibold))
@@ -1647,7 +1819,7 @@ struct ChannelStrip<Accessory: View>: View {
                 } else {
                     Spacer(minLength: 0)
                 }
-                VerticalFader(value: $volume)
+                ClassicVerticalFader(value: $volume)
                     .frame(width: 26)
                 if metersCollapsed || !meterSupported { Spacer(minLength: 0) }
             }
@@ -1691,10 +1863,108 @@ struct ChannelStrip<Accessory: View>: View {
         .frame(maxHeight: .infinity)
         .background(Theme.panelDark.opacity(0.6))
     }
+
+    private var hardwareBody: some View {
+        VStack(spacing: 6) {
+            namePlate
+            HStack(alignment: .top, spacing: 4) {
+                if !metersCollapsed && meterSupported {
+                    LayerMeter(meter: meter, dim: meterDim)
+                        .frame(width: 11)
+                        .overlay(MeterSegments().allowsHitTesting(false))
+                        .clipShape(RoundedRectangle(cornerRadius: 2))
+                        .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.black, lineWidth: 1))
+                        .padding(.top, 14)
+                }
+                VerticalFader(value: $volume)
+            }
+            .frame(minHeight: 90, maxHeight: .infinity)
+            Text(volume <= 0.0001 ? "-inf" : String(format: "%.1f", 20 * log10(Double(volume * volume))))
+                .font(.system(size: 13, weight: .bold).monospacedDigit())
+                .foregroundColor(Color(white: 0.88))
+                .frame(maxWidth: .infinity, minHeight: 22)
+                .background(RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.09)))
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.black.opacity(0.8), lineWidth: 1))
+            audioButton
+            accessory
+                .frame(height: 54, alignment: .top)   // same height on every strip → faders line up
+        }
+        .padding(.horizontal, 7)
+        .padding(.top, 14)
+        .padding(.bottom, 12)
+        .frame(width: SwitcherLayout.stripWidth - 2)
+        .frame(maxHeight: .infinity)
+        .background(RoundedRectangle(cornerRadius: 6).fill(LinearGradient(colors: [MixerLook.panelTop, MixerLook.panelBottom],
+                                                                          startPoint: .top, endPoint: .bottom)))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.black.opacity(0.85), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 6).inset(by: 1).stroke(Color.white.opacity(0.05), lineWidth: 1))
+        .overlay(alignment: .topLeading) { Screw().padding(4) }
+        .overlay(alignment: .topTrailing) { Screw().padding(4) }
+        .overlay(alignment: .bottomLeading) { Screw().padding(4) }
+        .overlay(alignment: .bottomTrailing) { Screw().padding(4) }
+    }
+
+    private var namePlate: some View {
+        let lit = highlight != nil
+        return HStack(spacing: 3) {
+            Screw(size: 5)
+            Text(title)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.white)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
+            Screw(size: 5)
+        }
+        .padding(.horizontal, 4)
+        .frame(height: 22)
+        .background(RoundedRectangle(cornerRadius: 4).fill(LinearGradient(
+            colors: lit ? [highlight!.opacity(1), highlight!.opacity(0.75)] : [Color(white: 0.17), Color(white: 0.10)],
+            startPoint: .top, endPoint: .bottom)))
+        .overlay(RoundedRectangle(cornerRadius: 4).stroke(lit ? Color.white.opacity(0.25) : Color.black.opacity(0.8), lineWidth: 1))
+        .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
+    }
+
+    @ViewBuilder private var audioButton: some View {
+        let st = audioState
+        let color: Color = st.map { s in
+            switch s { case .onAir: MixerLook.green; case .on: MixerLook.blue; case .mute: MixerLook.red; case .auto: MixerLook.key }
+        } ?? (muted ? MixerLook.red : MixerLook.blue)
+        Button(action: onAudioState ?? { muted.toggle() }) {
+            HStack(spacing: 6) {
+                Image(systemName: st?.symbol ?? (muted ? "speaker.slash.fill" : "speaker.wave.2.fill"))
+                    .font(.system(size: 12, weight: .semibold))
+                Rectangle().fill(Color.black.opacity(0.45)).frame(width: 1, height: 16)
+                Text(st?.label ?? (muted ? "MUTE" : "ON"))
+                    .font(.system(size: 12, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.6)
+            }
+            .foregroundColor(st == .auto ? Color(white: 0.75) : .white)
+            .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+            .background(color)
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .hmBevel(cornerRadius: 5)
+            .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
+        }
+        .buttonStyle(.plain)
+        .help(st?.help ?? L("음소거"))
+    }
 }
 
-/// Vertical fader 0...1 (unity at top), drag or scroll to change, double-click resets to 0 dB.
-struct VerticalFader: View {
+/// Dark lines across the level meter so it reads as LED segments.
+private struct MeterSegments: View {
+    var body: some View {
+        Canvas { ctx, size in
+            var y: CGFloat = 0
+            while y < size.height {
+                ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)), with: .color(.black.opacity(0.85)))
+                y += 4
+            }
+            ctx.fill(Path(CGRect(x: size.width / 2 - 0.5, y: 0, width: 1, height: size.height)), with: .color(.black.opacity(0.85)))
+        }
+    }
+}
+
+/// The plain fader of the clean look.
+struct ClassicVerticalFader: View {
     @Binding var value: Float
 
     var body: some View {
@@ -1720,6 +1990,88 @@ struct VerticalFader: View {
             })
             .simultaneousGesture(TapGesture(count: 2).onEnded { value = 1 })
         }
+    }
+}
+
+/// Vertical fader 0...1 (unity at top), drag to change, double-click resets to 0 dB.
+/// Hardware look: deep black slot, silver cap, dB scale on the right at the fader's real positions
+/// (gain = volume², so dB = 40·log10(volume); the fader tops out at 0 dB, so the scale does too).
+struct VerticalFader: View {
+    @Binding var value: Float
+    private static let marks: [(String, Double)] = [("0", 0), ("-3", -3), ("-6", -6), ("-9", -9), ("-12", -12), ("-15", -15),
+                                                    ("-18", -18), ("-20", -20), ("-24", -24), ("-30", -30), ("-40", -40),
+                                                    ("-60", -60), ("-inf", -.infinity)]
+
+    var body: some View {
+        GeometryReader { geo in
+            let h = geo.size.height
+            let capW: CGFloat = 22, capH: CGFloat = 22
+            let top: CGFloat = 14                       // room for "dB"
+            let travel = max(1, h - top - capH)
+            let y = top + travel * CGFloat(1 - value)
+            let scaleX = capW + 4
+            ZStack(alignment: .topLeading) {
+                Canvas { ctx, size in
+                    // slot
+                    let slot = CGRect(x: capW / 2 - 4, y: top + capH / 2 - 6, width: 8, height: travel + 12)
+                    ctx.fill(Path(roundedRect: slot, cornerRadius: 4), with: .color(.black))
+                    ctx.stroke(Path(roundedRect: slot.insetBy(dx: 0.5, dy: 0.5), cornerRadius: 4), with: .color(.white.opacity(0.08)), lineWidth: 1)
+                    // minor ticks, evenly spaced
+                    var ty = top + capH / 2
+                    while ty <= top + capH / 2 + travel + 0.5 {
+                        ctx.fill(Path(CGRect(x: scaleX, y: ty.rounded(), width: 3, height: 1)), with: .color(.white.opacity(0.22)))
+                        ty += 5
+                    }
+                    // major ticks + labels, skipping labels that would collide
+                    var lastY = -CGFloat.infinity
+                    for (label, db) in Self.marks {
+                        let v = db.isFinite ? pow(10, db / 40) : 0
+                        let my = (top + capH / 2 + travel * CGFloat(1 - v)).rounded()
+                        ctx.fill(Path(CGRect(x: scaleX, y: my, width: 8, height: 1)), with: .color(.white.opacity(0.55)))
+                        guard my - lastY >= 10 else { continue }
+                        lastY = my
+                        ctx.draw(Text(label).font(.system(size: 8.5, weight: .medium)).foregroundColor(Color(white: 0.75)),
+                                 at: CGPoint(x: scaleX + 11, y: my + 0.5), anchor: .leading)
+                    }
+                    ctx.draw(Text("dB").font(.system(size: 8.5, weight: .medium)).foregroundColor(Color(white: 0.6)),
+                             at: CGPoint(x: scaleX + 11, y: 5), anchor: .leading)
+                }
+                FaderCap()
+                    .frame(width: capW, height: capH)
+                    .offset(y: y)
+            }
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 1).onChanged { g in
+                let v = 1 - (g.location.y - top - capH / 2) / travel
+                value = Float(max(0, min(1, v)))
+            })
+            .simultaneousGesture(TapGesture(count: 2).onEnded { value = 1 })
+        }
+    }
+}
+
+/// The fader knob: silver, lit from above, a dark groove across the middle.
+private struct FaderCap: View {
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
+        shape
+            .fill(LinearGradient(stops: [
+                .init(color: Color(white: 0.93), location: 0),
+                .init(color: Color(white: 0.74), location: 0.42),
+                .init(color: Color(white: 0.30), location: 0.47),
+                .init(color: Color(white: 0.20), location: 0.53),
+                .init(color: Color(white: 0.62), location: 0.58),
+                .init(color: Color(white: 0.84), location: 1),
+            ], startPoint: .top, endPoint: .bottom))
+            .overlay(shape.fill(LinearGradient(stops: [
+                .init(color: .black.opacity(0.28), location: 0),
+                .init(color: .clear, location: 0.2),
+                .init(color: .white.opacity(0.14), location: 0.5),
+                .init(color: .clear, location: 0.8),
+                .init(color: .black.opacity(0.28), location: 1),
+            ], startPoint: .leading, endPoint: .trailing)))
+            .overlay(shape.strokeBorder(Color.black.opacity(0.55), lineWidth: 0.75))
+            .shadow(color: .black.opacity(0.7), radius: 2.5, y: 2.5)
     }
 }
 

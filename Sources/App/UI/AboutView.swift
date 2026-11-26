@@ -6,6 +6,7 @@ struct GeneralSettings: View {
     @AppStorage(AppLanguage.defaultsKey) private var language = AppLanguage.current.rawValue
     @AppStorage(FFmpegInput.rateConformKey) private var rateConform = true
     @AppStorage(AppSkin.defaultsKey) private var appSkin = AppSkin.current.rawValue
+    @AppStorage(AppLook.key) private var hardwareLook = true
     @AppStorage(InputConfig.newVideoLoopKey) private var newVideoLoop = false
     @AppStorage(InputTileRate.key) private var tileFPS = 6
     @AppStorage(InputCloseConfirm.key) private var confirmClose = true
@@ -29,6 +30,9 @@ struct GeneralSettings: View {
                 }
                 .pickerStyle(.radioGroup)
                 .onChange(of: appSkin) { _, _ in AppSkin.reload() }
+                Toggle(L("하드웨어 모양 (입체 버튼 · 믹서 채널 · 트랜지션 패널)"), isOn: $hardwareLook)
+                Text(L("끄면 예전처럼 평평하고 깔끔한 화면입니다."))
+                    .font(.caption).foregroundColor(.secondary)
                 Text(L("Monochrome: 흑백 화면에 색은 의미에만 (Program 빨강 · Preview 초록), 상단·하단 바는 유리 재질. 기본: 기존 HongMix 화면 (Output 초록 · Preview 주황)."))
                     .font(.caption).foregroundColor(.secondary)
             }

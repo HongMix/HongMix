@@ -383,6 +383,7 @@ struct ScopesButton: View {
                 .frame(width: 34, height: 30)
                 .background(Theme.button)
                 .clipShape(RoundedRectangle(cornerRadius: 3))
+                .hmBevel(cornerRadius: 3)
         }
         .buttonStyle(.plain)
         .help(L("스코프 — 웨이브폼 · RGB 퍼레이드 · 벡터스코프 · 히스토그램"))

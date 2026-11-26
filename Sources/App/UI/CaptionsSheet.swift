@@ -25,6 +25,7 @@ private struct CaptionsButtonLabel: View {
                 .frame(width: 36, height: 30)
                 .background(captions.running ? Theme.live : Theme.button)
                 .clipShape(RoundedRectangle(cornerRadius: 3))
+                .hmBevel(cornerRadius: 3)
         }
         .buttonStyle(.plain)
         .help(L("실시간 자막 — 방송 오디오를 맥 안에서 글자로 바꿔 자막 입력에 띄우고, 번역·SRT 파일 저장"))

@@ -173,12 +173,17 @@ final class DisplayMap: ObservableObject {
             w.level = .screenSaver      // above that monitor's menu bar; only this Space via the collection behaviour
             w.collectionBehavior = [.managed, .fullScreenAuxiliary, .ignoresCycle]
         }
-        engine.setDisplaySource(slot, a.source)
-        let src = engine.displaySlots[slot]
-        w.contentView = NSHostingView(rootView: ZStack {
-            Color.black
-            MonitorView(fps: 120, source: { src.latest() })
-        }.ignoresSafeArea())
+        if a.source == .talent {
+            engine.setDisplaySource(slot, nil)
+            w.contentView = NSHostingView(rootView: TalentDisplayView(cue: TalentCue.shared).ignoresSafeArea())
+        } else {
+            engine.setDisplaySource(slot, a.source)
+            let src = engine.displaySlots[slot]
+            w.contentView = NSHostingView(rootView: ZStack {
+                Color.black
+                MonitorView(fps: 120, source: { src.latest() })
+            }.ignoresSafeArea())
+        }
         w.setFrame(screen.frame, display: true)
         w.orderFrontRegardless()
         windows[a.key] = (w, slot)

@@ -15,6 +15,7 @@ struct DataSourcesButton: View {
                 .frame(height: 30)
                 .background(Theme.button)
                 .clipShape(RoundedRectangle(cornerRadius: 3))
+                .hmBevel(cornerRadius: 3)
         }
         .buttonStyle(.plain)
         .help(L("데이터 소스 — Google Sheets/CSV를 자막에 연결"))

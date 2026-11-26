@@ -52,6 +52,7 @@ struct InputPropertiesSheet: View {
                                 .frame(height: 30)
                                 .background(tab == item.id ? Theme.accent : Color.clear)
                                 .clipShape(RoundedRectangle(cornerRadius: 5))
+                                .hmBevel(cornerRadius: 5)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)

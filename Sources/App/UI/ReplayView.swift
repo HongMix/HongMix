@@ -697,6 +697,7 @@ struct ReplayButton: View {
                 .frame(width: 34, height: 30)
                 .background(replay.recording ? Theme.live.opacity(0.7) : Theme.button)
                 .clipShape(RoundedRectangle(cornerRadius: 3))
+                .hmBevel(cornerRadius: 3)
         }
         .buttonStyle(.plain)
         .help(L("Instant Replay — 녹화 · 마크 · 슬로모션 재생"))

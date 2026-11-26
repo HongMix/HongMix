@@ -169,8 +169,16 @@ final class FullscreenOutput: NSObject {
     }
 
     func setSource(_ src: BusSource, engine: SwitcherEngine) {
+        let rebuild = isShowing && (source == .talent) != (src == .talent)   // other kind of window content
         source = src
-        if isShowing { engine.setFullscreenSource(src) }
+        if rebuild {
+            // same place and size afterwards: the window frame, or the display it was filling
+            let frame = activeMode == .window && fillDisplayID == nil ? window?.frame : nil
+            let fill = fillDisplayID.flatMap { id in NSScreen.screens.first { FullscreenOutput.displayID(of: $0) == id } }
+            hide()
+            show(engine: engine, fill: fill, windowFrame: frame)
+        }
+        else if isShowing { engine.setFullscreenSource(src) }
         engine.objectWillChange.send()
     }
 
@@ -257,10 +265,11 @@ final class FullscreenOutput: NSObject {
         }
         w.onExit = { [weak self] in self?.exitPressed() }
         let slot = engine.fullscreenSlot
-        engine.setFullscreenSource(source)
+        let talent = source == .talent
+        engine.setFullscreenSource(talent ? nil : source)
         let root = ZStack(alignment: .top) {
             Color.black
-            MonitorView(fps: 120, source: { slot.latest() })
+            if talent { TalentDisplayView(cue: TalentCue.shared) } else { MonitorView(fps: 120, source: { slot.latest() }) }
             FullscreenHint(visible: coversAppScreen)
         }
         .ignoresSafeArea()

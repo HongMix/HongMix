@@ -97,7 +97,9 @@ enum FileDrop {
         let asList = NSEvent.modifierFlags.contains(.option)
         loadURLs(providers) { urls in
             let r = configs(for: urls, asList: asList)
-            for (k, c) in r.configs.enumerated() {
+            let category = InputCategory.current   // dropped while a category tab is open → in that category
+            for (k, var c) in r.configs.enumerated() {
+                c.category = category
                 engine.addInput(c)
                 if let n = afterNumber, n + k < engine.inputs.count - 1 {
                     engine.moveInput(from: engine.inputs.count - 1, to: n + k)
