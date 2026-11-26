@@ -202,6 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let engine = engine else { return }
         ProjectIO.autosave(engine)
         DisplayMap.shared.closeAll()
+        OutputWindows.shared.closeAll()
         engine.shutdown()
         mc_web_shutdown()       // embedded Chromium: close browsers and stop its helper processes
         FocusGuard.shared.appWillQuit()
@@ -213,6 +214,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum AfterLaunch {
     static func run(_ engine: SwitcherEngine) {
         DisplayMap.shared.start(engine: engine)
+        OutputWindows.shared.start(engine: engine)
         FocusGuard.shared.launch {
             if SystemCheck.showAtLaunch { StartupCheckWindow.show(engine: engine) }
         }
@@ -282,6 +284,7 @@ enum ProjectIO {
         }
         autosave(engine)
         DisplayMap.shared.closeAll()
+        OutputWindows.shared.closeAll()
         engine.shutdown()
         mc_web_shutdown()
         FocusGuard.shared.appWillQuit()

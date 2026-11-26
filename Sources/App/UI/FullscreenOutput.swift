@@ -45,11 +45,11 @@ final class FullscreenOutput: NSObject {
     private var fillDisplayID: CGDirectDisplayID?
 
     /// The Display output window (on air — never closed by ⌘W).
-    static func isOutputWindow(_ w: NSWindow) -> Bool { w is FullscreenWindow }
+    static func isOutputWindow(_ w: NSWindow) -> Bool { w is FullscreenWindow || OutputWindows.isOutputWindow(w) }
 
     /// The switcher's own window — not the output window, which can also become "main".
     static var switcherWindow: NSWindow? {
-        let candidates = NSApp.windows.filter { !($0 is FullscreenWindow) && $0.isVisible && $0.styleMask.contains(.titled) }
+        let candidates = NSApp.windows.filter { !isOutputWindow($0) && $0.isVisible && $0.styleMask.contains(.titled) }
         return candidates.first(where: { $0.identifier?.rawValue.hasPrefix("main") ?? false })
             ?? candidates.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height })
     }
@@ -80,6 +80,10 @@ final class FullscreenOutput: NSObject {
     }
 
     var isShowing: Bool { window != nil }
+    /// Showing borderless over a whole monitor (fullscreen mode, or the output window's green button).
+    var fillsScreen: Bool { window != nil && activeMode == .fullscreen }
+    /// Showing as the normal output window.
+    var showsWindow: Bool { window != nil && activeMode == .window }
     /// Monitor the output is on right now.
     var currentScreen: NSScreen? { window?.screen }
 

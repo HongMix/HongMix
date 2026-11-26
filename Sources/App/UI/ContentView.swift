@@ -921,10 +921,11 @@ struct FullscreenBarButton: View {
                     if mono && on {
                         Text(output.source.label).foregroundColor(Color(white: 0.72)).lineLimit(1)
                     }
-                    if DisplayMap.shared.showingCount > 0 {
-                        Text("+\(DisplayMap.shared.showingCount)")
+                    let extra = DisplayMap.shared.showingCount + OutputWindows.shared.openCount
+                    if extra > 0 {
+                        Text("+\(extra)")
                             .foregroundColor(Color(white: 0.85))
-                            .help(Lf("모니터별 출력 %@개 켜짐", "\(DisplayMap.shared.showingCount)"))
+                            .help(Lf("모니터별 출력 %@개 켜짐", "\(extra)"))
                     }
                 }
                 .font(.system(size: 12, weight: .semibold))
@@ -951,76 +952,6 @@ struct FullscreenBarButton: View {
         .clipShape(RoundedRectangle(cornerRadius: mono ? 15 : Theme.radius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: mono ? 15 : Theme.radius, style: .continuous)
             .stroke(mono ? (on ? Theme.program.opacity(0.55) : Color.white.opacity(0.10)) : .clear, lineWidth: 1))
-    }
-}
-
-/// Display ⚙: mode, monitor, source and window options for the display output.
-struct DisplaySettingsPanel: View {
-    @EnvironmentObject var engine: SwitcherEngine
-
-    private var sources: [BusSource] {
-        [.program, .clean, .preview] + engine.multiViewSources + [.talent] + engine.inputs.map { .input($0.id) }
-    }
-
-    private func sourceTitle(_ src: BusSource) -> String {
-        if case .input(let id) = src, let i = engine.input(withID: id) { return "Input \(engine.number(of: i)) — \(i.name)" }
-        if let n = engine.multiViewName(src) { return "MultiView — " + n }
-        return src.label
-    }
-
-    var body: some View {
-        let output = FullscreenOutput.shared
-        VStack(alignment: .leading, spacing: 12) {
-            Text(L("디스플레이 출력")).font(.headline)
-            Picker(L("방식"), selection: Binding(get: { output.mode }, set: { output.open($0, engine: engine) })) {
-                ForEach(DisplayOutputMode.allCases, id: \.rawValue) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            Picker(L("디스플레이"), selection: Binding(get: { output.displayID }, set: { output.setDisplay($0, engine: engine) })) {
-                Text(L("자동 (스위처가 없는 화면)")).tag(CGDirectDisplayID(0))
-                ForEach(FullscreenOutput.screens(), id: \.id) { Text($0.name).tag($0.id) }
-            }
-            Picker(L("소스"), selection: Binding(get: { output.source }, set: { output.setSource($0, engine: engine) })) {
-                ForEach(sources, id: \.self) { Text(sourceTitle($0)).tag($0) }
-            }
-            if output.mode == .window {
-                Toggle(L("항상 위에 표시"), isOn: Binding(get: { output.alwaysOnTop },
-                                                     set: { output.alwaysOnTop = $0; engine.objectWillChange.send() }))
-                Toggle(L("16:9 비율 고정"), isOn: Binding(get: { output.lockAspect },
-                                                     set: { output.lockAspect = $0; engine.objectWillChange.send() }))
-                Text(L("출력 창의 초록 버튼을 누르면 그 창이 있는 디스플레이를 꽉 채웁니다. Esc · 더블클릭 · 우클릭으로 창으로 돌아옵니다."))
-                    .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-            } else {
-                Picker(L("데스크탑"), selection: Binding(get: { output.pin },
-                                                     set: { output.pin = $0; engine.objectWillChange.send() })) {
-                    ForEach(DesktopPin.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .help(DesktopPin.help)
-                Text(L("지정한 디스플레이를 방송 화면으로 채웁니다. 스위처와 같은 화면이면 Esc · 더블클릭 · 우클릭으로 닫습니다."))
-                    .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            HStack {
-                if output.isShowing {
-                    Button(L("디스플레이 끄기")) {
-                        output.hide(); engine.objectWillChange.send()
-                    }
-                    Spacer()
-                    Button(output.mode == .window ? L("전체화면으로 전환") : L("출력 창으로 전환")) {
-                        output.open(output.mode == .window ? .fullscreen : .window, engine: engine)
-                    }
-                } else {
-                    Button(L("출력 창 열기")) { output.open(.window, engine: engine) }
-                    Spacer()
-                    Button(L("전체화면 열기")) { output.open(.fullscreen, engine: engine) }
-                }
-            }
-            if NSScreen.screens.count > 1 || !DisplayMap.shared.waiting.isEmpty {
-                Divider()
-                MonitorOutputsSection(sources: sources, title: sourceTitle)
-            }
-        }
-        .padding(16)
-        .frame(width: 460)
     }
 }
 

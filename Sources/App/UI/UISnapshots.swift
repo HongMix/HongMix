@@ -25,6 +25,9 @@ enum UISnapshots {
         case "talentcue":
             return view(TalentCueWindow().environmentObject(engine).background(Color(white: 0.12)),
                         size: NSSize(width: 1100, height: 760), to: path)
+        case "replay":
+            return view(ReplayView().environmentObject(engine).background(Color(white: 0.08)),
+                        size: NSSize(width: 1640, height: 1100), to: path)
         case "multiview":
             return view(MultiViewEditor().environmentObject(engine).background(Color(white: 0.12)),
                         size: NSSize(width: 980, height: 720), to: path)

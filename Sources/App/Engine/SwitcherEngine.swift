@@ -1155,6 +1155,20 @@ final class SwitcherEngine: ObservableObject {
         withState { $0.fullscreenSource = src }
     }
 
+    /// Display slots in use by monitor outputs and output windows (main thread).
+    private var claimedDisplaySlots = Set<Int>()
+
+    func claimDisplaySlot() -> Int? {
+        guard let k = (0..<SwitcherEngine.displaySlotCount).first(where: { !claimedDisplaySlots.contains($0) }) else { return nil }
+        claimedDisplaySlots.insert(k)
+        return k
+    }
+
+    func releaseDisplaySlot(_ k: Int) {
+        claimedDisplaySlots.remove(k)
+        setDisplaySource(k, nil)
+    }
+
     func setDisplaySource(_ index: Int, _ src: BusSource?) {
         guard (0..<SwitcherEngine.displaySlotCount).contains(index) else { return }
         withState { $0.displaySources[index] = src }

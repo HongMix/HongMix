@@ -94,6 +94,7 @@ struct MultiViewEditor: View {
         return !engine.busSources.contains(src)
             && !(fs.isShowing && fs.source == src)
             && !map.assignments.values.contains { $0.on && $0.source == src }
+            && !OutputWindows.shared.items.contains { $0.on && $0.source == src }
     }
 
     private func delete(_ k: Int) {
@@ -171,7 +172,7 @@ struct MultiViewEditor: View {
                     Button {
                         map.set(source: on ? nil : src, for: s)
                     } label: {
-                        Label("\(n + 1): \(s.localizedName)", systemImage: on ? "checkmark.rectangle.fill" : "rectangle")
+                        Label("\(n + 1): \(DisplayMap.shared.displayName(s))", systemImage: on ? "checkmark.rectangle.fill" : "rectangle")
                     }
                     .help(on ? L("이 모니터에서 끄기") : L("이 MultiView를 이 모니터에 전체화면으로"))
                 }

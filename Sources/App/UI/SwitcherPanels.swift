@@ -151,7 +151,7 @@ enum HWLook {
 }
 
 /// Hardware-look slider: dark groove, silver thumb.
-private struct GrooveSlider: View {
+struct GrooveSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
 
@@ -1869,7 +1869,7 @@ struct ChannelStrip<Accessory: View>: View {
             namePlate
             HStack(alignment: .top, spacing: 4) {
                 if !metersCollapsed && meterSupported {
-                    LayerMeter(meter: meter, dim: meterDim)
+                    LayerMeter(meter: meter, dim: meterDim, segment: MeterSegments.pitch)
                         .frame(width: 11)
                         .overlay(MeterSegments().allowsHitTesting(false))
                         .clipShape(RoundedRectangle(cornerRadius: 2))
@@ -1951,12 +1951,13 @@ struct ChannelStrip<Accessory: View>: View {
 
 /// Dark lines across the level meter so it reads as LED segments.
 private struct MeterSegments: View {
+    static let pitch: CGFloat = 4
     var body: some View {
         Canvas { ctx, size in
             var y: CGFloat = 0
             while y < size.height {
                 ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 1)), with: .color(.black.opacity(0.85)))
-                y += 4
+                y += Self.pitch
             }
             ctx.fill(Path(CGRect(x: size.width / 2 - 0.5, y: 0, width: 1, height: size.height)), with: .color(.black.opacity(0.85)))
         }

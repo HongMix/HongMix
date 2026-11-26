@@ -2152,5 +2152,19 @@
  "전환 시간 (0–5초)": "Transition time (0–5 s)",
  "스팅어 실행": "Run stinger",
  "T-바 — 오른쪽 끝까지 밀면 선택한 트랜지션으로 수동 전환": "T-bar — push all the way right to switch manually with the selected transition",
- "번역을 켜면 원문이 자막 줄 수만큼, 그 아래 번역이 이 줄 수만큼 나오고 둘이 함께 바뀝니다. 자막 영역보다 많으면 위로 늘어납니다.": "With translation on, the original takes the caption lines and the translation this many lines below it, and both change together. If they don't fit the caption area, it grows upward."
+ "번역을 켜면 원문이 자막 줄 수만큼, 그 아래 번역이 이 줄 수만큼 나오고 둘이 함께 바뀝니다. 자막 영역보다 많으면 위로 늘어납니다.": "With translation on, the original takes the caption lines and the translation this many lines below it, and both change together. If they don't fit the caption area, it grows upward.",
+ "출력이 너무 많습니다": "Too many outputs are on",
+ "출력 창 %@": "Window %@",
+ "연결 안 됨 — 다시 연결되면 %@ 자동 출력": "Not connected — shows %@ again when plugged in",
+ "잊기": "Forget",
+ "새 출력 창": "New output window",
+ "모니터를 켜면 그 화면 전체에 출력됩니다. 케이블을 다시 꽂으면 같은 모니터를 찾아 다시 켭니다. 출력 창 1의 초록 버튼은 창이 있는 화면을 채웁니다 (Esc로 돌아오기).": "A monitor that is on shows its source full screen. Plug a cable back in and HongMix finds the same monitor and turns it on again. Window 1's green button fills the screen it is on (Esc to go back).",
+ "스위처 화면": "switcher screen",
+ "출력 창 1": "Window 1",
+ "스위처가 있는 화면": "Switcher is here",
+ "스위처를 가리지 않도록 이 화면은 꺼져 있습니다. 출력 창 1의 초록 버튼으로 이 화면을 채울 수 있습니다.": "This screen stays off so the switcher isn't covered. Window 1's green button can fill it.",
+ "하단 Display 버튼": "Display button",
+ "연결된 모니터": "Monitors",
+ "출력 창 목록": "Windows",
+ "클릭해서 이름 바꾸기 — 비우면 원래 이름": "Click to rename — leave empty for the original name"
 }
