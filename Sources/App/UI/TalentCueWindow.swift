@@ -190,7 +190,8 @@ struct TalentCueWindow: View {
 
     private var link: String {
         let host = APIAccess.mode == "local" ? "localhost" : (HTTPAPIServer.localIPAddress() ?? "localhost")
-        return "http://\(host):8088/talent?key=\(cue.token)"
+        let port = BackstageLink.running ? Int(Backstage.port) : 8088   // Backstage's link survives a HongMix crash
+        return "http://\(host):\(port)/talent?key=\(cue.token)"
     }
 
     private var remoteSection: some View {

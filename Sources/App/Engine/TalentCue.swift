@@ -43,16 +43,16 @@ final class TalentCue: ObservableObject {
         var flashOvertime = true
     }
 
-    @Published var settings = Settings() { didSet { save() } }
+    @Published var settings = Settings() { didSet { save(); changed() } }
     /// Prepared messages; one of them can be on the display.
-    @Published var messages: [Message] = [] { didSet { save() } }
-    @Published var timer = TalentTimer() { didSet { save() } }
-    @Published var liveMessageID: UUID? = nil
+    @Published var messages: [Message] = [] { didSet { save(); changed() } }
+    @Published var timer = TalentTimer() { didSet { save(); changed() } }
+    @Published var liveMessageID: UUID? = nil { didSet { changed() } }
     /// Make the live message stand out (it blinks)
-    @Published var flash = false
-    @Published var timerOnDisplay = false
+    @Published var flash = false { didSet { changed() } }
+    @Published var timerOnDisplay = false { didSet { changed() } }
     /// Everything off: a black screen
-    @Published var blackout = false
+    @Published var blackout = false { didSet { changed() } }
     /// Secret part of the moderator link
     @Published private(set) var token: String
 
@@ -62,6 +62,7 @@ final class TalentCue: ObservableObject {
     private struct Saved: Codable { var settings: Settings; var messages: [Message]; var timer: TalentTimer }
 
     private init() {
+        defer { startSync() }
         token = UserDefaults.standard.string(forKey: "talentCueToken") ?? TalentCue.newToken()
         UserDefaults.standard.set(token, forKey: "talentCueToken")
         if let d = UserDefaults.standard.data(forKey: Self.key), let s = try? JSONDecoder().decode(Saved.self, from: d) {
@@ -78,6 +79,66 @@ final class TalentCue: ObservableObject {
         if let d = try? JSONEncoder().encode(Saved(settings: settings, messages: messages, timer: timer)) {
             UserDefaults.standard.set(d, forKey: Self.key)
         }
+    }
+
+    // MARK: Live state shared with Backstage (crash safety net)
+    //
+    // HongMix and its Backstage process (Backstage.swift) both run this model. Every change is written to
+    // `talent-live.json`; each side reads the file 4× a second and takes over what the other wrote. The timer
+    // is a start time, so both show the same countdown — and it keeps running when HongMix is gone.
+
+    private struct Live: Codable {
+        var settings: Settings, messages: [Message], timer: TalentTimer
+        var liveMessageID: UUID?, flash: Bool, timerOnDisplay: Bool, blackout: Bool
+    }
+    private static let liveURL: URL = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("HongMix", isDirectory: true)
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        return base.appendingPathComponent("talent-live.json")
+    }()
+    private var applying = false
+    private var writePending = false
+    private var lastLive: Data?
+    private var syncTimer: Timer?
+
+    private func changed() {
+        guard !applying, !writePending else { return }
+        writePending = true
+        DispatchQueue.main.async { [weak self] in self?.writeLive() }      // one write for several changes
+    }
+
+    private func writeLive() {
+        writePending = false
+        let live = Live(settings: settings, messages: messages, timer: timer, liveMessageID: liveMessageID, flash: flash,
+                        timerOnDisplay: timerOnDisplay, blackout: blackout)
+        guard let d = try? JSONEncoder().encode(live), d != lastLive else { return }
+        lastLive = d
+        try? d.write(to: Self.liveURL, options: .atomic)
+    }
+
+    private func readLive(maxAge: TimeInterval? = nil) {
+        if let maxAge, let m = (try? FileManager.default.attributesOfItem(atPath: Self.liveURL.path))?[.modificationDate] as? Date,
+           Date().timeIntervalSince(m) > maxAge { return }
+        guard let d = try? Data(contentsOf: Self.liveURL), d != lastLive,
+              let l = try? JSONDecoder().decode(Live.self, from: d) else { return }
+        lastLive = d
+        applying = true
+        if settings != l.settings { settings = l.settings }
+        if messages != l.messages { messages = l.messages }
+        if timer != l.timer { timer = l.timer }
+        if liveMessageID != l.liveMessageID { liveMessageID = l.liveMessageID }
+        if flash != l.flash { flash = l.flash }
+        if timerOnDisplay != l.timerOnDisplay { timerOnDisplay = l.timerOnDisplay }
+        if blackout != l.blackout { blackout = l.blackout }
+        applying = false
+    }
+
+    private func startSync() {
+        readLive(maxAge: 600)     // a restarted HongMix picks up the message and timer that were on (not a day-old one)
+        let t = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in self?.readLive() }
+        RunLoop.main.add(t, forMode: .common)
+        syncTimer = t
     }
 
     private static func newToken() -> String {

@@ -6,5 +6,5 @@ cd "$(dirname "$0")/../.."
 OUT="${1:-${TMPDIR:-/tmp}/hongmix-talentcue-test}"
 mkdir -p "$OUT"
 swiftc -O -module-cache-path "$OUT/mcache" -o "$OUT/talentcue_test" \
-  Sources/App/Engine/TalentTimer.swift Sources/App/Engine/TalentAccess.swift tests/talentcue/main.swift
+  Sources/App/Engine/TalentTimer.swift Sources/App/Engine/TalentAccess.swift Sources/App/Engine/BackstageRules.swift tests/talentcue/main.swift
 "$OUT/talentcue_test"

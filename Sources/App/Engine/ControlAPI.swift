@@ -200,12 +200,12 @@ final class HTTPAPIServer {
     }
 
     private func route(_ target: String) -> (String, String, String) {
-        guard let engine = engine else { return ("500 Internal Server Error", "text/plain", "engine unavailable") }
         let pathPart = target.split(separator: "?", maxSplits: 1).first.map(String.init) ?? "/"
         let queryPart = target.contains("?") ? String(target.split(separator: "?", maxSplits: 1)[1]) : ""
         let path = pathPart.lowercased()
         let q = APIProcessor.parseQuery(queryPart)
-        if let r = TalentRemote.route(path, q) { return r }
+        if let r = TalentRemote.route(path, q) { return r }     // also served by Backstage, which has no engine
+        guard let engine = engine else { return ("500 Internal Server Error", "text/plain", "engine unavailable") }
         if path == "/" || path == "/index.html" {
             return ("200 OK", "text/html; charset=utf-8", WebRemote.remotePage())
         }

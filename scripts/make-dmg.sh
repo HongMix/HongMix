@@ -59,6 +59,15 @@ for r in $(otool -l "$BIN" | awk '/LC_RPATH/{getline; getline; print $2}' | grep
   install_name_tool -delete_rpath "$r" "$BIN" 2>/dev/null || true
 done
 echo "  rpath: $(otool -l "$BIN" | grep -c "path $RP ")개"
+# Backstage helper: same binary, four folders deeper → its library paths point up to HongMix's Frameworks
+BSX="$APP/Contents/Helpers/HongMix Backstage.app/Contents/MacOS/HongMix Backstage"
+if [ -f "$BSX" ]; then
+  cp "$BIN" "$BSX"
+  for lib in $(otool -L "$BSX" | awk '/@executable_path\/\.\.\/Frameworks\//{print $1}'); do
+    install_name_tool -change "$lib" "${lib/@executable_path\/..\/Frameworks\//@executable_path/../../../../Frameworks/}" "$BSX"
+  done
+  install_name_tool -delete_rpath "$RP" "$BSX" 2>/dev/null; install_name_tool -add_rpath "@executable_path/../../../../Frameworks/" "$BSX"
+fi
 # 라이선스 안전장치: 배포 앱에 GPL/nonfree FFmpeg나 GPL 코덱이 들어가면 중단
 if strings "$APP/Contents/Frameworks/"libavcodec*.dylib 2>/dev/null | grep -qE -- "--enable-(gpl|nonfree)"; then
   echo "배포 중단: GPL/nonfree로 빌드된 FFmpeg입니다. scripts/build-ffmpeg-lgpl.sh 로 LGPL FFmpeg를 먼저 빌드하세요."; exit 1

@@ -166,6 +166,27 @@ PLIST
   done
 fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
+# Crash safety net "Backstage" (UI/Backstage.swift): the same binary in its own helper bundle with its own
+# bundle id, so macOS never mistakes it for HongMix (a click on HongMix must still open HongMix).
+BS="$APP/Contents/Helpers/HongMix Backstage.app"
+rm -rf "$BS"; mkdir -p "$BS/Contents/MacOS" "$BS/Contents/Resources"
+cp "$APP/Contents/MacOS/HongMix" "$BS/Contents/MacOS/HongMix Backstage"
+[ -f Resources/en.json ] && cp Resources/en.json "$BS/Contents/Resources/"
+cat > "$BS/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleExecutable</key><string>HongMix Backstage</string>
+<key>CFBundleIdentifier</key><string>com.hongseunghoon.HongMix.backstage</string>
+<key>CFBundleName</key><string>HongMix Backstage</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>1.0</string>
+<key>CFBundleVersion</key><string>1</string>
+<key>LSUIElement</key><string>1</string>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
+</dict></plist>
+PLIST
+codesign --force --sign - "$BS" >>"$LOG" 2>&1
 if [ "$HAVE_CEF" = 1 ]; then
   codesign --force --sign - "$APP/Contents/Frameworks/Chromium Embedded Framework.framework" >>"$LOG" 2>&1
   for H in "$APP/Contents/Frameworks/"HongMix\ Helper*.app; do codesign --force --sign - "$H" >>"$LOG" 2>&1; done

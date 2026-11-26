@@ -149,6 +149,8 @@ final class DisplayMap: ObservableObject {
                   let slot = freeSlot() else { continue }
             open(a, on: s, slot: slot, engine: engine)
         }
+        // monitors showing the Talent Display: Backstage keeps drawing them if HongMix crashes
+        BackstageLink.setScreens(windows.keys.filter { assignments[$0]?.source == .talent }.sorted())
         objectWillChange.send()
         engine.objectWillChange.send()
     }

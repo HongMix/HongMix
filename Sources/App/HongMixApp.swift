@@ -2,7 +2,14 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+/// `--backstage` runs the crash safety net (Backstage.swift) instead of the switcher.
 @main
+enum HongMixMain {
+    static func main() {
+        if CommandLine.arguments.contains(Backstage.flag) { Backstage.run() } else { HongMixApp.main() }
+    }
+}
+
 struct HongMixApp: App {
     /// Must run before anything reads UserDefaults (first stored property).
     private let migrated: Bool = {
@@ -144,6 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashNotice.checkOnLaunch()          // a crash last time: offer the report for a bug report
+        BackstageLink.start()                // crash safety net, from the very start (not after the launch screen)
         AppLanguage.syncSystemLanguage()      // system menus / file panels in the HongMix language (GitHub #7)
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleQuitEvent(_:withReplyEvent:)),
                                                      forEventClass: AEEventClass(kCoreEventClass),
@@ -188,6 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        BackstageLink.stop()        // a normal quit: Backstage must not restart HongMix
         guard let engine = engine else { return }
         ProjectIO.autosave(engine)
         DisplayMap.shared.closeAll()

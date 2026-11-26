@@ -1,4 +1,7 @@
 {
+ "충돌 안전망": "Crash safety net",
+ "Backstage: HongMix가 멈춰도 Talent Display·사회자 링크 유지, 자동 재시작": "Backstage: keep the Talent Display and moderator link running if HongMix stops, and restart it",
+ "작은 보조 프로세스가 Talent 화면을 계속 그리고 사회자 링크(포트 8089)를 받습니다. HongMix가 정상 종료 없이 사라지면 다시 시작합니다(2분에 최대 3번). 송출·녹화 자체는 보호하지 않습니다.": "A small helper process keeps drawing the Talent screen and serves the moderator link (port 8089). When HongMix disappears without quitting it starts it again (at most 3 times in 2 minutes). Streaming and recording themselves are not protected.",
  "맥 전체 CPU 사용률": "CPU use of the whole Mac",
  "맥 전체 GPU 사용률": "GPU use of the whole Mac",
  "맥 전체 사용 메모리 · HongMix %@ GB": "Memory used on the whole Mac · HongMix %@ GB",

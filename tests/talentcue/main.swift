@@ -53,4 +53,10 @@ check(!TalentAccess.allowsCrossSiteNavigation(path: "/talent/cmd", fetchMode: "n
 check(!TalentAccess.allowsCrossSiteNavigation(path: "/talent", fetchMode: "cors"), "page fetched by another site's script: no")
 check(!TalentAccess.allowsCrossSiteNavigation(path: "/api", fetchMode: "navigate"), "other paths: no")
 
+// Backstage restarts a crashed HongMix at most 3 times in 2 minutes (no endless loop if it crashes at launch)
+var budget = RelaunchBudget()
+check(budget.allow(at: at(0)) && budget.allow(at: at(10)) && budget.allow(at: at(20)), "first three restarts allowed")
+check(!budget.allow(at: at(30)), "fourth within 2 minutes refused")
+check(budget.allow(at: at(125)), "allowed again once the first one is older than 2 minutes")
+
 if failures == 0 { print("talentcue: all checks passed") } else { print("talentcue: \(failures) failed"); exit(1) }
