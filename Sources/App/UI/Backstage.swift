@@ -25,9 +25,9 @@ enum Backstage {
     struct MainInfo: Codable, Equatable { var pid: Int32; var screens: [String] }
 
     /// The helper bundle inside HongMix.app (nil when not built, e.g. an Xcode build).
-    static var helperExecutable: URL? {
-        let u = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/HongMix Backstage.app/Contents/MacOS/HongMix Backstage")
-        return FileManager.default.isExecutableFile(atPath: u.path) ? u : nil
+    static var helperApp: URL? {
+        let u = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/HongMix Backstage.app")
+        return FileManager.default.isExecutableFile(atPath: u.appendingPathComponent("Contents/MacOS/HongMix Backstage").path) ? u : nil
     }
 
     private static var controller: BackstageController?
@@ -148,13 +148,16 @@ enum BackstageLink {
             pid = p                // still running from before a crash: keep it (the Talent screen never went away)
             return
         }
-        guard let exe = Backstage.helperExecutable else { return }
-        let proc = Process()
-        proc.executableURL = exe
-        proc.arguments = [Backstage.flag]
-        proc.standardOutput = FileHandle.nullDevice
-        proc.standardError = FileHandle.nullDevice
-        do { try proc.run(); pid = proc.processIdentifier } catch { pid = 0 }
+        guard let app = Backstage.helperApp else { return }
+        // Started through macOS as an app of its own, not as our child process: Force Quit on HongMix also
+        // ends its child processes, which took the Talent screen down with it.
+        let c = NSWorkspace.OpenConfiguration()
+        c.arguments = [Backstage.flag]
+        c.activates = false
+        c.addsToRecentItems = false
+        NSWorkspace.shared.openApplication(at: app, configuration: c) { running, _ in
+            DispatchQueue.main.async { pid = running?.processIdentifier ?? 0 }
+        }
     }
 
     /// Normal quit or setting off.

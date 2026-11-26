@@ -196,7 +196,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        BackstageLink.stop()        // a normal quit: Backstage must not restart HongMix
+        // Quit from the menu / Dock / logout: Backstage stops too. Stopped from outside (Force Quit, a signal):
+        // Backstage keeps the Talent screen up and starts HongMix again.
+        if !ProjectIO.terminatingFromSignal { BackstageLink.stop() }
         guard let engine = engine else { return }
         ProjectIO.autosave(engine)
         DisplayMap.shared.closeAll()
