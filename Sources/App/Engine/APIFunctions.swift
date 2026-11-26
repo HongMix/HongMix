@@ -56,6 +56,7 @@ enum APIProcessor {
         case "output", "program": return .program
         case "preview": return .preview
         case "multiview": return .multiview
+        case "talent", "talentdisplay", "talentcue": return .talent
         case "clean", "cleanfeed", "output (clean)": return .clean
         case "overlaysalpha", "alpha", "keyfill", "alphapremultiplied": return .overlaysAlpha
         case "overlaysalphastraight", "alphastraight", "straight": return .overlaysAlphaStraight

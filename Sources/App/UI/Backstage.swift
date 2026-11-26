@@ -122,15 +122,33 @@ private final class BackstageController {
 enum BackstageLink {
     private static var pid: Int32 = 0
 
-    static var running: Bool { pid != 0 && kill(pid, 0) == 0 }
+    static var running: Bool { currentPID() != nil }
+
+    /// The Backstage that is running now (from its pid file, checked to really be Backstage), or nil.
+    private static func currentPID() -> Int32? {
+        if pid != 0, kill(pid, 0) == 0 { return pid }
+        guard let s = try? String(contentsOf: Backstage.pidURL, encoding: .utf8),
+              let p = Int32(s.trimmingCharacters(in: .whitespacesAndNewlines)), kill(p, 0) == 0,
+              NSRunningApplication(processIdentifier: p)?.bundleIdentifier == Backstage.bundleID else { return nil }
+        return p
+    }
 
     /// Main thread, after launch and when the setting changes.
     private static var info = Backstage.MainInfo(pid: getpid(), screens: [])
 
+    private static var mapScreens: [String] = []
+    private static var fullscreenScreen: String?
+
     /// DisplayMap: the monitors showing the Talent Display.
-    static func setScreens(_ keys: [String]) {
-        guard keys != info.screens else { return }
-        info.screens = keys
+    static func setScreens(_ keys: [String]) { mapScreens = keys; publishScreens() }
+
+    /// Display output (FullscreenOutput) filling a monitor with the Talent Display; nil = not.
+    static func setFullscreenScreen(_ key: String?) { fullscreenScreen = key; publishScreens() }
+
+    private static func publishScreens() {
+        let all = Array(Set(mapScreens + (fullscreenScreen.map { [$0] } ?? []))).sorted()
+        guard all != info.screens else { return }
+        info.screens = all
         writeInfo()
     }
 
@@ -141,10 +159,15 @@ enum BackstageLink {
     static func start() {
         _ = TalentCue.shared        // starts sharing the Talent state
         info.pid = getpid()
+        // keep the Talent monitors of the HongMix before (crashed): ours open only after the launch screen, and
+        // an empty list now would make Backstage close the Talent screen for those seconds
+        if let d = try? Data(contentsOf: Backstage.mainURL), let old = try? JSONDecoder().decode(Backstage.MainInfo.self, from: d) {
+            info.screens = old.screens
+            mapScreens = old.screens
+        }
         writeInfo()
         guard Backstage.enabled else { stop(); return }
-        if let s = try? String(contentsOf: Backstage.pidURL, encoding: .utf8), let p = Int32(s.trimmingCharacters(in: .whitespacesAndNewlines)),
-           kill(p, 0) == 0, NSRunningApplication(processIdentifier: p)?.bundleIdentifier == Backstage.bundleID {
+        if let p = currentPID() {
             pid = p                // still running from before a crash: keep it (the Talent screen never went away)
             return
         }
@@ -162,7 +185,8 @@ enum BackstageLink {
 
     /// Normal quit or setting off.
     static func stop() {
-        if running { kill(pid, SIGTERM) }
+        // looked up now, not only what start() saw: right after a restart macOS may not list Backstage yet
+        if let p = currentPID() { kill(p, SIGTERM) }
         pid = 0
         try? FileManager.default.removeItem(at: Backstage.pidURL)
     }

@@ -287,6 +287,8 @@ final class FullscreenOutput: NSObject {
             w.orderFrontRegardless()
         }
         NSCursor.setHiddenUntilMouseMoves(true)
+        // Talent Display filling a monitor: Backstage keeps it up if HongMix crashes
+        BackstageLink.setFullscreenScreen(talent && mode == .fullscreen ? MonitorIdentity.of(screen).key : nil)
         window = w
 
         screenObserver = NotificationCenter.default.addObserver(
@@ -392,6 +394,7 @@ final class FullscreenOutput: NSObject {
     }
 
     private func teardown(_ w: FullscreenWindow) {
+        BackstageLink.setFullscreenScreen(nil)
         w.orderOut(nil)
         w.contentView = nil
         w.forceClose()
