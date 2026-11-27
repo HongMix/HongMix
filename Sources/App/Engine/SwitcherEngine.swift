@@ -2149,17 +2149,18 @@ final class SwitcherEngine: ObservableObject {
             let live = i.id == st.programID || st.overlays.contains { $0.id == i.id && $0.alpha > 0 }
             return live ? red : (i.id == st.previewID ? green : gray)
         }
-        for (idx, r) in rects.enumerated() {
+        let below = mv.showLabels && mv.labelsBelow
+        let labelH = MultiViewConfig.labelBarHeight(frameHeight: CGFloat(fmt.height))
+        for (idx, cell) in rects.enumerated() {
             var t: TileSpec
+            let r = below ? MultiViewConfig.labelBelowRects(cell: cell, labelHeight: labelH).picture : cell
             switch targets[idx] {
             case .preview:
                 t = fullTile(pvw, rect: r)
                 t.borderColor = mv.showTally ? green : gray
-                t.label = "PREVIEW  " + (pvw?.name ?? "")
             case .program:
                 t = TileSpec(buffer: program, params: LayerParams(), rect: r)
                 t.borderColor = mv.showTally ? red : gray
-                t.label = "OUTPUT"
             case .input(let id):
                 guard let k = ins.firstIndex(where: { $0.id == id }) else {
                     t = TileSpec(buffer: nil, params: LayerParams(), rect: r); t.borderColor = gray; break
@@ -2167,15 +2168,17 @@ final class SwitcherEngine: ObservableObject {
                 let i = ins[k]
                 t = fullTile(i, rect: r)
                 t.borderColor = tally(i)
-                t.label = "\(k + 1)  \(i.name)"
+                t.label = MultiViewConfig.defaultLabel(.input(id), number: k + 1, name: i.name)
             case .talent:
                 t = TileSpec(buffer: TalentFrames.shared.latest, params: LayerParams(), rect: r)
                 t.borderColor = gray
-                t.label = "TALENT"
             case .empty, .auto:   // .auto never comes out of cellTargets
                 t = TileSpec(buffer: nil, params: LayerParams(), rect: r)
                 t.borderColor = gray
             }
+            if t.label == nil { t.label = MultiViewConfig.defaultLabel(targets[idx], number: nil, name: nil) }
+            if let own = mv.customLabel(idx) { t.label = own }
+            t.labelBelow = below
             t.borderWidth = bw
             if !mv.showLabels { t.label = nil }
             tiles.append(t)
