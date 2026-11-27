@@ -19,6 +19,7 @@ struct VideoCueWindow: View {
                 preview
                 nowNext
                 keys
+                CueOutputsPanel()
                 Spacer(minLength: 0)
             }
             .padding(14)
@@ -527,5 +528,70 @@ private struct CuePreview: View {
         }
         let z = cue.zoom
         return CGRect(x: (x - 0.5) * z + 0.5 + cue.panX / 2, y: (y - 0.5) * z + 0.5 - cue.panY / 2, width: w * z, height: h * z)
+    }
+}
+
+/// Window › Outputs: every Video Cue input is an output. Name it, put it on a monitor, show a test card.
+/// The monitor goes through the same per-monitor outputs as Display ⚙ (DisplayMap).
+private struct CueOutputsPanel: View {
+    @EnvironmentObject var engine: SwitcherEngine
+    @ObservedObject private var map = DisplayMap.shared
+    @ObservedObject private var cue = VideoCueEngine.shared
+
+    private var outputs: [InputSource] { engine.inputs.filter { $0 is VideoCueInput } }
+    private var screens: [(number: Int, screen: NSScreen)] {
+        let switcher = FullscreenOutput.switcherWindow?.screen
+        return NSScreen.screens.enumerated().filter { $0.element != switcher }.map { ($0.offset + 1, $0.element) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(L("출력")).font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).textCase(.uppercase)
+                Spacer()
+                Button(L("모니터 번호 표시")) { map.identify() }.controlSize(.small)
+                Button { engine.addInput(InputConfig(kind: .videoCue, name: "Video Cue \(outputs.count + 1)")) } label: {
+                    Image(systemName: "plus")
+                }
+                .controlSize(.small).help(L("출력 추가"))
+            }
+            ForEach(outputs, id: \.id) { o in row(o) }
+        }
+        .padding(.top, 6)
+    }
+
+    private func row(_ o: InputSource) -> some View {
+        HStack(spacing: 6) {
+            TextField("", text: Binding(get: { o.name }, set: { o.name = $0; engine.objectWillChange.send() }))
+                .textFieldStyle(.roundedBorder).frame(width: 120)
+            Menu {
+                Button(L("화면 없음")) { put(o, on: nil) }
+                Divider()
+                ForEach(screens, id: \.number) { n, s in Button(title(n, s)) { put(o, on: s) } }
+            } label: {
+                Text(screen(of: o).map { title($0.number, $0.screen) } ?? L("화면 없음")).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            Toggle(L("테스트 화면"), isOn: Binding(get: { cue.testCard.contains(o.id) }, set: { cue.setTestCard($0, output: o.id) }))
+                .toggleStyle(.button).controlSize(.small)
+        }
+        .contextMenu {
+            Button(L("이 출력 삭제"), role: .destructive) { engine.removeInput(o) }.disabled(outputs.count < 2)
+        }
+    }
+
+    private func title(_ n: Int, _ s: NSScreen) -> String {
+        let custom = map.customName(s)
+        return "\(n). " + (custom.isEmpty ? s.localizedName : custom)
+    }
+
+    private func screen(of o: InputSource) -> (number: Int, screen: NSScreen)? {
+        screens.first { map.isShowing($0.screen) && map.assignment(for: $0.screen)?.source == .input(o.id) }
+    }
+
+    /// One monitor per output: the old monitor goes off, the new one shows this output.
+    private func put(_ o: InputSource, on s: NSScreen?) {
+        if let old = screen(of: o) { map.set(source: nil, for: old.screen) }
+        if let s { map.set(source: .input(o.id), for: s) }
     }
 }

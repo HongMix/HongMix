@@ -34,6 +34,10 @@ final class VideoCueEngine: ObservableObject {
     private var fades: [Fade?] = [nil, nil]
     private var looks: [VideoCue?] = [nil, nil]  // render thread's copy of each deck's cue (picture, outputs)
     private var background: InputSource?          // the list's fallback picture (under `lock`)
+    /// Outputs showing the test card instead of the show (window › Outputs).
+    @Published private(set) var testCard: Set<UUID> = []
+    private var testCardShown: Set<UUID> = []     // render thread's copy (under `lock`)
+    private var bars: InputSource?                 // colour bars, made the first time a test card is asked for
     private var fadeOpen = [false, false]        // a fade whose end the machine hasn't heard yet
     private var wasPlaying = [false, false]
     private var startedAt: [Double] = [0, 0]     // stills: when GO showed them
@@ -159,6 +163,16 @@ final class VideoCueEngine: ObservableObject {
         if let old { closeQueue.async { old.stop() } }
     }
 
+    func setTestCard(_ on: Bool, output: UUID) {
+        if on && bars == nil {
+            var cfg = InputConfig(kind: .color, name: "Video Cue test card"); cfg.color = "bars"
+            let b = ColorInput(config: cfg); b.start()
+            lock.lock(); bars = b; lock.unlock()
+        }
+        if on { testCard.insert(output) } else { testCard.remove(output) }
+        lock.lock(); testCardShown = testCard; lock.unlock()
+    }
+
     /// (Re)open the background deck: a colour, a still or a looping silent video.
     private func applyBackground() {
         lock.lock(); let old = background; background = nil; lock.unlock()
@@ -243,9 +257,14 @@ final class VideoCueEngine: ObservableObject {
     /// framed by its cue's picture settings.
     func layers(width W: CGFloat, height H: CGFloat, output: UUID) -> [ComposeLayer] {
         let now = CACurrentMediaTime()
-        lock.lock(); let ds = decks, fs = fades, ls = looks, bg = background; lock.unlock()
+        lock.lock(); let ds = decks, fs = fades, ls = looks, bg = background
+        let card = testCardShown.contains(output) ? bars?.video.latest() : nil; lock.unlock()
         let full = CGRect(x: 0, y: 0, width: W, height: H)
         var p = LayerParams(); p.premul = 0
+        if let card {
+            var cp = LayerParams(); cp.premul = 1; cp.fitMode = 2
+            return [ComposeLayer(buffer: card, params: cp, rect: full)]
+        }
         var parts = [ComposeLayer(buffer: Slates.black, params: p, rect: full)]
         if let bg, let buf = bg.video.latest() {
             var bp = LayerParams(); bp.premul = bg.alphaPremultiplied ? 1 : 0; bp.fitMode = 1    // fill

@@ -42,6 +42,7 @@ final class ShortcutManager: ObservableObject {
         "Play", "Pause", "PlayPause", "Restart", "NextPicture", "PreviousPicture",
         "SetText", "StartCountdown", "StopCountdown",
         "DataSourceNextRow", "DataSourcePreviousRow", "DataSourceSelectRow",
+        "VideoCueGo", "VideoCueStop", "VideoCuePanic", "VideoCueNext", "VideoCuePrevious", "VideoCueSelect",
     ]
 
     private static let specialKeys: [UInt16: String] = [
