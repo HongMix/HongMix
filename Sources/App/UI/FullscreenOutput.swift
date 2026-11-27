@@ -45,11 +45,11 @@ final class FullscreenOutput: NSObject {
     private var fillDisplayID: CGDirectDisplayID?
 
     /// The Display output window (on air — never closed by ⌘W).
-    static func isOutputWindow(_ w: NSWindow) -> Bool { w is FullscreenWindow }
+    static func isOutputWindow(_ w: NSWindow) -> Bool { w is FullscreenWindow || OutputWindows.isOutputWindow(w) }
 
     /// The switcher's own window — not the output window, which can also become "main".
     static var switcherWindow: NSWindow? {
-        let candidates = NSApp.windows.filter { !($0 is FullscreenWindow) && $0.isVisible && $0.styleMask.contains(.titled) }
+        let candidates = NSApp.windows.filter { !isOutputWindow($0) && $0.isVisible && $0.styleMask.contains(.titled) }
         return candidates.first(where: { $0.identifier?.rawValue.hasPrefix("main") ?? false })
             ?? candidates.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height })
     }
@@ -80,6 +80,10 @@ final class FullscreenOutput: NSObject {
     }
 
     var isShowing: Bool { window != nil }
+    /// Showing borderless over a whole monitor (fullscreen mode, or the output window's green button).
+    var fillsScreen: Bool { window != nil && activeMode == .fullscreen }
+    /// Showing as the normal output window.
+    var showsWindow: Bool { window != nil && activeMode == .window }
     /// Monitor the output is on right now.
     var currentScreen: NSScreen? { window?.screen }
 
@@ -169,8 +173,16 @@ final class FullscreenOutput: NSObject {
     }
 
     func setSource(_ src: BusSource, engine: SwitcherEngine) {
+        let rebuild = isShowing && (source == .talent) != (src == .talent)   // other kind of window content
         source = src
-        if isShowing { engine.setFullscreenSource(src) }
+        if rebuild {
+            // same place and size afterwards: the window frame, or the display it was filling
+            let frame = activeMode == .window && fillDisplayID == nil ? window?.frame : nil
+            let fill = fillDisplayID.flatMap { id in NSScreen.screens.first { FullscreenOutput.displayID(of: $0) == id } }
+            hide()
+            show(engine: engine, fill: fill, windowFrame: frame)
+        }
+        else if isShowing { engine.setFullscreenSource(src) }
         engine.objectWillChange.send()
     }
 
@@ -257,10 +269,11 @@ final class FullscreenOutput: NSObject {
         }
         w.onExit = { [weak self] in self?.exitPressed() }
         let slot = engine.fullscreenSlot
-        engine.setFullscreenSource(source)
+        let talent = source == .talent
+        engine.setFullscreenSource(talent ? nil : source)
         let root = ZStack(alignment: .top) {
             Color.black
-            MonitorView(fps: 120, source: { slot.latest() })
+            if talent { TalentDisplayView(cue: TalentCue.shared) } else { MonitorView(fps: 120, source: { slot.latest() }) }
             FullscreenHint(visible: coversAppScreen)
         }
         .ignoresSafeArea()
@@ -278,6 +291,8 @@ final class FullscreenOutput: NSObject {
             w.orderFrontRegardless()
         }
         NSCursor.setHiddenUntilMouseMoves(true)
+        // Talent Display filling a monitor: Backstage keeps it up if HongMix crashes
+        BackstageLink.setFullscreenScreen(talent && mode == .fullscreen ? MonitorIdentity.of(screen).key : nil)
         window = w
 
         screenObserver = NotificationCenter.default.addObserver(
@@ -383,6 +398,7 @@ final class FullscreenOutput: NSObject {
     }
 
     private func teardown(_ w: FullscreenWindow) {
+        BackstageLink.setFullscreenScreen(nil)
         w.orderOut(nil)
         w.contentView = nil
         w.forceClose()

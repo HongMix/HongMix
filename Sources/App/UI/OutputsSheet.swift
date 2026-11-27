@@ -158,7 +158,11 @@ struct BusSourcesBar: View {
                             Button(L("Overlay 알파 (Straight)")) { engine.setBusSource(b, .overlaysAlphaStraight) }
                         }
                         Button(L("미리보기")) { engine.setBusSource(b, .preview) }
-                        Button("MultiView") { engine.setBusSource(b, .multiview) }
+                        Section("MultiView") {
+                            ForEach(Array(engine.multiViews.enumerated()), id: \.element.id) { (k, mv) in
+                                Button(mv.name) { engine.setBusSource(b, engine.multiViewSource(k)) }
+                            }
+                        }
                         Section(L("입력")) {
                             ForEach(engine.inputs) { i in
                                 Button("\(engine.number(of: i)). \(i.name)") { engine.setBusSource(b, .input(i.id)) }
@@ -185,6 +189,7 @@ struct BusSourcesBar: View {
 
     private func sourceName(_ s: BusSource) -> String {
         if case .input(let id) = s { return engine.input(withID: id).map { Lf("입력: %@", "\($0.name)") } ?? L("입력 (없음)") }
+        if let n = engine.multiViewName(s) { return n }
         return s.label
     }
 }
@@ -221,6 +226,7 @@ struct OutputRow: View {
                     .frame(width: 52, height: 24)
                     .background(output.running ? Theme.live : Theme.program)
                     .clipShape(RoundedRectangle(cornerRadius: 5))
+                    .hmBevel(cornerRadius: 5)
                     .overlay {
                         if output.config.kind == .stream && output.running && output.state != Int32(MC_STATE_RUNNING) {
                             TimelineView(.periodic(from: .now, by: 0.5)) { ctx in

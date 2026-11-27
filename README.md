@@ -10,27 +10,30 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.6</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.7</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.3.6
-- Translated live captions now change together with their original instead of appearing first.
-- **Caption lines** sets the original line count and **Translation lines** sets the translated line count independently.
-- The caption area grows upward when the configured rows need more room instead of silently dropping rows.
-- Synthetic-sentence app checks plus core, translation, checksums, DMG and ad-hoc signing passed for build 168. Continuous live-microphone speech was not tested. See [English notes](docs/RELEASE-NOTES-2.3.6.md) or [한국어](docs/RELEASE-NOTES-2.3.6.ko.md).
+### Latest update · 2.3.7
+- **Multiple MultiViews:** seven layouts, per-cell sources, labels and tally, with monitor and output routing.
+- **Talent Cue:** a presenter timer and messages controlled from HongMix or a protected phone link.
+- Optional **Backstage** relaunches HongMix after a crash; the hardware look adds console-style mixer strips and raised controls.
+- Reworked outputs, multiple output windows, a separate Audio Mixer window, system-load meters, new formats and Dutch captions.
+- Build 171 passed core, translation, MultiView, Talent Cue, installed Backstage, DMG and signing checks. See [English notes](docs/RELEASE-NOTES-2.3.7.md) or [한국어](docs/RELEASE-NOTES-2.3.7.ko.md).
+
+Thanks to [@otiumvisuals](https://github.com/otiumvisuals), who contributed MultiView, Talent Cue, the hardware look and more in 2.3.7.
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.6/en-captions.png" alt="HongMix 2.3.6 showing three original caption lines with two translated lines" width="100%"><br><sub>Original and translation change together</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.5/en-main.png" alt="HongMix 2.3.5 main switcher with final center panel" width="100%"><br><sub>Final center panel · large operator controls</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.7/en-main.png" alt="HongMix 2.3.7 main switcher with hardware look" width="100%"><br><sub>Hardware look · system load in the top bar</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.7/en-multiview.png" alt="HongMix 2.3.7 MultiView editor" width="100%"><br><sub>Multiple MultiViews · seven layouts</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.4/en-main.png" alt="Two-line translated captions" width="100%"><br><sub>Readable two-line translation</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/en-web-phone.png" alt="Slide controls in the phone web remote" width="100%"><br><sub>Slide controls from 2.3.3</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.7/en-talentcue.png" alt="HongMix 2.3.7 Talent Cue controls" width="100%"><br><sub>Talent Cue timer and presenter messages</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.7/en-mixer.png" alt="HongMix 2.3.7 separate Audio Mixer window" width="100%"><br><sub>Audio Mixer in its own window</sub></td>
   </tr>
 </table>
 

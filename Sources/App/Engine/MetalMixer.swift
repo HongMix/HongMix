@@ -47,7 +47,6 @@ struct LayerParams {
     var zoomY: Float = 1
     var fitMode: Int32 = 0  // 0 fit, 1 fill, 2 stretch
 }
-
 /// Must match `MixParams` in Mixer.metal.
 struct MixParams {
     var t: Float = 0
@@ -581,24 +580,5 @@ final class MetalMixer {
 
     func flushCache() {
         CVMetalTextureCacheFlush(readCache, 0)
-    }
-}
-
-/// Simple layout for MultiView: preview + output on top, up to 8 inputs below.
-enum MultiViewLayout {
-    static func rects(width: Int, height: Int) -> (preview: CGRect, program: CGRect, small: [CGRect]) {
-        let W = CGFloat(width), H = CGFloat(height)
-        let topH = H * 0.5
-        let preview = CGRect(x: 0, y: 0, width: W / 2, height: topH)
-        let program = CGRect(x: W / 2, y: 0, width: W / 2, height: topH)
-        var small: [CGRect] = []
-        let cols = 4, rows = 2
-        let cw = W / CGFloat(cols), ch = (H - topH) / CGFloat(rows)
-        for r in 0..<rows {
-            for c in 0..<cols {
-                small.append(CGRect(x: CGFloat(c) * cw, y: topH + CGFloat(r) * ch, width: cw, height: ch))
-            }
-        }
-        return (preview, program, small)
     }
 }

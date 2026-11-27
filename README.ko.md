@@ -10,27 +10,30 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.6 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.7 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.3.6
-- 번역 자막이 원문보다 먼저 나오지 않고 원문과 같이 바뀍니다.
-- **자막 줄 수**는 원문, **번역 줄 수**는 번역에 각각 독립적으로 적용됩니다.
-- 설정한 줄이 자막 영역에 다 들어가지 않으면 줄을 버리지 않고 영역을 위로 늘립니다.
-- 빌드 168의 합성 시험 문장 앱 검사와 코어·번역·체크섬·DMG·애드혹 서명 검사를 통과했습니다. 실제 마이크 연속 발화는 시험하지 못했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.6.ko.md) · [English](docs/RELEASE-NOTES-2.3.6.md)
+### 최신 업데이트 · 2.3.7
+- **MultiView 여러 개:** 레이아웃 7종, 칸별 화면·이름·탤리, 모니터와 출력으로 보내기.
+- **Talent Cue:** 발표자용 타이머·메시지를 HongMix 또는 보호된 휴대폰 링크로 조작.
+- 선택 기능인 **Backstage**는 비정상 종료 후 HongMix를 다시 실행하고, 새 **하드웨어 룩**은 콘솔 형식 믹서와 입체 조작계를 제공합니다.
+- 출력 패널, 출력 창 여러 개, 별도 Audio Mixer 창, 시스템 부하 표시, 새 포맷과 네덜란드어 자막을 추가했습니다.
+- 빌드 171의 코어·번역·MultiView·Talent Cue·설치 Backstage·DMG·서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.7.ko.md) · [English](docs/RELEASE-NOTES-2.3.7.md)
+
+2.3.7의 MultiView, Talent Cue, 하드웨어 룩 등을 기여해 주신 [@otiumvisuals](https://github.com/otiumvisuals) 님께 감사드립니다.
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.6/ko-captions.png" alt="원문 자막 세 줄과 번역 자막 두 줄을 표시한 HongMix 2.3.6" width="100%"><br><sub>원문과 번역이 같이 바뀍</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.5/ko-main.png" alt="최종 센터 패널이 있는 HongMix 2.3.5 메인 화면" width="100%"><br><sub>최종 센터 패널 · 큰 방송 조작 버튼</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.7/ko-main.png" alt="하드웨어 룩을 적용한 HongMix 2.3.7 메인 스위처" width="100%"><br><sub>하드웨어 룩 · 위쪽 시스템 부하 표시</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.7/ko-multiview.png" alt="HongMix 2.3.7 MultiView 편집기" width="100%"><br><sub>MultiView 여러 개 · 레이아웃 7종</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.4/ko-main.png" alt="두 줄 번역 자막" width="100%"><br><sub>읽기 쉬운 번역 자막 두 줄</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.3/ko-web-phone.png" alt="휴대폰 웹 리모컨 슬라이드 조작" width="100%"><br><sub>2.3.3의 슬라이드 조작</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.7/ko-talentcue.png" alt="HongMix 2.3.7 Talent Cue 조작 창" width="100%"><br><sub>Talent Cue 타이머와 발표자 메시지</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.7/ko-mixer.png" alt="HongMix 2.3.7 별도 Audio Mixer 창" width="100%"><br><sub>Audio Mixer를 별도 창으로</sub></td>
   </tr>
 </table>
 

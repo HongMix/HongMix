@@ -27,6 +27,7 @@ private struct MonitoringButtonLabel: View {
                     .frame(width: 34, height: 30)
                     .background(srt.links.isEmpty ? Theme.button : (worst == 2 ? Color.red : (worst == 1 ? Color.orange : Theme.program)))
                     .clipShape(RoundedRectangle(cornerRadius: 3))
+                    .hmBevel(cornerRadius: 3)
                 if !box.incidents.isEmpty {
                     Text("\(box.incidents.count)")
                         .font(.system(size: 9, weight: .bold)).foregroundColor(.white)

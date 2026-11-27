@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CoreImage
 
 /// Test hook (API SnapshotView): renders a HongMix view or alert offscreen to a PNG, so layouts can be
 /// checked (and release screenshots made) even when nobody is at the Mac or the screen is locked.
@@ -12,6 +13,24 @@ enum UISnapshots {
             return view(StartupCheckView(onClose: {}).environmentObject(engine), size: NSSize(width: 820, height: 700), to: path)
         case "display":
             return view(DisplaySettingsPanel().environmentObject(engine), size: nil, to: path)
+        case "talentframe":     // the frame a MultiView Talent cell gets (TalentFrames)
+            guard let pb = TalentFrames.shared.latest else { return "no Talent frame (no MultiView with a Talent cell)" }
+            let ci = CIImage(cvPixelBuffer: pb)
+            guard let cg = CIContext().createCGImage(ci, from: ci.extent),
+                  let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) else { return "render failed" }
+            do { try png.write(to: URL(fileURLWithPath: path)) } catch { return error.localizedDescription }
+            return nil
+        case "talent":
+            return view(TalentDisplayView(cue: TalentCue.shared), size: NSSize(width: 1280, height: 720), to: path)
+        case "talentcue":
+            return view(TalentCueWindow().environmentObject(engine).background(Color(white: 0.12)),
+                        size: NSSize(width: 1100, height: 760), to: path)
+        case "replay":
+            return view(ReplayView().environmentObject(engine).background(Color(white: 0.08)),
+                        size: NSSize(width: 1640, height: 1100), to: path)
+        case "multiview":
+            return view(MultiViewEditor().environmentObject(engine).background(Color(white: 0.12)),
+                        size: NSSize(width: 980, height: 720), to: path)
         case "general":
             return view(GeneralSettings().frame(width: 640, height: 900), size: NSSize(width: 640, height: 900), to: path)
         case "topbar":

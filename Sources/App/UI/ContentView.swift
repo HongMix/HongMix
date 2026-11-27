@@ -4,6 +4,20 @@ import AppKit
 
 /// Colours follow vMix conventions for Preview/Program. Overlay channels have their own
 /// control-surface colors; these are UI indicators and never tint the broadcast picture.
+/// Settings › General › "Hardware look": raised keys, aluminium relief, hardware mixer strips and the
+/// designed transition column. Off = the clean flat look HongMix had before. Cached like AppSkin.
+enum AppLook {
+    static let key = "appLookHardware"
+    private static var cached: Bool?
+    static var hardware: Bool {
+        if let c = cached { return c }
+        let v = UserDefaults.standard.object(forKey: key) as? Bool ?? true
+        cached = v
+        return v
+    }
+    static func sync(_ v: Bool) { if cached != v { cached = v } }
+}
+
 enum AppSkin: String, CaseIterable, Identifiable {
     case mono, classic
     var id: String { rawValue }
@@ -119,19 +133,92 @@ struct HMGlass: ViewModifier {
     }
 }
 
+/// Very subtle brushed-aluminium relief on top of a button's own colour: a faint sheen at the top, a
+/// slightly darker bottom and a fine light top edge — so the flat buttons read as physical keys.
+struct HMBevel: ViewModifier {
+    var cornerRadius: CGFloat
+
+    @ViewBuilder func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if !AppLook.hardware {
+            content
+        } else {
+        content
+            .overlay(shape.fill(LinearGradient(stops: [
+                .init(color: .white.opacity(0.11), location: 0),
+                .init(color: .white.opacity(0.03), location: 0.48),
+                .init(color: .black.opacity(0.02), location: 0.52),
+                .init(color: .black.opacity(0.13), location: 1),
+            ], startPoint: .top, endPoint: .bottom)).allowsHitTesting(false))
+            .overlay(shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0.04), .black.opacity(0.28)],
+                                                       startPoint: .top, endPoint: .bottom), lineWidth: 0.75)
+                .allowsHitTesting(false))
+            .shadow(color: .black.opacity(0.55), radius: 1.2, y: 1.2)   // raised key
+        }
+    }
+}
+
 extension View {
+    func hmBevel(cornerRadius: CGFloat) -> some View { modifier(HMBevel(cornerRadius: cornerRadius)) }
+
     func hmGlass(cornerRadius: CGFloat = 14, fallback: Color = Theme.panelDark) -> some View {
         modifier(HMGlass(cornerRadius: cornerRadius, fallback: fallback))
     }
 }
 
 struct SheetRequest: Identifiable {
-    enum Mode { case source, properties, title }
+    enum Mode { case source, properties, title, captions }
     let id = UUID()
     var kind: InputKind
     var editing: InputSource?
     var mode: Mode = .source
     var tab: Int = 0
+}
+
+/// The sheet a SheetRequest opens (main window and the detached audio mixer window).
+struct SheetRequestView: View {
+    @EnvironmentObject var engine: SwitcherEngine
+    let req: SheetRequest
+    @Binding var sheet: SheetRequest?
+
+    var body: some View {
+        switch req.mode {
+        case .source:
+            InputEditorSheet(kind: req.kind, editing: req.editing)
+        case .properties:
+            if let input = req.editing {
+                InputPropertiesSheet(input: input, initialTab: req.tab, onChangeSource: {
+                    sheet = SheetRequest(kind: input.kind, editing: input)
+                })
+            }
+        case .title:
+            if let t = req.editing as? TitleInput { TitleEditorSheet(title: t) }
+        case .captions:
+            CaptionsSheet(captions: engine.captions)
+        }
+    }
+}
+
+/// Window "Audio Mixer": the mixer on its own (e.g. on a second screen). While it is open the docked
+/// mixer in the main window is hidden; closing the window docks it again.
+struct AudioMixerWindow: View {
+    /// Open mixer windows (a language/skin/look change rebuilds the window: new onAppear can come first)
+    static var open = 0
+    @EnvironmentObject var engine: SwitcherEngine
+    @ViewState private var sheet: SheetRequest? = nil
+    @AppStorage("audioInputStripsCollapsed") private var collapsed = false
+
+    var body: some View {
+        AudioMixerPanel(sheet: $sheet, inputStripsCollapsed: $collapsed)
+            .frame(minWidth: 320, minHeight: 360)
+            .background(Theme.window)
+            .onAppear { AudioMixerWindow.open += 1; engine.mixerVisible = false }
+            .onDisappear {
+                AudioMixerWindow.open -= 1
+                if AudioMixerWindow.open <= 0 { AudioMixerWindow.open = 0; engine.mixerVisible = true }
+            }
+            .sheet(item: $sheet) { req in SheetRequestView(req: req, sheet: $sheet).environmentObject(engine) }
+    }
 }
 
 /// Main window, laid out like a classic software switcher:
@@ -140,6 +227,7 @@ struct SheetRequest: Identifiable {
 ///   [ Add Input | Record | External | Stream | Fullscreen ......... status ]
 struct ContentView: View {
     @EnvironmentObject var engine: SwitcherEngine
+    @Environment(\.openWindow) private var openWindow
     @ViewState private var sheet: SheetRequest? = nil
     @ViewState private var outputsSheet: OutputKind? = nil
     /// vMix: drag the dividing line to give the inputs more (or fewer) rows
@@ -209,7 +297,8 @@ struct ContentView: View {
                         if inputDockLeft { Spacer(minLength: 0) }
                         if engine.mixerVisible {
                             Rectangle().fill(Color.black).frame(width: 1)
-                            AudioMixerPanel(sheet: $sheet, inputStripsCollapsed: $audioInputStripsCollapsed)
+                            AudioMixerPanel(sheet: $sheet, inputStripsCollapsed: $audioInputStripsCollapsed,
+                                            onPopOut: { openWindow(id: "audiomixer") })
                                 .frame(width: lay.mixerWidth)
                                 .frame(maxHeight: .infinity)
                         }
@@ -225,25 +314,7 @@ struct ContentView: View {
         .background(
             Theme.window
         )
-        .sheet(item: $sheet) { req in
-            switch req.mode {
-            case .source:
-                InputEditorSheet(kind: req.kind, editing: req.editing)
-                    .environmentObject(engine)
-            case .properties:
-                if let input = req.editing {
-                    InputPropertiesSheet(input: input, initialTab: req.tab, onChangeSource: {
-                        sheet = SheetRequest(kind: input.kind, editing: input)
-                    })
-                    .environmentObject(engine)
-                }
-            case .title:
-                if let t = req.editing as? TitleInput {
-                    TitleEditorSheet(title: t)
-                        .environmentObject(engine)
-                }
-            }
-        }
+        .sheet(item: $sheet) { req in SheetRequestView(req: req, sheet: $sheet).environmentObject(engine) }
         .sheet(item: $outputsSheet) { kind in
             OutputsSheet(focusKind: kind)
                 .environmentObject(engine)
@@ -259,7 +330,7 @@ struct SwitcherLayout {
     static let transitionWidth: CGFloat = 168
     static let header: CGFloat = 22
     static let transport: CGFloat = 26      // vMix video controls row under each monitor
-    static let stripWidth: CGFloat = 72
+    static var stripWidth: CGFloat { AppLook.hardware ? 92 : 72 }
     /// Smallest height the TransitionColumn's fixed controls need (header gap, Quick Play, Cut,
     /// 4 transition rows, Stinger, Overlay 1–8, T-bar min 56, FTB + spacing). Below this the
     /// column overflowed its frame and its top/bottom buttons were pushed outside.
@@ -321,6 +392,7 @@ struct TopBar: View {
                     .padding(.horizontal, 8).frame(height: 20)
                     .background(Theme.button)
                     .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                    .hmBevel(cornerRadius: Theme.radius)
                 }
                 .buttonStyle(.plain)
                 .help(Lf("방금 닫은 입력 되살리기: %@", "\(t)"))
@@ -402,7 +474,28 @@ struct EngineStatsChips: View {
             StatusChip(label: "Drop", value: "\(engine.droppedTicks)", warn: engine.droppedTicks > 0)
                 .onTapGesture { engine.resetDrops() }
                 .help(L("렌더러가 늦어 건너뛴 프레임 수 (앱 시작 이후 누적). 클릭하면 0으로."))
+            SystemLoadChips()
             SystemLagChip()
+        }
+    }
+}
+
+/// Whole-Mac CPU · GPU · RAM next to the render figures (SystemLoad).
+struct SystemLoadChips: View {
+    @ObservedObject var load = SystemLoad.shared
+
+    var body: some View {
+        let gb = 1_073_741_824.0
+        HStack(spacing: 14) {
+            StatusChip(label: "CPU", value: String(format: "%.0f%%", load.cpu), warn: load.cpu > 80)
+                .help(L("맥 전체 CPU 사용률"))
+            if let g = load.gpu {
+                StatusChip(label: "GPU", value: String(format: "%.0f%%", g), warn: g > 85)
+                    .help(L("맥 전체 GPU 사용률"))
+            }
+            StatusChip(label: "RAM", value: String(format: "%.1f/%.0f GB", load.ramUsed / gb, load.ramTotal / gb),
+                       warn: load.ramUsed / max(1, load.ramTotal) > 0.9)
+                .help(Lf("맥 전체 사용 메모리 · HongMix %@ GB", String(format: "%.1f", load.appRAM / gb)))
         }
     }
 }
@@ -575,6 +668,7 @@ struct BottomBar: View {
                     .frame(height: 30)
                     .background(Theme.button)
                     .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                    .hmBevel(cornerRadius: Theme.radius)
             }
             .buttonStyle(.plain)
             .keyboardShortcut("i", modifiers: [.command])
@@ -590,6 +684,10 @@ struct BottomBar: View {
                                 help: L("스코프 — 파형 · 벡터스코프 · 히스토그램"))
             ToolBarWindowButton(title: "PTZ", symbol: "camera.metering.center.weighted", windowID: "ptz",
                                 help: L("PTZ 컨트롤 — 1~9 카메라 · WASD 이동 · Q/E 줌 · Z/X 포커스"))
+            ToolBarWindowButton(title: "Talent Cue", symbol: "timer", windowID: "talentcue",
+                                help: L("Talent Cue — 발표자 화면: 메시지 · 타이머 · 사회자 원격"))
+            ToolBarWindowButton(title: "MultiView", symbol: "rectangle.split.3x3", windowID: "multiview",
+                                help: L("MultiView — 레이아웃 · 칸마다 화면 선택 · 여러 개 만들어 모니터에 보내기"))
             Button {
                 engine.mixerVisible.toggle()
             } label: {
@@ -598,6 +696,7 @@ struct BottomBar: View {
                     .frame(width: 30, height: 30)
                     .background(engine.mixerVisible ? Theme.accent : Theme.button)
                     .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                    .hmBevel(cornerRadius: Theme.radius)
             }
             .buttonStyle(.plain)
             .help(L("Audio Mixer 보이기/숨기기"))
@@ -625,6 +724,7 @@ struct BottomBar: View {
                     .frame(height: 30)
                     .background(Theme.button)
                     .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                    .hmBevel(cornerRadius: Theme.radius)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
@@ -639,6 +739,7 @@ struct BottomBar: View {
                     .frame(width: 30, height: 30)
                     .background(Theme.button)
                     .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                    .hmBevel(cornerRadius: Theme.radius)
             }
             .buttonStyle(.plain)
             .help(L("Statistics — 별도 모니터링 창 열기 (다른 디스플레이·데스크톱으로 이동 가능)"))
@@ -820,10 +921,11 @@ struct FullscreenBarButton: View {
                     if mono && on {
                         Text(output.source.label).foregroundColor(Color(white: 0.72)).lineLimit(1)
                     }
-                    if DisplayMap.shared.showingCount > 0 {
-                        Text("+\(DisplayMap.shared.showingCount)")
+                    let extra = DisplayMap.shared.showingCount + OutputWindows.shared.openCount
+                    if extra > 0 {
+                        Text("+\(extra)")
                             .foregroundColor(Color(white: 0.85))
-                            .help(Lf("모니터별 출력 %@개 켜짐", "\(DisplayMap.shared.showingCount)"))
+                            .help(Lf("모니터별 출력 %@개 켜짐", "\(extra)"))
                     }
                 }
                 .font(.system(size: 12, weight: .semibold))
@@ -853,75 +955,6 @@ struct FullscreenBarButton: View {
     }
 }
 
-/// Display ⚙: mode, monitor, source and window options for the display output.
-struct DisplaySettingsPanel: View {
-    @EnvironmentObject var engine: SwitcherEngine
-
-    private var sources: [BusSource] {
-        [.program, .clean, .preview, .multiview] + engine.inputs.map { .input($0.id) }
-    }
-
-    private func sourceTitle(_ src: BusSource) -> String {
-        if case .input(let id) = src, let i = engine.input(withID: id) { return "Input \(engine.number(of: i)) — \(i.name)" }
-        return src.label
-    }
-
-    var body: some View {
-        let output = FullscreenOutput.shared
-        VStack(alignment: .leading, spacing: 12) {
-            Text(L("디스플레이 출력")).font(.headline)
-            Picker(L("방식"), selection: Binding(get: { output.mode }, set: { output.open($0, engine: engine) })) {
-                ForEach(DisplayOutputMode.allCases, id: \.rawValue) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            Picker(L("디스플레이"), selection: Binding(get: { output.displayID }, set: { output.setDisplay($0, engine: engine) })) {
-                Text(L("자동 (스위처가 없는 화면)")).tag(CGDirectDisplayID(0))
-                ForEach(FullscreenOutput.screens(), id: \.id) { Text($0.name).tag($0.id) }
-            }
-            Picker(L("소스"), selection: Binding(get: { output.source }, set: { output.setSource($0, engine: engine) })) {
-                ForEach(sources, id: \.self) { Text(sourceTitle($0)).tag($0) }
-            }
-            if output.mode == .window {
-                Toggle(L("항상 위에 표시"), isOn: Binding(get: { output.alwaysOnTop },
-                                                     set: { output.alwaysOnTop = $0; engine.objectWillChange.send() }))
-                Toggle(L("16:9 비율 고정"), isOn: Binding(get: { output.lockAspect },
-                                                     set: { output.lockAspect = $0; engine.objectWillChange.send() }))
-                Text(L("출력 창의 초록 버튼을 누르면 그 창이 있는 디스플레이를 꽉 채웁니다. Esc · 더블클릭 · 우클릭으로 창으로 돌아옵니다."))
-                    .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-            } else {
-                Picker(L("데스크탑"), selection: Binding(get: { output.pin },
-                                                     set: { output.pin = $0; engine.objectWillChange.send() })) {
-                    ForEach(DesktopPin.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .help(DesktopPin.help)
-                Text(L("지정한 디스플레이를 방송 화면으로 채웁니다. 스위처와 같은 화면이면 Esc · 더블클릭 · 우클릭으로 닫습니다."))
-                    .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            HStack {
-                if output.isShowing {
-                    Button(L("디스플레이 끄기")) {
-                        output.hide(); engine.objectWillChange.send()
-                    }
-                    Spacer()
-                    Button(output.mode == .window ? L("전체화면으로 전환") : L("출력 창으로 전환")) {
-                        output.open(output.mode == .window ? .fullscreen : .window, engine: engine)
-                    }
-                } else {
-                    Button(L("출력 창 열기")) { output.open(.window, engine: engine) }
-                    Spacer()
-                    Button(L("전체화면 열기")) { output.open(.fullscreen, engine: engine) }
-                }
-            }
-            if NSScreen.screens.count > 1 || !DisplayMap.shared.waiting.isEmpty {
-                Divider()
-                MonitorOutputsSection(sources: sources, title: sourceTitle)
-            }
-        }
-        .padding(16)
-        .frame(width: 460)
-    }
-}
-
 /// Bottom-bar shortcut to a tool window (Instant Replay, Scopes).
 struct ToolBarWindowButton: View {
     @Environment(\.openWindow) private var openWindow
@@ -942,6 +975,7 @@ struct ToolBarWindowButton: View {
             .frame(height: 30)
             .background(mono ? Color.white.opacity(0.07) : Theme.button)
             .clipShape(RoundedRectangle(cornerRadius: mono ? 15 : Theme.radius, style: .continuous))
+            .hmBevel(cornerRadius: mono ? 15 : Theme.radius)
             .overlay(RoundedRectangle(cornerRadius: mono ? 15 : Theme.radius, style: .continuous)
                 .stroke(mono ? Color.white.opacity(0.10) : .clear, lineWidth: 1))
         }
@@ -1158,6 +1192,7 @@ private struct DelayChip: View {
                     .padding(.horizontal, 8).padding(.vertical, 1)
                     .background(Theme.live)
                     .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
+                    .hmBevel(cornerRadius: Theme.radius)
                     .help(L("지연 중인 구간을 버리고 바로 실시간으로 내보냅니다 (아직 안 나간 장면이 시청자에게 가지 않음)"))
                     .confirmationDialog(L("지연 구간을 버릴까요?"), isPresented: $confirm) {
                         Button(L("DUMP — 지금 실시간으로"), role: .destructive) { output.dumpDelay() }

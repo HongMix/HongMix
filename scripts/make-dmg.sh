@@ -59,6 +59,23 @@ for r in $(otool -l "$BIN" | awk '/LC_RPATH/{getline; getline; print $2}' | grep
   install_name_tool -delete_rpath "$r" "$BIN" 2>/dev/null || true
 done
 echo "  rpath: $(otool -l "$BIN" | grep -c "path $RP ")개"
+# Backstage helper: same binary, four folders deeper → its library paths point up to HongMix's Frameworks
+BSX="$APP/Contents/Helpers/HongMix Backstage.app/Contents/MacOS/HongMix Backstage"
+if [ -f "$BSX" ]; then
+  cp "$BIN" "$BSX"
+  for lib in $(otool -L "$BSX" | awk '/@executable_path\/\.\.\/Frameworks\//{print $1}'); do
+    install_name_tool -change "$lib" "${lib/@executable_path\/..\/Frameworks\//@executable_path/../../../../Frameworks/}" "$BSX"
+  done
+  install_name_tool -delete_rpath "$RP" "$BSX" 2>/dev/null; install_name_tool -add_rpath "@executable_path/../../../../Frameworks/" "$BSX"
+fi
+# Libraries load each other relative to themselves (@loader_path), not to the program that started them:
+# the Backstage helper sits four folders deeper, and "@executable_path/../Frameworks" from there does not exist.
+for d in "$APP/Contents/Frameworks/"*.dylib; do
+  [ -L "$d" ] && continue
+  for dep in $(otool -L "$d" | awk 'NR>1 && /@executable_path\/\.\.\/Frameworks\//{print $1}'); do
+    install_name_tool -change "$dep" "@loader_path/${dep#@executable_path/../Frameworks/}" "$d" 2>/dev/null
+  done
+done
 # 라이선스 안전장치: 배포 앱에 GPL/nonfree FFmpeg나 GPL 코덱이 들어가면 중단
 if strings "$APP/Contents/Frameworks/"libavcodec*.dylib 2>/dev/null | grep -qE -- "--enable-(gpl|nonfree)"; then
   echo "배포 중단: GPL/nonfree로 빌드된 FFmpeg입니다. scripts/build-ffmpeg-lgpl.sh 로 LGPL FFmpeg를 먼저 빌드하세요."; exit 1
@@ -91,6 +108,9 @@ SA="$STAGE/$PRODUCT.app"
 # 배포본에는 디버그 정보(dSYM, 심볼) 없이 — 개발 경로·소스 파일 이름이 들어가지 않도록
 rm -rf "$SA/Contents/MacOS/"*.dSYM
 strip -S -x "$SA/Contents/MacOS/$PRODUCT" 2>/dev/null || true
+# Backstage helper (same program): strip it too
+BSH="$SA/Contents/Helpers/HongMix Backstage.app/Contents/MacOS/HongMix Backstage"
+[ -f "$BSH" ] && { strip -S -x "$BSH" 2>/dev/null || true; }
 # 오픈소스 고지 (FFmpeg, SRT, NDI, Chromium …)
 [ -f docs/THIRD-PARTY-NOTICES.txt ] && cp docs/THIRD-PARTY-NOTICES.txt "$SA/Contents/Resources/"
 mkdir -p "$SA/Contents/Resources/licenses"

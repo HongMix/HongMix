@@ -52,6 +52,10 @@ struct TransitionSlot: Codable, Equatable {
 /// What an auxiliary output bus (Output 2–4) carries.
 enum BusSource: Codable, Equatable, Hashable {
     case program, clean, preview, multiview, input(UUID)
+    /// A user-made MultiView other than the first (`.multiview` = the first one, kept for old sessions)
+    case multiviewID(UUID)
+    /// Talent Cue screen (Displays only — drawn by TalentDisplayView, not by the render engine)
+    case talent
     /// Overlay channels only on a transparent background (key & fill for NDI / DeckLink / downstream keyers)
     case overlaysAlpha, overlaysAlphaStraight
 
@@ -62,8 +66,9 @@ enum BusSource: Codable, Equatable, Hashable {
         case .overlaysAlpha: return L("Overlay 알파 (Premultiplied)")
         case .overlaysAlphaStraight: return L("Overlay 알파 (Straight)")
         case .preview: return "Preview"
-        case .multiview: return "MultiView"
+        case .multiview, .multiviewID: return "MultiView"
         case .input: return L("입력")
+        case .talent: return "Talent Display"
         }
     }
 }
@@ -167,6 +172,7 @@ private struct RenderState {
     /// Per-monitor display outputs (DisplayMap), slot index → source; nil = slot unused.
     var displaySources = [BusSource?](repeating: nil, count: SwitcherEngine.displaySlotCount)
     var isoMasterAudio = false
+    var multiViews: [MultiViewConfig] = [.standard()]
 }
 
 /// The switcher: owns inputs, outputs, the render clock, GPU mixer and audio mixer.
@@ -203,6 +209,15 @@ final class SwitcherEngine: ObservableObject {
     @Published var busSources: [BusSource] = [.preview, .multiview, .clean] {
         didSet { withState { $0.busSources = busSources } }
     }
+    /// User-made MultiViews (layout + what each cell shows). Never empty: the first one is `.multiview`.
+    @Published var multiViews: [MultiViewConfig] = [.standard()] {
+        didSet {
+            if multiViews.isEmpty { multiViews = [.standard()] }   // didSet does not run again for this
+            let mv = multiViews
+            withState { $0.multiViews = mv }
+            TalentFrames.shared.setActive(mv.contains { $0.resolvedSlots.contains(.talent) })
+        }
+    }
     /// Auto ducking (presenter mic lowers music/VT automatically)
     @Published var ducking = DuckSettings() { didSet { audioMixer.setDucking(ducking) } }
     @Published var busSettings: [BusSettings] = [BusSettings](repeating: BusSettings(), count: AudioMixer.busCount) {
@@ -231,6 +246,8 @@ final class SwitcherEngine: ObservableObject {
         didSet { withState { $0.overlaySettings = overlaySettings } }
     }
     @Published private(set) var multiCorderOn = false
+    /// MultiViews render on every n-th frame (1 = full rate); raised automatically when rendering gets tight.
+    @Published private(set) var multiViewDivider = 1
     /// Latest MultiCorder failure ("input: reason"), shown on the button. Before, ISO recordings that
     /// failed to open or hit a write error (disk full) still showed "recording".
     @Published private(set) var multiCorderError: String?
@@ -357,6 +374,12 @@ final class SwitcherEngine: ObservableObject {
     private var renderMsCount = 0
     private var renderMsMax: Double = 0
     private var droppedCount = 0
+    // MultiView frame skipping under load (render thread only)
+    private var mvThrottle = MultiViewThrottle()
+    private var mvLastFrames: [BusSource: CVPixelBuffer] = [:]
+    private var mvUsed: Set<BusSource> = []
+    private var mvTicks = 0
+    private var mvDroppedSeen = 0
     /// Mac sleep (lid closed …): frames missed while asleep and shortly after waking are not drops (stateLock).
     private var systemAsleep = false
     private var ignoreDropsUntil: Double = 0       // CACurrentMediaTime
@@ -710,7 +733,7 @@ final class SwitcherEngine: ObservableObject {
             guard outputs.contains(where: { $0.running && $0.config.bus == bus }) else { continue }
             switch src {
             case .input(let id): used.insert(id); for c in layerSources(of: id) { used.insert(c.id) }
-            case .multiview: everything = true
+            case .multiview, .multiviewID: everything = true
             default: break
             }
         }
@@ -1130,6 +1153,20 @@ final class SwitcherEngine: ObservableObject {
 
     func setFullscreenSource(_ src: BusSource?) {
         withState { $0.fullscreenSource = src }
+    }
+
+    /// Display slots in use by monitor outputs and output windows (main thread).
+    private var claimedDisplaySlots = Set<Int>()
+
+    func claimDisplaySlot() -> Int? {
+        guard let k = (0..<SwitcherEngine.displaySlotCount).first(where: { !claimedDisplaySlots.contains($0) }) else { return nil }
+        claimedDisplaySlots.insert(k)
+        return k
+    }
+
+    func releaseDisplaySlot(_ k: Int) {
+        claimedDisplaySlots.remove(k)
+        setDisplaySource(k, nil)
     }
 
     func setDisplaySource(_ index: Int, _ src: BusSource?) {
@@ -1575,7 +1612,28 @@ final class SwitcherEngine: ObservableObject {
                 slowTickBreakdown = parts.joined(separator: ", ")
             }
             renderMsMax = max(renderMsMax, ms)
+            let droppedNow = droppedCount
             stateLock.unlock()
+            mvThrottle.add(ms: ms)
+            mvTicks += 1
+            if mvTicks >= max(1, Int(renderFormat.fps.rounded())) {      // once a second
+                let changed = mvThrottle.evaluate(budgetMs: renderFormat.frameDuration * 1000,
+                                                  dropped: droppedNow - mvDroppedSeen, active: !mvUsed.isEmpty)
+                mvLastFrames = mvLastFrames.filter { mvUsed.contains($0.key) }   // let go of MultiViews no longer shown
+                mvUsed.removeAll()
+                mvTicks = 0
+                mvDroppedSeen = droppedNow
+                if changed {
+                    let d = mvThrottle.divider
+                    let fps = renderFormat.fps / Double(d)
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else { return }
+                        self.multiViewDivider = d
+                        self.lastMessage = d == 1 ? L("MultiView 다시 전체 프레임")
+                            : Lf("렌더 부하 높음: MultiView %@ fps로 낮춤 (라이브 출력 보호)", String(format: "%.0f", fps))
+                    }
+                }
+            }
             tick += 1
             let target = start + toAbs(Double(tick) * frameNs)
             let now = mach_absolute_time()
@@ -1952,8 +2010,21 @@ final class SwitcherEngine: ObservableObject {
                 f = mixer?.renderTiles([fullTile(pvw, rect: full)])
             case .input(let id):
                 f = mixer?.renderTiles([fullTile(find(id), rect: full)])
-            case .multiview:
-                f = renderMultiView(ins: ins, st: st, program: program, pvw: pvw, fmt: fmt)
+            case .talent:
+                f = nil
+            case .multiview, .multiviewID:
+                mvUsed.insert(src)
+                // under load: repeat the last MultiView frame on skipped ticks (see MultiViewThrottle)
+                // each MultiView on its own frame (offset by its index), so throttling spreads the work
+                let k: Int = { if case .multiviewID(let id) = src { return st.multiViews.firstIndex { $0.id == id } ?? 0 }; return 0 }()
+                if !mvThrottle.renders(tick: tick &+ Int64(k)), let last = mvLastFrames[src] {
+                    f = last
+                } else {
+                    var mv = st.multiViews[0]
+                    if case .multiviewID(let id) = src, let m = st.multiViews.first(where: { $0.id == id }) { mv = m }
+                    f = renderMultiView(mv, ins: ins, st: st, program: program, pvw: pvw, fmt: fmt)
+                    mvLastFrames[src] = f
+                }
             }
             if let f = f { sourceCache[src] = f }
             return f
@@ -2056,31 +2127,49 @@ final class SwitcherEngine: ObservableObject {
         o.pushVideo(f, width: fmt.width, height: fmt.height, tick: tick)
     }
 
-    private func renderMultiView(ins: [InputSource], st: RenderState, program: CVPixelBuffer?, pvw: InputSource?,
-                                 fmt: VideoFormat) -> CVPixelBuffer? {
-        let layout = MultiViewLayout.rects(width: fmt.width, height: fmt.height)
+    private func renderMultiView(_ mv: MultiViewConfig, ins: [InputSource], st: RenderState, program: CVPixelBuffer?,
+                                 pvw: InputSource?, fmt: VideoFormat) -> CVPixelBuffer? {
+        let rects = mv.layout.rects(width: CGFloat(fmt.width), height: CGFloat(fmt.height))
         let green: (Float, Float, Float) = (0.16, 0.72, 0.24)
         let red: (Float, Float, Float) = (0.86, 0.16, 0.16)
         let gray: (Float, Float, Float) = (0.25, 0.25, 0.28)
         let bw = Float(max(2, fmt.height / 270))
         var tiles: [TileSpec] = []
-        var pv = fullTile(pvw, rect: layout.preview)
-        pv.borderColor = green
-        pv.borderWidth = bw
-        pv.label = "PREVIEW  " + (pvw?.name ?? "")
-        tiles.append(pv)
-        var pg = TileSpec(buffer: program, params: LayerParams(), rect: layout.program)
-        pg.borderColor = red
-        pg.borderWidth = bw
-        pg.label = "OUTPUT"
-        tiles.append(pg)
-        for (idx, r) in layout.small.enumerated() where idx < ins.count {
-            let i = ins[idx]
-            var t = fullTile(i, rect: r)
+        let targets = mv.cellTargets(inputIDs: ins.map(\.id))
+        func tally(_ i: InputSource) -> (Float, Float, Float) {
+            guard mv.showTally else { return gray }
             let live = i.id == st.programID || st.overlays.contains { $0.id == i.id && $0.alpha > 0 }
-            t.borderColor = live ? red : (i.id == st.previewID ? green : gray)
+            return live ? red : (i.id == st.previewID ? green : gray)
+        }
+        for (idx, r) in rects.enumerated() {
+            var t: TileSpec
+            switch targets[idx] {
+            case .preview:
+                t = fullTile(pvw, rect: r)
+                t.borderColor = mv.showTally ? green : gray
+                t.label = "PREVIEW  " + (pvw?.name ?? "")
+            case .program:
+                t = TileSpec(buffer: program, params: LayerParams(), rect: r)
+                t.borderColor = mv.showTally ? red : gray
+                t.label = "OUTPUT"
+            case .input(let id):
+                guard let k = ins.firstIndex(where: { $0.id == id }) else {
+                    t = TileSpec(buffer: nil, params: LayerParams(), rect: r); t.borderColor = gray; break
+                }
+                let i = ins[k]
+                t = fullTile(i, rect: r)
+                t.borderColor = tally(i)
+                t.label = "\(k + 1)  \(i.name)"
+            case .talent:
+                t = TileSpec(buffer: TalentFrames.shared.latest, params: LayerParams(), rect: r)
+                t.borderColor = gray
+                t.label = "TALENT"
+            case .empty, .auto:   // .auto never comes out of cellTargets
+                t = TileSpec(buffer: nil, params: LayerParams(), rect: r)
+                t.borderColor = gray
+            }
             t.borderWidth = bw
-            t.label = "\(idx + 1)  \(i.name)"
+            if !mv.showLabels { t.label = nil }
             tiles.append(t)
         }
         return mixer?.renderTiles(tiles)
@@ -2199,6 +2288,7 @@ final class SwitcherEngine: ObservableObject {
         p.ducking = ducking
         p.replay = ReplayEngine.shared.settings
         p.busSources = busSources
+        p.multiViews = multiViews
         p.stingers = stingers
         p.multiCorder = multiCorderSettings
         p.overlaySettings = overlaySettings
@@ -2270,6 +2360,7 @@ final class SwitcherEngine: ObservableObject {
             watch(o.id, o.objectWillChange)
         }
         if let bs = project.busSources, bs.count == 3 { busSources = bs } else { busSources = [.preview, .multiview, .clean] }
+        multiViews = (project.multiViews?.isEmpty == false) ? project.multiViews! : [.standard()]
         syncRenderLists()
         if let pi = project.programIndex, inputs.indices.contains(pi) { cutDirect(inputs[pi].id) }
         if let vi = project.previewIndex, inputs.indices.contains(vi) { setPreview(inputs[vi].id) }
@@ -2287,6 +2378,7 @@ struct ProjectFile: Codable {
     var masterVolume: Float?
     var busSettings: [BusSettings]? = nil
     var busSources: [BusSource]? = nil
+    var multiViews: [MultiViewConfig]? = nil
     var stingers: [StingerConfig]? = nil
     var multiCorder: MultiCorderSettings? = nil
     var overlaySettings: [OverlaySettings]? = nil

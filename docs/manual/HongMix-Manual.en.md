@@ -1,4 +1,4 @@
-# HongMix 2.3.6 User Manual
+# HongMix 2.3.7 User Manual
 
 HongMix is a live production switcher for Apple Silicon Macs. Its layout, keyboard shortcuts and remote API follow vMix, so vMix operators, Bitfocus Companion and Stream Deck setups feel at home.
 
@@ -31,13 +31,13 @@ Everything HongMix needs (FFmpeg, SRT, the NDI runtime and the Chromium web engi
 
 ### Option A: PKG installer (recommended)
 
-1. Double-click **HongMix-2.3.6.pkg**.
+1. Double-click **HongMix-2.3.7.pkg**.
 2. If macOS says the file is from an **unidentified developer**, right-click the file and choose **Open**, then **Open** again. (Alternatively: **System Settings › Privacy & Security**, then **Open Anyway**.)
 3. Click **Continue**, then **Install**. HongMix is installed in **Applications**.
 
 ### Option B: DMG
 
-1. Open **HongMix-2.3.6.dmg**.
+1. Open **HongMix-2.3.7.dmg**.
 2. Drag **HongMix** into the **Applications** folder.
 
 ### First launch
@@ -333,7 +333,7 @@ Assign an input to a color category from its ⚙ menu (**Category**). The color 
 
 ## 7. Audio Mixer
 
-Show or hide the mixer with the slider button in the bottom bar.
+Show or hide the mixer with the slider button in the bottom bar. Use its window button to move the Audio Mixer into a separate window; close that window to return it to the main switcher.
 
 ### What is shown
 
@@ -432,6 +432,23 @@ A **Return feed** (Add Output › Return feed) sends the program back to the fie
 4. Click **DISPLAY** to turn the display outputs on or off.
 
 To close a full-screen output: **Esc**, double-click or right-click. If a display is unplugged, its output closes and reopens automatically when the display comes back.
+
+### Multiple MultiViews
+
+1. Open **Tools › All Outputs…**, add a MultiView and open its editor.
+2. Choose one of seven layouts: 2+8, 8+2, large left, large right, 2×2, 3×3 or 4×4.
+3. Choose what each cell shows and whether names and tally borders appear.
+4. Route a MultiView to Output 2–4, an NDI/DeckLink output, a display monitor or an output window. Under heavy load, MultiView lowers its frame rate before Program does.
+
+### Talent Cue (stage timer)
+
+Open **Tools › Talent Cue…** to run a countdown or count-up clock, choose color phases, send prepared or typed messages, blink a message, show the idle screen or black out the presenter display. Add a **Talent Display** input when the presenter screen is needed as a source.
+
+For a moderator, copy the protected phone link shown in Talent Cue. It has its own secret key and controls Talent Cue only. Do not publish or reuse the link as a general remote-control password.
+
+### Output windows
+
+**Tools › All Outputs…** lists connected monitors and all output windows. Add and rename windows, choose Program, Preview, a MultiView, an input or Talent Display for each, then move them to the required desktop or monitor.
 
 ### MultiCorder (ISO recording)
 
@@ -648,11 +665,13 @@ Open **Settings** with **⌘,**. Tabs: **Video**, **Network**, **General**, **Ab
 |---|---|
 | **언어 / Language** | 한국어 or English. The window switches right away; streaming and recording keep running. |
 | **Appearance › Skin** | **Black & White** (default) or **Default** (classic HongMix look). |
+| **Appearance › Hardware look** | Console-style mixer strips and raised controls. Turn it off for the previous flat look. |
 | **Playback › File frame-rate conform (60 ↔ 59.94)** | Plays 60.00 fps files 0.1 % slower in a 59.94 program, removing a frame drop about every 17 s. Audio is conformed too. |
 | **Playback › Input thumbnail smoothness** | 6, 15 or 30 fps for the small tile pictures only. Program, Preview, streaming and recording always run at the full rate. |
 | **Playback › Loop new video inputs** | Default Loop state for newly added videos. |
 | **Safety › Ask before closing an input** | Asks before the tile **×** or menu closes an input. Turn this on again after choosing **Don't ask again**. |
 | **On-Air Safety** | Do Not Disturb at open/quit, Pre-show Check at launch, internet speed test. |
+| **Backstage** | Off by default. When enabled, a helper keeps Talent Display available and relaunches HongMix after a crash or Force Quit (up to 3 times in 2 minutes). It does not protect streaming or recording. |
 
 ### Video
 

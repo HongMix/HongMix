@@ -926,6 +926,7 @@ struct InputEditorSheet: View {
         if let e = editing {
             engine.replaceInput(e, with: c)
         } else {
+            c.category = InputCategory.current      // Add Input with a category tab open → lands in that category
             engine.addInput(c)
         }
         dismiss()

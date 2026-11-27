@@ -72,6 +72,7 @@ private struct TransportControls: View {
                 .frame(width: 26, height: 20)
                 .background(Theme.button)
                 .clipShape(RoundedRectangle(cornerRadius: 3))
+                .hmBevel(cornerRadius: 3)
         }
         .buttonStyle(.plain)
         .help(help)
@@ -227,6 +228,7 @@ struct SlideControls: View {
             .frame(minWidth: 26, minHeight: 20)
             .background(Theme.button)
             .clipShape(RoundedRectangle(cornerRadius: 3))
+            .hmBevel(cornerRadius: 3)
         }
         .buttonStyle(.plain)
         .help(help)

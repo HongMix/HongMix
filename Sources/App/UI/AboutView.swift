@@ -6,6 +6,7 @@ struct GeneralSettings: View {
     @AppStorage(AppLanguage.defaultsKey) private var language = AppLanguage.current.rawValue
     @AppStorage(FFmpegInput.rateConformKey) private var rateConform = true
     @AppStorage(AppSkin.defaultsKey) private var appSkin = AppSkin.current.rawValue
+    @AppStorage(AppLook.key) private var hardwareLook = true
     @AppStorage(InputConfig.newVideoLoopKey) private var newVideoLoop = false
     @AppStorage(InputTileRate.key) private var tileFPS = 6
     @AppStorage(InputCloseConfirm.key) private var confirmClose = true
@@ -30,6 +31,16 @@ struct GeneralSettings: View {
                 .pickerStyle(.radioGroup)
                 .onChange(of: appSkin) { _, _ in AppSkin.reload() }
                 Text(L("Monochrome: 흑백 화면에 색은 의미에만 (Program 빨강 · Preview 초록), 상단·하단 바는 유리 재질. 기본: 기존 HongMix 화면 (Output 초록 · Preview 주황)."))
+                    .font(.caption).foregroundColor(.secondary)
+                Toggle(L("하드웨어 모양 (입체 버튼 · 믹서 채널 · 트랜지션 패널)"), isOn: $hardwareLook)
+                Text(L("끄면 예전처럼 평평하고 깔끔한 화면입니다."))
+                    .font(.caption).foregroundColor(.secondary)
+            }
+            Section(L("충돌 안전망")) {
+                Toggle(L("Backstage: HongMix가 멈춰도 Talent Display·사회자 링크 유지, 자동 재시작"), isOn: Binding(
+                    get: { Backstage.enabled },
+                    set: { UserDefaults.standard.set($0, forKey: Backstage.enabledKey); BackstageLink.start() }))
+                Text(L("작은 보조 프로세스가 Talent 화면을 계속 그리고 사회자 링크(포트 8089)를 받습니다. HongMix가 정상 종료 없이 사라지면 다시 시작합니다(2분에 최대 3번). 송출·녹화 자체는 보호하지 않습니다."))
                     .font(.caption).foregroundColor(.secondary)
             }
             Section(L("실수 방지")) {

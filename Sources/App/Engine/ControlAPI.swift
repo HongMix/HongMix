@@ -148,7 +148,8 @@ final class HTTPAPIServer {
     /// requests), and asks for the password when one is set.
     static func reject(_ h: [String: String], path: String = "/") -> (String, String, String)? {
         // only this page itself (same-origin) or a typed address / Companion (none or no header) may send
-        if let site = h["sec-fetch-site"], site != "same-origin", site != "none" {
+        if let site = h["sec-fetch-site"], site != "same-origin", site != "none",
+           !TalentAccess.allowsCrossSiteNavigation(path: path, fetchMode: h["sec-fetch-mode"]) {
             return ("403 Forbidden", "cross-site request blocked", "")
         }
         if let origin = h["origin"], let host = h["host"] {
@@ -156,7 +157,8 @@ final class HTTPAPIServer {
             if o != host { return ("403 Forbidden", "cross-origin request blocked", "") }
         }
         let pw = APIAccess.password
-        if !pw.isEmpty && !WebRemote.publicPaths.contains(path) {    // the tally is view-only: no password
+        // the tally is view-only: no password · Talent Cue paths check their own link key (TalentRemote)
+        if !pw.isEmpty && !WebRemote.publicPaths.contains(path) && !TalentRemote.isTalentPath(path) {
             var ok = false
             if let a = h["authorization"], a.lowercased().hasPrefix("basic "),
                let d = Data(base64Encoded: String(a.dropFirst(6))), let s = String(data: d, encoding: .utf8),
@@ -198,11 +200,12 @@ final class HTTPAPIServer {
     }
 
     private func route(_ target: String) -> (String, String, String) {
-        guard let engine = engine else { return ("500 Internal Server Error", "text/plain", "engine unavailable") }
         let pathPart = target.split(separator: "?", maxSplits: 1).first.map(String.init) ?? "/"
         let queryPart = target.contains("?") ? String(target.split(separator: "?", maxSplits: 1)[1]) : ""
         let path = pathPart.lowercased()
         let q = APIProcessor.parseQuery(queryPart)
+        if let r = TalentRemote.route(path, q) { return r }     // also served by Backstage, which has no engine
+        guard let engine = engine else { return ("500 Internal Server Error", "text/plain", "engine unavailable") }
         if path == "/" || path == "/index.html" {
             return ("200 OK", "text/html; charset=utf-8", WebRemote.remotePage())
         }

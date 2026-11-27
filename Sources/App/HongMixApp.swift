@@ -2,7 +2,14 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+/// `--backstage` runs the crash safety net (Backstage.swift) instead of the switcher.
 @main
+enum HongMixMain {
+    static func main() {
+        if CommandLine.arguments.contains(Backstage.flag) { Backstage.run() } else { HongMixApp.main() }
+    }
+}
+
 struct HongMixApp: App {
     /// Must run before anything reads UserDefaults (first stored property).
     private let migrated: Bool = {
@@ -16,12 +23,15 @@ struct HongMixApp: App {
     @AppStorage(AppLanguage.defaultsKey) private var language = AppLanguage.current.rawValue
     /// Changing the skin rebuilds every window too, so Replay/Scopes/Statistics/Settings repaint.
     @AppStorage(AppSkin.defaultsKey) private var skin = AppSkin.current.rawValue
+    @AppStorage(AppLook.key) private var hardware = true
+    private var look: String { hardware ? "hw" : "clean" }
 
     var body: some Scene {
         let _ = AppSkin.sync(skin)
+        let _ = AppLook.sync(hardware)
         Window("HongMix", id: "main") {
             ZStack {
-                ContentView().id(language + skin)
+                ContentView().id(language + skin + look)
                 LaunchOverlay()
             }
                 .environmentObject(engine)
@@ -64,42 +74,63 @@ struct HongMixApp: App {
 
         Window("Rundown", id: "rundown") {
             RundownView(rundown: engine.rundown)
-                .id(language + skin)
+                .id(language + skin + look)
                 .environmentObject(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1120, height: 680)
         Window("Replay", id: "replay") {
             ReplayView()
-                .id(language + skin)
+                .id(language + skin + look)
                 .environmentObject(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1200, height: 860)
         Window("Scopes", id: "scopes") {
             ScopesView()
-                .id(language + skin)
+                .id(language + skin + look)
                 .environmentObject(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 960, height: 560)
+        Window("Audio Mixer", id: "audiomixer") {
+            AudioMixerWindow()
+                .id(language + skin + look)
+                .environmentObject(engine)
+                .preferredColorScheme(.dark)
+        }
+        .defaultSize(width: 520, height: 640)
+        Window("Talent Cue", id: "talentcue") {
+            TalentCueWindow()
+                .id(language + skin + look)
+                .environmentObject(engine)
+                .preferredColorScheme(.dark)
+        }
+        .defaultSize(width: 1100, height: 720)
+        Window("MultiView", id: "multiview") {
+            MultiViewEditor()
+                .id(language + skin + look)
+                .environmentObject(engine)
+                .preferredColorScheme(.dark)
+        }
+        .defaultSize(width: 980, height: 720)
         Window("PTZ Control", id: "ptz") {
             PTZControlWindow()
-                .id(language + skin)
+                .id(language + skin + look)
                 .environmentObject(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 680, height: 520)
         Window(L("통계 및 모니터링"), id: "statistics") {
             StatisticsSheet(engine: engine)
-                .id(language + skin)
+                .id(language + skin + look)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1440, height: 900)
 
         Settings {
             SettingsView()
-                .id(language + skin)
+                .id(language + skin + look)
                 .environmentObject(engine)
                 .preferredColorScheme(.dark)
         }
@@ -120,6 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         CrashNotice.checkOnLaunch()          // a crash last time: offer the report for a bug report
+        BackstageLink.start()                // crash safety net, from the very start (not after the launch screen)
         AppLanguage.syncSystemLanguage()      // system menus / file panels in the HongMix language (GitHub #7)
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleQuitEvent(_:withReplyEvent:)),
                                                      forEventClass: AEEventClass(kCoreEventClass),
@@ -164,9 +196,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Quit from the menu / Dock / logout: Backstage stops too. Stopped from outside (Force Quit, a signal):
+        // Backstage keeps the Talent screen up and starts HongMix again.
+        if !ProjectIO.terminatingFromSignal { BackstageLink.stop() }
         guard let engine = engine else { return }
         ProjectIO.autosave(engine)
         DisplayMap.shared.closeAll()
+        OutputWindows.shared.closeAll()
         engine.shutdown()
         mc_web_shutdown()       // embedded Chromium: close browsers and stop its helper processes
         FocusGuard.shared.appWillQuit()
@@ -178,6 +214,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum AfterLaunch {
     static func run(_ engine: SwitcherEngine) {
         DisplayMap.shared.start(engine: engine)
+        OutputWindows.shared.start(engine: engine)
         FocusGuard.shared.launch {
             if SystemCheck.showAtLaunch { StartupCheckWindow.show(engine: engine) }
         }
@@ -247,6 +284,7 @@ enum ProjectIO {
         }
         autosave(engine)
         DisplayMap.shared.closeAll()
+        OutputWindows.shared.closeAll()
         engine.shutdown()
         mc_web_shutdown()
         FocusGuard.shared.appWillQuit()

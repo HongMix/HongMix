@@ -74,6 +74,7 @@ struct PreflightButton: View {
                 .frame(width: 34, height: 30)
                 .background(Theme.button)
                 .clipShape(RoundedRectangle(cornerRadius: 3))
+                .hmBevel(cornerRadius: 3)
         }
         .buttonStyle(.plain)
         .help(L("송출 전 점검 — 신호·백업·SRT·송출 주소·디스크·오디오·렌더를 한 번에 확인"))

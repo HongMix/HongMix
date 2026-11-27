@@ -60,9 +60,11 @@ final class CaptionEngine: ObservableObject {
     @Published private(set) var lastTranslation = ""
 
     static var languages: [(String, String)] { [("ko-KR", L("한국어")), ("en-US", "English"), ("es-ES", "Español"),
-                                                ("ja-JP", "日本語"), ("zh-CN", "中文"), ("fr-FR", "Français"), ("de-DE", "Deutsch")] }
+                                                ("ja-JP", "日本語"), ("zh-CN", "中文"), ("fr-FR", "Français"), ("de-DE", "Deutsch"),
+                                                ("nl-NL", "Nederlands")] }
     static var targets: [(String, String)] { [("", L("번역 안 함")), ("en", "English"), ("ko", L("한국어")), ("es", "Español"),
-                                              ("ja", "日本語"), ("zh-Hans", "中文"), ("fr", "Français"), ("de", "Deutsch")] }
+                                              ("ja", "日本語"), ("zh-Hans", "中文"), ("fr", "Français"), ("de", "Deutsch"),
+                                              ("nl", "Nederlands")] }
 
     weak var engine: SwitcherEngine?
     private var recognizer: SFSpeechRecognizer?
@@ -695,11 +697,17 @@ final class CaptionEngine: ObservableObject {
     /// Settings › "Send test sentence": shows a sample line group without recognition (style check).
     func sendTest() {
         // sample in the spoken language (Korean captions get a Korean sample even in the English UI)
-        let ko = settings.language.hasPrefix("ko")
-        let samples = ko ? ["위원님들께서 지금 여기 계시는 위원님들은 대부분 큰 지역 대도시에 있는 위원님들이신데",
-                            "연락한 부분이 많이 있습니다. 자료를 다시 한번 확인해 주시기 바랍니다."]
-                         : ["Most of the committee members here today represent large cities and major regions",
-                            "There are many areas we contacted. Please check the documents once more."]
+        let samples: [String]
+        if settings.language.hasPrefix("ko") {
+            samples = ["위원님들께서 지금 여기 계시는 위원님들은 대부분 큰 지역 대도시에 있는 위원님들이신데",
+                       "연락한 부분이 많이 있습니다. 자료를 다시 한번 확인해 주시기 바랍니다."]
+        } else if settings.language.hasPrefix("nl") {
+            samples = ["De meeste commissieleden hier vandaag vertegenwoordigen grote steden en regio's",
+                       "We hebben veel partijen benaderd. Kijk de stukken nog één keer goed na."]
+        } else {
+            samples = ["Most of the committee members here today represent large cities and major regions",
+                       "There are many areas we contacted. Please check the documents once more."]
+        }
         let text = samples[currentBase % samples.count]
         finals.append((currentBase, text))
         currentBase += 1

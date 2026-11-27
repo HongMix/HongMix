@@ -16,6 +16,7 @@ struct SchedulerButton: View {
             .frame(height: 30)
             .background(Theme.button)
             .clipShape(RoundedRectangle(cornerRadius: 3))
+            .hmBevel(cornerRadius: 3)
         }
         .buttonStyle(.plain)
         .help(L("스케줄러 — 정해진 시각/요일에 송출 시작·녹화·컷·오버레이 등 아무 기능이나 자동 실행"))

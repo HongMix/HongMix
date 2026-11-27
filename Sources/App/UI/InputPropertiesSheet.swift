@@ -52,6 +52,7 @@ struct InputPropertiesSheet: View {
                                 .frame(height: 30)
                                 .background(tab == item.id ? Theme.accent : Color.clear)
                                 .clipShape(RoundedRectangle(cornerRadius: 5))
+                                .hmBevel(cornerRadius: 5)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -93,8 +94,8 @@ struct InputPropertiesSheet: View {
             }
             .padding()
         }
-        // Position / Layers put the live picture beside the values: wider window for those two tabs
-        .frame(width: tab == 3 || tab == 6 ? 1240 : 900, height: tab == 3 || tab == 6 ? 800 : 680)
+        // Position / Layers put the live picture beside the values; that size for every tab, so it never jumps
+        .frame(width: 1240, height: 800)   // one size for every tab (the largest, Position / Triggers): no jumping
     }
 
     private var propertyTabs: [(id: Int, title: String, icon: String)] {

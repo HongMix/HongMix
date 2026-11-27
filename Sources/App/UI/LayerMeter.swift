@@ -8,16 +8,19 @@ struct LayerMeter: NSViewRepresentable {
     let meter: () -> (Float, Float)
     /// When it returns true the bars are drawn grey (signal present but not reaching the output).
     var dim: (() -> Bool)? = nil
+    /// LED height in points: the bar lights whole LEDs only (cells counted from the top, like MeterSegments). 0 = smooth.
+    var segment: CGFloat = 0
 
     func makeNSView(context: Context) -> LayerMeterView {
         let v = LayerMeterView()
         v.source = meter
         v.dimSource = dim
+        v.segment = segment
         MeterClock.shared.add(v)
         return v
     }
 
-    func updateNSView(_ v: LayerMeterView, context: Context) { v.source = meter; v.dimSource = dim }
+    func updateNSView(_ v: LayerMeterView, context: Context) { v.source = meter; v.dimSource = dim; v.segment = segment }
 
     static func dismantleNSView(_ v: LayerMeterView, coordinator: ()) { MeterClock.shared.remove(v) }
 }
@@ -25,6 +28,7 @@ struct LayerMeter: NSViewRepresentable {
 final class LayerMeterView: NSView {
     var source: () -> (Float, Float) = { (0, 0) }
     var dimSource: (() -> Bool)?
+    var segment: CGFloat = 0
     private var dimmed = false
     private static let liveColors = [NSColor.systemGreen.cgColor, NSColor.systemYellow.cgColor,
                                      NSColor.systemOrange.cgColor, NSColor.systemRed.cgColor]
@@ -70,6 +74,13 @@ final class LayerMeterView: NSView {
         return CGFloat(max(0, min(1, (db + 60) / 60)))
     }
 
+    /// Fill height snapped to whole LEDs: an LED is on or off, never half full.
+    private func lit(_ fill: CGFloat, _ h: CGFloat) -> CGFloat {
+        guard segment > 0, fill > 0 else { return fill }
+        let top = (ceil((h - fill) / segment - 0.001) * segment)
+        return max(0, h - top)
+    }
+
     func refresh() {
         let d = dimSource?() ?? false
         if d != dimmed {
@@ -85,8 +96,8 @@ final class LayerMeterView: NSView {
         if abs(f.0 - last.0) * h < 0.5 && abs(f.1 - last.1) * h < 0.5 { return }
         last = f
         CATransaction.begin(); CATransaction.setDisableActions(true)
-        masks[0].frame = CGRect(x: 0, y: 0, width: bars[0].bounds.width, height: h * f.0)
-        masks[1].frame = CGRect(x: 0, y: 0, width: bars[1].bounds.width, height: h * f.1)
+        masks[0].frame = CGRect(x: 0, y: 0, width: bars[0].bounds.width, height: lit(h * f.0, h))
+        masks[1].frame = CGRect(x: 0, y: 0, width: bars[1].bounds.width, height: lit(h * f.1, h))
         CATransaction.commit()
     }
 }

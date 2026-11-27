@@ -24,9 +24,12 @@ struct VideoFormat: Codable, Hashable, Identifiable {
         VideoFormat(id: "1080p50", name: "1080p 50", width: 1920, height: 1080, fpsNum: 50, fpsDen: 1),
         VideoFormat(id: "1080p5994", name: "1080p 59.94", width: 1920, height: 1080, fpsNum: 60000, fpsDen: 1001),
         VideoFormat(id: "1080p60", name: "1080p 60", width: 1920, height: 1080, fpsNum: 60, fpsDen: 1),
+        VideoFormat(id: "720p50", name: "720p 50", width: 1280, height: 720, fpsNum: 50, fpsDen: 1),
         VideoFormat(id: "720p5994", name: "720p 59.94", width: 1280, height: 720, fpsNum: 60000, fpsDen: 1001),
+        VideoFormat(id: "2160p25", name: "2160p 25", width: 3840, height: 2160, fpsNum: 25, fpsDen: 1),
         VideoFormat(id: "2160p2997", name: "2160p 29.97", width: 3840, height: 2160, fpsNum: 30000, fpsDen: 1001),
         VideoFormat(id: "2160p30", name: "2160p 30", width: 3840, height: 2160, fpsNum: 30, fpsDen: 1),
+        VideoFormat(id: "2160p50", name: "2160p 50", width: 3840, height: 2160, fpsNum: 50, fpsDen: 1),
     ]
 
     static let defaultFormat = presets[0]

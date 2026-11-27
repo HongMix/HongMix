@@ -225,6 +225,7 @@ struct RundownButton: View {
             .frame(height: 30)
             .background(Theme.button)
             .clipShape(RoundedRectangle(cornerRadius: 3))
+            .hmBevel(cornerRadius: 3)
         }
         .buttonStyle(.plain)
         .help(L("런다운(큐시트) — 방송 순서를 NEXT 한 번으로 진행"))

@@ -82,7 +82,7 @@ struct ReplayView: View {
                     Text(replay.recording ? "REC" : L("녹화 시작")).font(.system(size: 12, weight: .heavy))
                 }
                 .padding(.horizontal, 12).frame(height: 28)
-                .background(RoundedRectangle(cornerRadius: 5).fill(replay.recording ? Theme.live.opacity(0.35) : Theme.button))
+                .replayKey(replay.recording ? Theme.live.opacity(0.35) : ReplayKey.neutral, radius: 5)
             }
             .buttonStyle(.plain)
             .fixedSize()
@@ -96,51 +96,53 @@ struct ReplayView: View {
             .frame(minWidth: 160, alignment: .leading)
             .help(diskLine)
             Spacer()
-            timecodeReadout(label: "REC TC", value: replay.recordTimecode(), color: replay.recording ? .red : .secondary)
-            VStack(alignment: .trailing, spacing: 0) {
-                Text(L("SELECTED · TC / 녹화 시각")).font(.system(size: 8, weight: .bold)).foregroundColor(Theme.preview)
-                Text(replay.selectedTimecode()).font(.system(size: 17, weight: .semibold, design: .monospaced)).foregroundColor(.white)
-                Text(replay.selectedClock()).font(.system(size: 13, weight: .semibold, design: .monospaced)).foregroundColor(ReplayColors.clock)
-            }
-            .padding(.horizontal, 9).padding(.vertical, 3)
-            .background(RoundedRectangle(cornerRadius: 5).fill(Color.black.opacity(0.75)))
-            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Theme.preview.opacity(0.5), lineWidth: 1))
-            .fixedSize()
-            .help(L("선택한 덱 위치의 TC와 그 장면이 실제로 녹화된 시각"))
+            timecodeReadout(label: "REC TC", value: replay.recordTimecode(), color: replay.recording ? .red : .secondary,
+                            sub: replay.recording ? "REC" : " ", subColor: .red)
+            timecodeReadout(label: L("SELECTED · TC / 녹화 시각"), value: replay.selectedTimecode(), color: Theme.preview,
+                            sub: replay.selectedClock(), subColor: ReplayColors.clock)
+                .help(L("선택한 덱 위치의 TC와 그 장면이 실제로 녹화된 시각"))
             TimelineView(.periodic(from: .now, by: 1.0 / max(1, engine.format.fps))) { context in
-                VStack(alignment: .trailing, spacing: 2) {
-                    timecodeReadout(label: "SYSTEM TC", value: replay.systemTimecode(context.date), color: .green)
-                    Text("REC START  \(replay.recordingStartText())")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced)).foregroundColor(.secondary)
-                }
-                .fixedSize()
+                timecodeReadout(label: "SYSTEM TC", value: replay.systemTimecode(context.date), color: .green,
+                                sub: "REC START  \(replay.recordingStartText())", subColor: .secondary)
             }
             if let m = message {
                 Text(m).font(.caption).foregroundColor(.orange).lineLimit(2)
                     .frame(maxWidth: 220, alignment: .leading).help(m)
             }
-            Picker("", selection: Binding(get: { replay.selected == [0, 1] ? 2 : (replay.selected.first ?? 0) },
-                                          set: { replay.selected = $0 == 2 ? [0, 1] : [$0] })) {
-                Text("A").tag(0)
-                Text("B").tag(1)
-                Text("A+B").tag(2)
+            let deckSel = replay.selected == [0, 1] ? 2 : (replay.selected.first ?? 0)
+            HStack(spacing: 4) {
+                ForEach([(0, "A"), (1, "B"), (2, "A+B")], id: \.0) { tag, title in
+                    Button { replay.selected = tag == 2 ? [0, 1] : [tag] } label: {
+                        Text(title).font(.system(size: 12, weight: .bold))
+                            .frame(width: 44, height: 26)
+                            .replayKey(deckSel == tag ? Theme.accent : ReplayKey.neutral)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .pickerStyle(.segmented).labelsHidden().frame(width: 140).fixedSize()
+            .fixedSize()
             .help(L("전송 버튼이 움직일 채널"))
-            Button { showSettings = true } label: { Image(systemName: "gearshape") }
-                .help(L("리플레이 설정 — 소스, 녹화 형식, 슬로모션, 저장 위치"))
+            Button { showSettings = true } label: {
+                Image(systemName: "gearshape").font(.system(size: 13, weight: .semibold))
+                    .frame(width: 32, height: 26)
+                    .replayKey(ReplayKey.neutral)
+            }
+            .buttonStyle(.plain)
+            .help(L("리플레이 설정 — 소스, 녹화 형식, 슬로모션, 저장 위치"))
         }
     }
 
-    private func timecodeReadout(label: String, value: String, color: Color) -> some View {
+    /// The three timecode blocks: same size, square corners (label · big TC · second line).
+    private func timecodeReadout(label: String, value: String, color: Color, sub: String, subColor: Color) -> some View {
         VStack(alignment: .trailing, spacing: 1) {
-            Text(label).font(.system(size: 8, weight: .bold)).foregroundColor(color)
+            Text(label).font(.system(size: 8, weight: .bold)).foregroundColor(color).lineLimit(1)
             Text(value).font(.system(size: 17, weight: .semibold, design: .monospaced)).foregroundColor(.white)
+            Text(sub).font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundColor(subColor).lineLimit(1)
         }
-        .padding(.horizontal, 9).padding(.vertical, 4)
-        .background(RoundedRectangle(cornerRadius: 5).fill(Color.black.opacity(0.75)))
-        .overlay(RoundedRectangle(cornerRadius: 5).stroke(color.opacity(0.5), lineWidth: 1))
-        .fixedSize()
+        .padding(.horizontal, 9)
+        .frame(width: 172, height: 56, alignment: .trailing)
+        .background(Rectangle().fill(Color.black.opacity(0.75)))
+        .overlay(Rectangle().strokeBorder(color.opacity(0.5), lineWidth: 1))
     }
 
     private var statusLine: String {
@@ -222,9 +224,9 @@ struct ReplayView: View {
                 }
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .lineLimit(1).minimumScaleFactor(0.7)
-                Slider(value: Binding(get: { min(bounds.upperBound, max(bounds.lowerBound, Double(ui.position))) },
-                                      set: { replay.seekTimeline($0, channel: c) }), in: bounds)
-                    .tint(ui.live ? Theme.program : deckColor)
+                ReplaySlider(value: Binding(get: { min(bounds.upperBound, max(bounds.lowerBound, Double(ui.position))) },
+                                            set: { replay.seekTimeline($0, channel: c) }), range: bounds,
+                             tint: ui.live ? Theme.program : deckColor)
             }
             .help(L("녹화된 범위 (TC · 녹화 시각) — 드래그하여 원하는 시점으로 이동"))
             HStack(spacing: 10) {
@@ -320,7 +322,7 @@ struct ReplayView: View {
                 }
                 .menuStyle(.borderlessButton)
                 .padding(.horizontal, 6).frame(height: 22)
-                .background(RoundedRectangle(cornerRadius: 4).fill(Theme.button))
+                .replayKey(ReplayKey.neutral)
             } else {
                 // Empty slot: one full-width "choose source" button (no tiny black box with wrapped text).
                 Menu { sourceMenu(k) } label: {
@@ -370,16 +372,25 @@ struct ReplayView: View {
                 Button { replay.setSpeed(v) } label: {
                     Text(String(format: "%.0f%%", v * 100)).font(.system(size: 11, weight: .bold).monospacedDigit())
                         .frame(width: 46, height: 26)
-                        .background(RoundedRectangle(cornerRadius: 3).fill(abs(cur.speed - v) < 0.001 ? Theme.accent : Theme.button))
+                        .replayKey(abs(cur.speed - v) < 0.001 ? Theme.accent : ReplayKey.neutral, radius: 3)
                 }
                 .buttonStyle(.plain)
             }
-            Slider(value: Binding(get: { cur.speed }, set: { replay.setSpeed($0) }), in: 0.05...2)
+            ReplaySlider(value: Binding(get: { cur.speed }, set: { replay.setSpeed($0) }), range: 0.05...2)
                 .frame(width: 140)
-            Toggle(L("역재생"), isOn: Binding(get: { cur.reverse }, set: { replay.setReverse($0) }))
-                .toggleStyle(.button).fixedSize()
+            Button { replay.setReverse(!cur.reverse) } label: {
+                Text(L("역재생")).font(.system(size: 12, weight: .semibold))
+                    .padding(.horizontal, 12).frame(height: 28)
+                    .replayKey(cur.reverse ? Theme.accent : ReplayKey.neutral)
+            }
+            .buttonStyle(.plain).fixedSize()
             Spacer()
-            Button(L("LIVE (선택 채널)")) { replay.goLive() }.lineLimit(1)
+            Button { replay.goLive() } label: {
+                Text(L("LIVE (선택 채널)")).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    .padding(.horizontal, 12).frame(height: 28)
+                    .replayKey(ReplayKey.neutral)
+            }
+            .buttonStyle(.plain).fixedSize()
         }
     }
 
@@ -387,7 +398,7 @@ struct ReplayView: View {
         Button(action: f) {
             Image(systemName: sym).font(.system(size: 13, weight: .semibold))
                 .frame(width: wide ? 56 : 36, height: 28)
-                .background(RoundedRectangle(cornerRadius: 4).fill(Theme.button))
+                .replayKey(ReplayKey.neutral)
         }
         .buttonStyle(.plain)
         .help(help)
@@ -431,7 +442,7 @@ struct ReplayView: View {
             Text(title).font(.system(size: 11, weight: .heavy))
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .padding(.horizontal, 10).frame(height: 28)
-                .background(RoundedRectangle(cornerRadius: 4).fill(color.opacity(0.85)))
+                .replayKey(color == Theme.button ? ReplayKey.neutral : color.opacity(0.85))
         }
         .buttonStyle(.plain)
     }
@@ -494,7 +505,7 @@ struct ReplayView: View {
                                     Text("\(k + 1)").font(.system(size: 10, weight: .heavy))
                                         .foregroundColor(e.camera == k ? (k == 1 ? .black : .white) : .secondary)
                                         .frame(width: 22, height: 18)
-                                        .background(RoundedRectangle(cornerRadius: 3).fill(e.camera == k ? ReplayColors.cam(k) : Theme.button))
+                                        .replayKey(e.camera == k ? ReplayColors.cam(k) : ReplayKey.neutral, radius: 3)
                                 }
                                 .buttonStyle(.plain)
                                 .help(sourceName(k))
@@ -697,8 +708,38 @@ struct ReplayButton: View {
                 .frame(width: 34, height: 30)
                 .background(replay.recording ? Theme.live.opacity(0.7) : Theme.button)
                 .clipShape(RoundedRectangle(cornerRadius: 3))
+                .hmBevel(cornerRadius: 3)
         }
         .buttonStyle(.plain)
         .help(L("Instant Replay — 녹화 · 마크 · 슬로모션 재생"))
+    }
+}
+
+
+/// Replay window keys: in the hardware look dark raised keys (same as the switcher), else the flat buttons.
+enum ReplayKey {
+    static var neutral: Color { AppLook.hardware ? HWLook.key : Theme.button }
+}
+
+extension View {
+    /// Key face: fill + (hardware look) aluminium relief.
+    func replayKey(_ fill: Color, radius: CGFloat = 4) -> some View {
+        background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(fill))
+            .hmBevel(cornerRadius: radius)
+    }
+}
+
+/// Speed / scrub slider: the hardware groove in the hardware look, else the system slider.
+struct ReplaySlider: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var tint: Color = Theme.accent
+
+    var body: some View {
+        if AppLook.hardware {
+            GrooveSlider(value: $value, range: range).frame(height: 20)
+        } else {
+            Slider(value: $value, in: range).tint(tint)
+        }
     }
 }

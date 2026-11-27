@@ -55,6 +55,22 @@ final class DisplayMap: ObservableObject {
     }
 
     @Published private(set) var assignments: [String: Assignment] = [:]
+    /// The operator's own monitor names, by MonitorIdentity key ("" = the monitor's own name).
+    @Published private(set) var names: [String: String] = UserDefaults.standard.dictionary(forKey: "monitorNames") as? [String: String] ?? [:]
+
+    func customName(_ screen: NSScreen) -> String { names[MonitorIdentity.of(screen).key] ?? "" }
+
+    func setCustomName(_ name: String, for screen: NSScreen) {
+        let t = name.trimmingCharacters(in: .whitespaces)
+        names[MonitorIdentity.of(screen).key] = t.isEmpty ? nil : String(t.prefix(60))
+        UserDefaults.standard.set(names, forKey: "monitorNames")
+    }
+
+    /// Own name if given, else what macOS calls it.
+    func displayName(_ screen: NSScreen) -> String {
+        let c = customName(screen)
+        return c.isEmpty ? screen.localizedName : c
+    }
     private var windows: [String: (window: NSWindow, slot: Int)] = [:]
     private weak var engine: SwitcherEngine?
     private var screenObserver: NSObjectProtocol?
@@ -86,20 +102,27 @@ final class DisplayMap: ObservableObject {
 
     func assignment(for screen: NSScreen) -> Assignment? { assignments[MonitorIdentity.of(screen).key] }
 
-    /// nil source = this monitor shows nothing.
-    func set(source: BusSource?, for screen: NSScreen) {
+    /// nil source = this monitor shows nothing. turnOn false: only remember the source (an output that is off stays off).
+    func set(source: BusSource?, for screen: NSScreen, turnOn: Bool = true) {
         let id = MonitorIdentity.of(screen)
         if let s = source {
-            var a = assignments[id.key] ?? Assignment(key: id.key, name: id.name, source: s)
+            var a = assignments[id.key] ?? Assignment(key: id.key, name: id.name, source: s, on: false)
             a.source = s
             a.name = id.name
-            a.on = true
+            if turnOn { a.on = true }
             assignments[id.key] = a
         } else {
             assignments[id.key]?.on = false
         }
         save()
         reconcile(reopen: id.key)
+    }
+
+    /// Drop a monitor that is not connected (it no longer comes back by itself).
+    func forget(_ key: String) {
+        assignments[key] = nil
+        save()
+        reconcile()
     }
 
     func set(pin: DesktopPin, for screen: NSScreen) {
@@ -146,16 +169,15 @@ final class DisplayMap: ObservableObject {
         // open
         for a in assignments.values where a.on && windows[a.key] == nil {
             guard let s = MonitorIdentity.screen(forKey: a.key), s != switcherScreen,
-                  let slot = freeSlot() else { continue }
+                  let slot = engine.claimDisplaySlot() else { continue }
+            // the Display output filling this monitor gives way
+            if FullscreenOutput.shared.fillsScreen, FullscreenOutput.shared.currentScreen == s { FullscreenOutput.shared.hide() }
             open(a, on: s, slot: slot, engine: engine)
         }
+        // monitors showing the Talent Display: Backstage keeps drawing them if HongMix crashes
+        BackstageLink.setScreens(windows.keys.filter { assignments[$0]?.source == .talent }.sorted())
         objectWillChange.send()
         engine.objectWillChange.send()
-    }
-
-    private func freeSlot() -> Int? {
-        let used = Set(windows.values.map { $0.slot })
-        return (0..<SwitcherEngine.displaySlotCount).first { !used.contains($0) }
     }
 
     private func open(_ a: Assignment, on screen: NSScreen, slot: Int, engine: SwitcherEngine) {
@@ -173,12 +195,17 @@ final class DisplayMap: ObservableObject {
             w.level = .screenSaver      // above that monitor's menu bar; only this Space via the collection behaviour
             w.collectionBehavior = [.managed, .fullScreenAuxiliary, .ignoresCycle]
         }
-        engine.setDisplaySource(slot, a.source)
-        let src = engine.displaySlots[slot]
-        w.contentView = NSHostingView(rootView: ZStack {
-            Color.black
-            MonitorView(fps: 120, source: { src.latest() })
-        }.ignoresSafeArea())
+        if a.source == .talent {
+            engine.setDisplaySource(slot, nil)
+            w.contentView = NSHostingView(rootView: TalentDisplayView(cue: TalentCue.shared).ignoresSafeArea())
+        } else {
+            engine.setDisplaySource(slot, a.source)
+            let src = engine.displaySlots[slot]
+            w.contentView = NSHostingView(rootView: ZStack {
+                Color.black
+                MonitorView(fps: 120, source: { src.latest() })
+            }.ignoresSafeArea())
+        }
         w.setFrame(screen.frame, display: true)
         w.orderFrontRegardless()
         windows[a.key] = (w, slot)
@@ -188,7 +215,7 @@ final class DisplayMap: ObservableObject {
         w.window.orderOut(nil)
         w.window.contentView = nil
         w.window.close()
-        engine?.setDisplaySource(w.slot, nil)
+        engine?.releaseDisplaySlot(w.slot)
         windows[key] = nil
     }
 
@@ -214,7 +241,7 @@ final class DisplayMap: ObservableObject {
             w.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
             w.contentView = NSHostingView(rootView: VStack(spacing: 6) {
                 Text("\(k + 1)").font(.system(size: 120, weight: .heavy)).foregroundColor(.white)
-                Text(s.localizedName).font(.system(size: 18, weight: .semibold)).foregroundColor(.white.opacity(0.85))
+                Text(self.displayName(s)).font(.system(size: 18, weight: .semibold)).foregroundColor(.white.opacity(0.85))
                     .lineLimit(1).padding(.horizontal, 12)
             }
             .frame(width: size.width, height: size.height)
@@ -234,74 +261,4 @@ final class DisplayMap: ObservableObject {
 private final class DisplayOutputWindow: NSWindow {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
-}
-
-/// Display ⚙ › "Monitor outputs": one row per connected monitor.
-struct MonitorOutputsSection: View {
-    @EnvironmentObject var engine: SwitcherEngine
-    @ObservedObject var map = DisplayMap.shared
-    let sources: [BusSource]
-    let title: (BusSource) -> String
-
-    var body: some View {
-        let switcher = FullscreenOutput.switcherWindow?.screen
-        let primary = FullscreenOutput.shared.isShowing ? FullscreenOutput.shared.currentScreen : nil
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(L("모니터별 출력")).font(.headline)
-                Spacer()
-                Button(L("모니터 번호 표시")) { map.identify() }
-                    .help(L("각 모니터에 번호를 3초 동안 크게 띄웁니다"))
-            }
-            Text(L("연결된 모니터마다 다른 화면을 전체화면으로 내보냅니다. 케이블을 다시 꽂으면 같은 모니터를 찾아 자동으로 다시 켭니다."))
-                .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-            ForEach(Array(NSScreen.screens.enumerated()), id: \.offset) { (k, s) in
-                let a = map.assignment(for: s)
-                let isSwitcher = s == switcher
-                let isPrimary = s == primary
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Circle().fill(map.isShowing(s) ? Color.green : Color.gray.opacity(0.5)).frame(width: 7, height: 7)
-                        Text("\(k + 1): \(s.localizedName)").font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                        Text("\(Int(s.frame.width))×\(Int(s.frame.height))").font(.caption).foregroundColor(.secondary)
-                        Spacer(minLength: 0)
-                    }
-                    if isSwitcher {
-                        Text(L("스위처 화면 — 위의 출력 창을 쓰세요")).font(.caption).foregroundColor(.secondary)
-                    } else if isPrimary {
-                        Text(L("위의 디스플레이 출력이 사용 중")).font(.caption).foregroundColor(.secondary)
-                    } else {
-                        HStack(spacing: 8) {
-                            Picker("", selection: Binding<BusSource?>(
-                                get: { (a?.on ?? false) ? a?.source : nil },
-                                set: { map.set(source: $0, for: s) })) {
-                                Text(L("끔")).tag(BusSource?.none)
-                                ForEach(sources, id: \.self) { Text(title($0)).tag(BusSource?.some($0)) }
-                            }
-                            .labelsHidden()
-                            .frame(minWidth: 160)
-                            Picker("", selection: Binding<DesktopPin>(
-                                get: { a?.pin ?? .allDesktops },
-                                set: { map.set(pin: $0, for: s) })) {
-                                ForEach(DesktopPin.allCases, id: \.self) { Text($0.title).tag($0) }
-                            }
-                            .labelsHidden()
-                            .frame(minWidth: 150)
-                            .disabled(a?.on != true)
-                            .help(DesktopPin.help)
-                        }
-                    }
-                }
-                .padding(8)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.04)))
-            }
-            ForEach(map.waiting, id: \.key) { a in
-                HStack(spacing: 6) {
-                    Circle().fill(Color.orange).frame(width: 7, height: 7)
-                    Text(Lf("%@ — 연결 안 됨 (다시 연결되면 %@ 자동 출력)", a.name, title(a.source)))
-                        .font(.caption).foregroundColor(.orange).fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
 }

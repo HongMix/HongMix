@@ -16,6 +16,7 @@ struct OverlaySettingsButton: View {
                 .frame(height: 30)
                 .background(engine.overlayOn.contains(true) ? Theme.overlay : Theme.button)
                 .clipShape(RoundedRectangle(cornerRadius: 3))
+                .hmBevel(cornerRadius: 3)
         }
         .buttonStyle(.plain)
         .help(L("오버레이 채널 1~8 / Stinger 설정"))
