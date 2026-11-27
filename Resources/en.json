@@ -544,6 +544,7 @@
  "스케줄러 — 정해진 시각/요일에 송출 시작·녹화·컷·오버레이 등 아무 기능이나 자동 실행": "Scheduler — run any function (start streaming, record, cut, overlay …) at set times/days",
  "스코어보드": "Scoreboard",
  "스코프 — 웨이브폼 · RGB 퍼레이드 · 벡터스코프 · 히스토그램": "Scopes — waveform · RGB parade · vectorscope · histogram",
+ "스코프 창 하나 더 열기 (카메라마다 따로 보기)": "Open another Scopes window (one per camera)",
  "스트리밍 (RTMP/SRT)": "Streaming (RTMP/SRT)",
  "스트리밍 (−14)": "Streaming (−14)",
  "스트림": "Stream",
@@ -2168,6 +2169,5 @@
  "출력 창 목록": "Windows",
  "클릭해서 이름 바꾸기 — 비우면 원래 이름": "Click to rename — leave empty for the original name",
  "−1분": "−1 min",
- "+1분": "+1 min",
- "스코프 창 하나 더 열기 (카메라마다 따로 보기)": "Open another Scopes window (one per camera)"
+ "+1분": "+1 min"
 }
