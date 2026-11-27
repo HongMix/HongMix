@@ -153,12 +153,28 @@ struct HMBevel: ViewModifier {
             .overlay(shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0.04), .black.opacity(0.28)],
                                                        startPoint: .top, endPoint: .bottom), lineWidth: 0.75)
                 .allowsHitTesting(false))
-            .shadow(color: .black.opacity(0.55), radius: 1.2, y: 1.2)   // raised key
+            .hwDrop(shape, opacity: 0.55, y: 1.2)   // raised key
         }
     }
 }
 
+/// Raised-key drop shadow for the hardware look, drawn as two plain offset fills under the shape.
+/// SwiftUI's `.shadow` is rendered off-screen on every redraw: ~100 of them (tile keys, mixer strips)
+/// kept the GPU so busy in 2.3.7 that Program frames were dropped on every cut, fade and at launch.
+struct HWDrop<S: Shape>: ViewModifier {
+    let shape: S
+    var opacity: Double
+    var y: CGFloat
+    @ViewBuilder func body(content: Content) -> some View {
+        content.background(ZStack {
+            shape.fill(Color.black.opacity(opacity * 0.45)).offset(y: y + 0.5)
+            shape.fill(Color.black.opacity(opacity * 0.75)).offset(y: y * 0.6)
+        }.allowsHitTesting(false))
+    }
+}
+
 extension View {
+    func hwDrop<S: Shape>(_ shape: S, opacity: Double, y: CGFloat) -> some View { modifier(HWDrop(shape: shape, opacity: opacity, y: y)) }
     func hmBevel(cornerRadius: CGFloat) -> some View { modifier(HMBevel(cornerRadius: cornerRadius)) }
 
     func hmGlass(cornerRadius: CGFloat = 14, fallback: Color = Theme.panelDark) -> some View {

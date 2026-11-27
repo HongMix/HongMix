@@ -10,19 +10,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.7 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.8 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.3.7
-- **MultiView 여러 개:** 레이아웃 7종, 칸별 화면·이름·탤리, 모니터와 출력으로 보내기.
-- **Talent Cue:** 발표자용 타이머·메시지를 HongMix 또는 보호된 휴대폰 링크로 조작.
-- 선택 기능인 **Backstage**는 비정상 종료 후 HongMix를 다시 실행하고, 새 **하드웨어 룩**은 콘솔 형식 믹서와 입체 조작계를 제공합니다.
-- 출력 패널, 출력 창 여러 개, 별도 Audio Mixer 창, 시스템 부하 표시, 새 포맷과 네덜란드어 자막을 추가했습니다.
-- 빌드 171의 코어·번역·MultiView·Talent Cue·설치 Backstage·DMG·서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.7.ko.md) · [English](docs/RELEASE-NOTES-2.3.7.md)
+### 최신 업데이트 · 2.3.8
+- **2.3.7 사용자 모두에게 권장:** 하드웨어 룩을 켰을 때 컷·트랜지션·실행 중 Program 프레임이 끊기던 문제를 고쳤습니다.
+- 입체 버튼 그림자를 별도 GPU 그림자 처리 대신 가벼운 어두운 바탕 두 겹으로 바꿔 모양은 유지했습니다.
+- 운영자의 4K 59.94 프로젝트에서 2.3.7에 드랍이 있던 실행, 페이드 20회, 컷 10회가 2.3.8 반복 측정 두 번 모두 0이었습니다.
+- 빌드 173의 코어·번역·체크섬·DMG·심층 서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.8.ko.md) · [English](docs/RELEASE-NOTES-2.3.8.md)
 
 2.3.7의 MultiView, Talent Cue, 하드웨어 룩 등을 기여해 주신 [@otiumvisuals](https://github.com/otiumvisuals) 님께 감사드립니다.
 

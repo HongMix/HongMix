@@ -10,19 +10,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.7</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.8</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.3.7
-- **Multiple MultiViews:** seven layouts, per-cell sources, labels and tally, with monitor and output routing.
-- **Talent Cue:** a presenter timer and messages controlled from HongMix or a protected phone link.
-- Optional **Backstage** relaunches HongMix after a crash; the hardware look adds console-style mixer strips and raised controls.
-- Reworked outputs, multiple output windows, a separate Audio Mixer window, system-load meters, new formats and Dutch captions.
-- Build 171 passed core, translation, MultiView, Talent Cue, installed Backstage, DMG and signing checks. See [English notes](docs/RELEASE-NOTES-2.3.7.md) or [한국어](docs/RELEASE-NOTES-2.3.7.ko.md).
+### Latest update · 2.3.8
+- **Recommended for everyone on 2.3.7:** fixes Program frames dropping on cuts, transitions and at launch when the hardware look is enabled.
+- Raised-key shadows now use lightweight offset fills instead of extra GPU shadow passes, while keeping the same appearance.
+- In the operator's 4K 59.94 project, launch, 20 fades and 10 cuts each went from measurable drops in 2.3.7 to zero in two repeated 2.3.8 tests.
+- Core, translation, checksum, DMG and deep-signing checks passed for build 173. See [English notes](docs/RELEASE-NOTES-2.3.8.md) or [한국어](docs/RELEASE-NOTES-2.3.8.ko.md).
 
 Thanks to [@otiumvisuals](https://github.com/otiumvisuals), who contributed MultiView, Talent Cue, the hardware look and more in 2.3.7.
 

@@ -166,7 +166,7 @@ struct GrooveSlider: View {
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                     .fill(LinearGradient(colors: [Color(white: 0.92), Color(white: 0.68)], startPoint: .top, endPoint: .bottom))
                     .frame(width: thumbW, height: 14)
-                    .shadow(color: .black.opacity(0.6), radius: 1.5, y: 1.5)
+                    .hwDrop(RoundedRectangle(cornerRadius: 4, style: .continuous), opacity: 0.6, y: 1.5)
                     .offset(x: x)
             }
             .frame(maxHeight: .infinity)
@@ -308,7 +308,7 @@ private struct OverlayBank: View {
                                                                                          startPoint: .top, endPoint: .bottom)
                                                                         : LinearGradient(colors: [.clear], startPoint: .top, endPoint: .bottom)))
                                 .overlay(Circle().stroke(color.opacity(savedInput == nil ? 0.35 : 0.9), lineWidth: 1.5))
-                                .shadow(color: .black.opacity(AppLook.hardware ? 0.55 : 0), radius: 1.5, y: 1.5)
+                                .hwDrop(Circle(), opacity: AppLook.hardware ? 0.55 : 0, y: 1.5)
                         }
                         .buttonStyle(.plain)
                         .frame(maxWidth: .infinity)
@@ -1921,7 +1921,7 @@ struct ChannelStrip<Accessory: View>: View {
             colors: lit ? [highlight!.opacity(1), highlight!.opacity(0.75)] : [Color(white: 0.17), Color(white: 0.10)],
             startPoint: .top, endPoint: .bottom)))
         .overlay(RoundedRectangle(cornerRadius: 4).stroke(lit ? Color.white.opacity(0.25) : Color.black.opacity(0.8), lineWidth: 1))
-        .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
+        .hwDrop(RoundedRectangle(cornerRadius: 4), opacity: 0.5, y: 1)
     }
 
     @ViewBuilder private var audioButton: some View {
@@ -1942,7 +1942,6 @@ struct ChannelStrip<Accessory: View>: View {
             .background(color)
             .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
             .hmBevel(cornerRadius: 5)
-            .shadow(color: .black.opacity(0.5), radius: 1, y: 1)
         }
         .buttonStyle(.plain)
         .help(st?.help ?? L("음소거"))
@@ -2072,7 +2071,7 @@ private struct FaderCap: View {
                 .init(color: .black.opacity(0.28), location: 1),
             ], startPoint: .leading, endPoint: .trailing)))
             .overlay(shape.strokeBorder(Color.black.opacity(0.55), lineWidth: 0.75))
-            .shadow(color: .black.opacity(0.7), radius: 2.5, y: 2.5)
+            .hwDrop(shape, opacity: 0.7, y: 2.5)
     }
 }
 
