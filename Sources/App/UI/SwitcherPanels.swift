@@ -2134,7 +2134,7 @@ private struct TileSlideStrip: View {
 struct BrushedMetal: View {
     var base: Color
     var body: some View {
-        if AppLook.hardware {
+        if AppLook.hardware && AppLook.metalTexture {
             base.overlay(Image(nsImage: Self.tile).resizable(resizingMode: .tile).opacity(0.5))
         } else {
             base

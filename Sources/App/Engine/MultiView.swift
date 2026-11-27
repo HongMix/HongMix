@@ -96,14 +96,18 @@ struct MultiViewConfig: Codable, Identifiable, Equatable {
     var labels: [String] = []
     /// Labels in a strip under each picture (pictures get a bit smaller, with room around them) instead of on it
     var labelsBelow = false
+    /// Short automatic names: "PREVIEW" / "PROGRAM". Off (default): "PREVIEW  <input name>" / "OUTPUT" as before.
+    var simpleLabels = false
 
     init(id: UUID = UUID(), name: String, layout: MultiViewLayoutKind = .bigTop, slots: [MultiViewSlot] = [],
-         showLabels: Bool = true, showTally: Bool = true, labels: [String] = [], labelsBelow: Bool = false) {
+         showLabels: Bool = true, showTally: Bool = true, labels: [String] = [], labelsBelow: Bool = false,
+         simpleLabels: Bool = false) {
         self.id = id; self.name = name; self.layout = layout; self.slots = slots
         self.showLabels = showLabels; self.showTally = showTally; self.labels = labels; self.labelsBelow = labelsBelow
+        self.simpleLabels = simpleLabels
     }
 
-    private enum K: String, CodingKey { case id, name, layout, slots, showLabels, showTally, labels, labelsBelow }
+    private enum K: String, CodingKey { case id, name, layout, slots, showLabels, showTally, labels, labelsBelow, simpleLabels }
 
     // Tolerant: MultiViews saved by an older HongMix miss the newer keys.
     init(from decoder: Decoder) throws {
@@ -116,6 +120,7 @@ struct MultiViewConfig: Codable, Identifiable, Equatable {
         showTally = (try? c.decode(Bool.self, forKey: .showTally)) ?? true
         labels = (try? c.decode([String].self, forKey: .labels)) ?? []
         labelsBelow = (try? c.decode(Bool.self, forKey: .labelsBelow)) ?? false
+        simpleLabels = (try? c.decode(Bool.self, forKey: .simpleLabels)) ?? false
     }
 
     /// Labels below: the picture (cell aspect, centred, a margin all round) and the label strip right under it.
@@ -133,11 +138,12 @@ struct MultiViewConfig: Codable, Identifiable, Equatable {
         return t.isEmpty ? nil : t
     }
 
-    /// Automatic label of a cell showing `target` (nil = no label).
-    static func defaultLabel(_ target: MultiViewSlot, number: Int?, name: String?) -> String? {
+    /// Automatic label of a cell showing `target` (nil = no label). `simple`: "PREVIEW" / "PROGRAM";
+    /// otherwise the names used before: "PREVIEW  <preview input>" / "OUTPUT".
+    static func defaultLabel(_ target: MultiViewSlot, number: Int?, name: String?, simple: Bool = true) -> String? {
         switch target {
-        case .preview: return "PREVIEW"
-        case .program: return "PROGRAM"
+        case .preview: return simple || (name ?? "").isEmpty ? "PREVIEW" : "PREVIEW  \(name!)"
+        case .program: return simple ? "PROGRAM" : "OUTPUT"
         case .talent: return "TALENT"
         case .input: return number.map { "\($0)  \(name ?? "")" }
         case .empty, .auto: return nil

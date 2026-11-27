@@ -16,6 +16,17 @@ enum AppLook {
         return v
     }
     static func sync(_ v: Bool) { if cached != v { cached = v } }
+
+    /// Hardware look option: brushed-metal grain on the window backgrounds (off by default).
+    static let textureKey = "appLookMetalTexture"
+    private static var cachedTexture: Bool?
+    static var metalTexture: Bool {
+        if let c = cachedTexture { return c }
+        let v = UserDefaults.standard.bool(forKey: textureKey)
+        cachedTexture = v
+        return v
+    }
+    static func syncTexture(_ v: Bool) { if cachedTexture != v { cachedTexture = v } }
 }
 
 enum AppSkin: String, CaseIterable, Identifiable {
@@ -625,7 +636,7 @@ struct MonitorPane: View {
         }
         .background(Color.black)
         .clipShape(RoundedRectangle(cornerRadius: mono ? (AppLook.hardware ? 4 : 10) : 0, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: mono ? (AppLook.hardware ? 4 : 10) : 0, style: .continuous).stroke(color.opacity(mono && AppLook.hardware ? 0.5 : 1), lineWidth: mono ? 1.5 : 2))
+        .overlay(RoundedRectangle(cornerRadius: mono ? (AppLook.hardware ? 4 : 10) : 0, style: .continuous).stroke(color, lineWidth: mono ? 1.5 : 2))   // tally at full strength: it is the on-air cue
         .frame(maxWidth: .infinity)
     }
 }

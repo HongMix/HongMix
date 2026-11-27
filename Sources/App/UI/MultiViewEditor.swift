@@ -118,16 +118,26 @@ struct MultiViewEditor: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 260)
                 Toggle(L("이름 표시"), isOn: mv.showLabels)
+                Toggle(L("탈리 테두리 (빨강 = 방송 · 초록 = 미리보기)"), isOn: mv.showTally)
+                Spacer()
+            }
+            // name options on their own row (where the names go, which automatic names)
+            HStack(spacing: 10) {
                 Picker("", selection: mv.labelsBelow) {
                     Text(L("화면 안")).tag(false)
                     Text(L("화면 아래")).tag(true)
                 }
                 .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .disabled(!mv.wrappedValue.showLabels)
                 .help(L("화면 아래: 이름이 화면 밖 띠에 표시되고, 화면은 조금 작아져 사이에 여백이 생깁니다"))
-                Toggle(L("탈리 테두리 (빨강 = 방송 · 초록 = 미리보기)"), isOn: mv.showTally)
+                Picker("", selection: mv.simpleLabels) {
+                    Text(L("입력 이름 포함")).tag(false)
+                    Text("PREVIEW · PROGRAM").tag(true)
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
+                .help(L("자동 이름: 'PREVIEW 카메라 이름' · 'OUTPUT' 또는 간단히 'PREVIEW' · 'PROGRAM'. 칸마다 직접 쓴 이름이 우선합니다"))
                 Spacer()
             }
+            .disabled(!mv.wrappedValue.showLabels)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(L("기본 레이아웃")).font(.system(size: 11, weight: .bold)).foregroundColor(.secondary)
@@ -254,7 +264,7 @@ private struct CellCanvas: View {
             let isAuto = config.slot(k) == .auto
             switch targets[k] {
             case .preview: return config.customLabel(k) ?? "PREVIEW"
-            case .program: return config.customLabel(k) ?? "PROGRAM"
+            case .program: return config.customLabel(k) ?? (config.simpleLabels ? "PROGRAM" : "OUTPUT")
             case .talent: return config.customLabel(k) ?? "TALENT"
             case .empty, .auto: return isAuto ? L("자동 (입력 없음)") : L("비어 있음")
             case .input(let id):

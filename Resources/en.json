@@ -2176,5 +2176,8 @@
  "출력 창 목록": "Windows",
  "클릭해서 이름 바꾸기 — 비우면 원래 이름": "Click to rename — leave empty for the original name",
  "−1분": "−1 min",
- "+1분": "+1 min"
+ "+1분": "+1 min",
+ "배경에 금속 질감 (브러시드 메탈)": "Brushed-metal background",
+ "입력 이름 포함": "With input name",
+ "자동 이름: 'PREVIEW 카메라 이름' · 'OUTPUT' 또는 간단히 'PREVIEW' · 'PROGRAM'. 칸마다 직접 쓴 이름이 우선합니다": "Automatic names: 'PREVIEW camera name' · 'OUTPUT', or just 'PREVIEW' · 'PROGRAM'. A name typed for a cell always wins"
 }

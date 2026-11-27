@@ -2176,7 +2176,10 @@ final class SwitcherEngine: ObservableObject {
                 t = TileSpec(buffer: nil, params: LayerParams(), rect: r)
                 t.borderColor = gray
             }
-            if t.label == nil { t.label = MultiViewConfig.defaultLabel(targets[idx], number: nil, name: nil) }
+            if t.label == nil {
+                let pvwName = targets[idx] == .preview ? pvw?.name : nil
+                t.label = MultiViewConfig.defaultLabel(targets[idx], number: nil, name: pvwName, simple: mv.simpleLabels)
+            }
             if let own = mv.customLabel(idx) { t.label = own }
             t.labelBelow = below
             t.borderWidth = bw

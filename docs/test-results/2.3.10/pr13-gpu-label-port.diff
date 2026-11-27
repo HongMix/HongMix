@@ -1,0 +1,120 @@
+diff --git a/Sources/App/Engine/MetalMixer.swift b/Sources/App/Engine/MetalMixer.swift
+index 247ff16..00916d7 100644
+--- a/Sources/App/Engine/MetalMixer.swift
++++ b/Sources/App/Engine/MetalMixer.swift
+@@ -128,6 +128,8 @@ struct TileSpec {
+     var borderColor: (Float, Float, Float) = (0, 0, 0)
+     var borderWidth: Float = 0
+     var label: String? = nil
++    /// Draw the label in a strip under `rect` (MultiView "labels below") instead of on the picture
++    var labelBelow = false
+ }
+
+ /// Shared Metal objects (device, library, texture cache).
+@@ -590,7 +592,7 @@ final class MetalMixer {
+     /// Blends the tiles' labels over `out` (encoded after the tiles). False: no GPU path, draw on the CPU.
+     private func encodeLabels(_ tiles: [TileSpec], into out: CVPixelBuffer, _ cmd: MTLCommandBuffer) -> Bool {
+         guard let pso = labelPipeline, let outTex = outputTexture(out) else { return false }
+-        let images = tiles.compactMap { t in t.label.flatMap { labelImage($0, rect: t.rect) } }
++        let images = tiles.compactMap { labelImage($0) }
+         guard !images.isEmpty else { return true }
+         let rp = MTLRenderPassDescriptor()
+         rp.colorAttachments[0].texture = outTex
+@@ -612,36 +614,51 @@ final class MetalMixer {
+         return true
+     }
+
+-    /// Same pixels as `drawLabels`: the bitmap sits on the frame's pixel grid, so the bar's (fractional)
+-    /// edges and the text land exactly where the CPU path drew them.
+-    private func labelImage(_ text: String, rect r: CGRect) -> LabelImage? {
++    /// The label bar of `tile` in frame pixels (top-left origin): on the picture's bottom-left corner, or
++    /// (labels below) a full-width strip right under the picture.
++    private func labelBar(_ tile: TileSpec, line: CTLine, fontSize: CGFloat, barH: CGFloat) -> CGRect {
++        let r = tile.rect
++        if tile.labelBelow { return CGRect(x: r.minX, y: r.maxY, width: r.width, height: barH) }
++        let w = CTLineGetBoundsWithOptions(line, []).width
++        return CGRect(x: r.minX, y: r.maxY - barH, width: min(r.width, w + fontSize), height: barH)
++    }
++
++    /// Draws one label (bar + text, text clipped to the bar) into `cg`. `bar` is in `cg`'s own
++    /// (bottom-left origin) coordinates. Shared by the GPU label cache and the CPU fallback.
++    private func drawLabel(_ line: CTLine, below: Bool, bar: CGRect, fontSize: CGFloat, in cg: CGContext) {
++        cg.setFillColor(CGColor(gray: below ? 0.12 : 0, alpha: below ? 1 : 0.65))
++        cg.fill(bar)
++        cg.saveGState()
++        cg.clip(to: bar)          // long names stop at the cell edge
++        let w = CTLineGetBoundsWithOptions(line, []).width
++        let x = below ? max(bar.minX + fontSize * 0.5, bar.midX - w / 2) : bar.minX + fontSize * 0.5
++        cg.textPosition = CGPoint(x: x, y: bar.minY + fontSize * 0.4)
++        CTLineDraw(line, cg)
++        cg.restoreGState()
++    }
++
++    /// A label drawn once into its own small bitmap, placed on the frame's pixel grid so the bar's
++    /// (fractional) edges and the text land exactly where the CPU path draws them.
++    private func labelImage(_ tile: TileSpec) -> LabelImage? {
++        guard let text = tile.label else { return nil }
+         let W = format.width, H = format.height
+-        let key = "\(text)\u{1}\(r.minX),\(r.minY),\(r.width),\(r.height)"
++        let r = tile.rect
++        let key = "\(text)\u{1}\(r.minX),\(r.minY),\(r.width),\(r.height),\(tile.labelBelow)"
+         if let im = labelCache[key] { return im }
+-        let fontSize = CGFloat(H) / 45
++        let barH = MultiViewConfig.labelBarHeight(frameHeight: CGFloat(H))
++        let fontSize = barH / 1.5
+         let line = labelLine(text, fontSize: fontSize)
+-        let bounds = CTLineGetBoundsWithOptions(line, [])
+-        let glyphs = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+-        let barH = fontSize * 1.5
+-        let barW = min(r.width, bounds.width + fontSize)
+-        let textX = fontSize * 0.5, textY = fontSize * 0.4   // from the bar's bottom-left
+-        // bitmap area in frame pixels (top-left origin): the bar, plus any glyph that reaches past it
+-        let x0 = max(0, Int(r.minX.rounded(.down)))
+-        let right = r.minX + max(barW, textX + max(bounds.width, glyphs.maxX) + 2)
+-        let top = r.maxY - max(barH, textY + max(bounds.maxY, glyphs.maxY) + 2)
+-        let y0 = max(0, Int(top.rounded(.down)))
+-        let x1 = min(W, Int(right.rounded(.up))), y1 = min(H, Int(r.maxY.rounded(.up)))
++        let bar = labelBar(tile, line: line, fontSize: fontSize, barH: barH)
++        let x0 = max(0, Int(bar.minX.rounded(.down))), y0 = max(0, Int(bar.minY.rounded(.down)))
++        let x1 = min(W, Int(bar.maxX.rounded(.up))), y1 = min(H, Int(bar.maxY.rounded(.up)))
+         guard x1 > x0, y1 > y0 else { return nil }
+         let bw = x1 - x0, bh = y1 - y0
+         let info = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+         guard let cg = CGContext(data: nil, width: bw, height: bh, bitsPerComponent: 8, bytesPerRow: bw * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: info) else { return nil }
+-        // frame rows are flipped in CG: the bar's bottom edge (frame y = r.maxY) sits at bitmap y = y1 - r.maxY
+-        let barRect = CGRect(x: r.minX - CGFloat(x0), y: CGFloat(y1) - r.maxY, width: barW, height: barH)
+-        cg.setFillColor(CGColor(gray: 0, alpha: 0.65))
+-        cg.fill(barRect)
+-        cg.textPosition = CGPoint(x: barRect.minX + textX, y: barRect.minY + textY)
+-        CTLineDraw(line, cg)
++        // frame rows are flipped in CG: frame y = bar.maxY sits at bitmap y = y1 - bar.maxY
++        let local = CGRect(x: bar.minX - CGFloat(x0), y: CGFloat(y1) - bar.maxY, width: bar.width, height: bar.height)
++        drawLabel(line, below: tile.labelBelow, bar: local, fontSize: fontSize, in: cg)
+         guard let data = cg.data else { return nil }
+         let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: bw, height: bh, mipmapped: false)
+         d.usage = [.shaderRead]
+@@ -672,19 +689,15 @@ final class MetalMixer {
+         guard let cg = CGContext(data: base, width: w, height: h, bitsPerComponent: 8,
+                                  bytesPerRow: CVPixelBufferGetBytesPerRow(pb),
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: info) else { return }
+-        let fontSize = CGFloat(h) / 45
++        let barH = MultiViewConfig.labelBarHeight(frameHeight: CGFloat(h))
++        let fontSize = barH / 1.5
+         for tile in tiles {
+             guard let text = tile.label else { continue }
+             let line = labelLine(text, fontSize: fontSize)
+-            let bounds = CTLineGetBoundsWithOptions(line, [])
+-            let r = tile.rect
++            let bar = labelBar(tile, line: line, fontSize: fontSize, barH: barH)
+             // CG origin is bottom-left
+-            let barH = fontSize * 1.5
+-            let barRect = CGRect(x: r.minX, y: CGFloat(h) - r.maxY, width: min(r.width, bounds.width + fontSize), height: barH)
+-            cg.setFillColor(CGColor(gray: 0, alpha: 0.65))
+-            cg.fill(barRect)
+-            cg.textPosition = CGPoint(x: barRect.minX + fontSize * 0.5, y: barRect.minY + fontSize * 0.4)
+-            CTLineDraw(line, cg)
++            drawLabel(line, below: tile.labelBelow, bar: CGRect(x: bar.minX, y: CGFloat(h) - bar.maxY, width: bar.width, height: bar.height),
++                      fontSize: fontSize, in: cg)
+         }
+     }

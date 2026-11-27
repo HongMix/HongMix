@@ -115,4 +115,14 @@ sl.setLayout(.grid9)
 check(sl.labels.count <= 9 && sl.customLabel(11) == nil, "labels of removed cells are dropped")
 check(MultiViewConfig.defaultLabel(.talent, number: nil, name: nil) == "TALENT", "talent label")
 
+// Label style option (default = the names used before 2.3.10)
+check(MultiViewConfig.standard().simpleLabels == false, "default label style keeps the input name")
+check(MultiViewConfig.defaultLabel(.preview, number: nil, name: "Cam 2", simple: false) == "PREVIEW  Cam 2", "classic preview label")
+check(MultiViewConfig.defaultLabel(.program, number: nil, name: nil, simple: false) == "OUTPUT", "classic program label")
+check(MultiViewConfig.defaultLabel(.preview, number: nil, name: nil, simple: false) == "PREVIEW", "classic preview label, no preview input")
+check(MultiViewConfig.defaultLabel(.program, number: nil, name: nil, simple: true) == "PROGRAM", "simple program label")
+check(dec.simpleLabels == false, "old MultiView decodes with the classic label style")
+var sv = MultiViewConfig.standard(); sv.simpleLabels = true
+check(try! JSONDecoder().decode(MultiViewConfig.self, from: JSONEncoder().encode(sv)).simpleLabels, "label style round trip")
+
 if failures == 0 { print("multiview: all checks passed") } else { print("multiview: \(failures) failed"); exit(1) }

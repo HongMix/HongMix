@@ -7,6 +7,7 @@ struct GeneralSettings: View {
     @AppStorage(FFmpegInput.rateConformKey) private var rateConform = true
     @AppStorage(AppSkin.defaultsKey) private var appSkin = AppSkin.current.rawValue
     @AppStorage(AppLook.key) private var hardwareLook = true
+    @AppStorage(AppLook.textureKey) private var metalTexture = false
     @AppStorage(InputConfig.newVideoLoopKey) private var newVideoLoop = false
     @AppStorage(InputTileRate.key) private var tileFPS = 6
     @AppStorage(InputCloseConfirm.key) private var confirmClose = true
@@ -35,6 +36,9 @@ struct GeneralSettings: View {
                 Toggle(L("하드웨어 모양 (입체 버튼 · 믹서 채널 · 트랜지션 패널)"), isOn: $hardwareLook)
                 Text(L("끄면 예전처럼 평평하고 깔끔한 화면입니다."))
                     .font(.caption).foregroundColor(.secondary)
+                Toggle(L("배경에 금속 질감 (브러시드 메탈)"), isOn: $metalTexture)
+                    .disabled(!hardwareLook)
+                    .padding(.leading, 18)
             }
             Section(L("충돌 안전망")) {
                 Toggle(L("Backstage: HongMix가 멈춰도 Talent Display·사회자 링크 유지, 자동 재시작"), isOn: Binding(

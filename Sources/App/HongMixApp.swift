@@ -24,11 +24,13 @@ struct HongMixApp: App {
     /// Changing the skin rebuilds every window too, so Replay/Scopes/Statistics/Settings repaint.
     @AppStorage(AppSkin.defaultsKey) private var skin = AppSkin.current.rawValue
     @AppStorage(AppLook.key) private var hardware = true
-    private var look: String { hardware ? "hw" : "clean" }
+    @AppStorage(AppLook.textureKey) private var metalTexture = false
+    private var look: String { hardware ? (metalTexture ? "hw-metal" : "hw") : "clean" }
 
     var body: some Scene {
         let _ = AppSkin.sync(skin)
         let _ = AppLook.sync(hardware)
+        let _ = AppLook.syncTexture(metalTexture)
         Window("HongMix", id: "main") {
             ZStack {
                 ContentView().id(language + skin + look)
