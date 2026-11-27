@@ -60,6 +60,13 @@
  "복제": "Duplicate",
  "복사본": "copy",
  "이름 표시": "Show names",
+ "화면 안": "On picture",
+ "화면 아래": "Below picture",
+ "화면 아래: 이름이 화면 밖 띠에 표시되고, 화면은 조금 작아져 사이에 여백이 생깁니다": "Below picture: labels go in a strip under each picture; pictures get a little smaller, with space between them",
+ "이름표": "Label",
+ "이 칸에 표시할 이름 (비우면 자동)": "Label shown in this cell (empty = automatic)",
+ "자동 — 입력하면 바뀝니다": "Automatic — type to change",
+ "보여줄 화면": "Shows",
  "탈리 테두리 (빨강 = 방송 · 초록 = 미리보기)": "Tally borders (red = on air · green = preview)",
  "첫 번째 MultiView는 삭제할 수 없습니다": "The first MultiView can't be deleted",
  "출력에서 사용 중 — 먼저 출력의 소스를 바꾸세요": "In use by an output — change that output's source first",
@@ -2168,12 +2175,5 @@
  "출력 창 목록": "Windows",
  "클릭해서 이름 바꾸기 — 비우면 원래 이름": "Click to rename — leave empty for the original name",
  "−1분": "−1 min",
- "+1분": "+1 min",
- "화면 안": "On picture",
- "화면 아래": "Below picture",
- "화면 아래: 이름이 화면 밖 띠에 표시되고, 화면은 조금 작아져 사이에 여백이 생깁니다": "Below picture: labels go in a strip under each picture; pictures get a little smaller, with space between them",
- "이름표": "Label",
- "이 칸에 표시할 이름 (비우면 자동)": "Label shown in this cell (empty = automatic)",
- "자동 — 입력하면 바뀝니다": "Automatic — type to change",
- "보여줄 화면": "Shows"
+ "+1분": "+1 min"
 }
