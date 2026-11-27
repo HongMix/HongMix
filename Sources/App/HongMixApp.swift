@@ -93,6 +93,14 @@ struct HongMixApp: App {
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 960, height: 560)
+        // extra Scopes windows (the "+" in a Scopes window), each with its own source — several cameras at once
+        WindowGroup("Scopes", id: "scopes-extra") {
+            ScopesView(extra: true)
+                .id(language + skin + look)
+                .environmentObject(engine)
+                .preferredColorScheme(.dark)
+        }
+        .defaultSize(width: 960, height: 560)
         Window("Audio Mixer", id: "audiomixer") {
             AudioMixerWindow()
                 .id(language + skin + look)

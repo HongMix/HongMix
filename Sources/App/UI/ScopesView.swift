@@ -234,8 +234,16 @@ final class ScopeAnalyzer: ObservableObject {
 /// Scopes window (Window id "scopes").
 struct ScopesView: View {
     @EnvironmentObject var engine: SwitcherEngine
+    @Environment(\.openWindow) private var openWindow
     @StateObject private var scopes = ScopeAnalyzer()
-    @AppStorage("scopesLayout") private var layout = "quad"
+    /// An extra window (the "+"): its own layout, so two cameras can show different scopes
+    var extra = false
+    @AppStorage("scopesLayout") private var savedLayout = "quad"
+    @ViewState private var ownLayout = "quad"
+    private var layout: String {
+        get { extra ? ownLayout : savedLayout }
+        nonmutating set { if extra { ownLayout = newValue } else { savedLayout = newValue } }
+    }
 
     private var sourceName: String {
         switch scopes.source {
@@ -255,7 +263,7 @@ struct ScopesView: View {
             }
         }
         .padding(10)
-        .background(Color(white: 0.08))
+        .background(AppLook.hardware ? Theme.window : Color(white: 0.08))
         .frame(minWidth: 900, minHeight: 460)
         .onAppear { scopes.start(engine) }
         .onDisappear { scopes.stop() }
@@ -281,23 +289,32 @@ struct ScopesView: View {
             }
             .menuStyle(.borderlessButton)
             .padding(.horizontal, 8).frame(height: 24)
-            .background(RoundedRectangle(cornerRadius: 5).fill(Color(white: 0.17)))
+            .replayKey(AppLook.hardware ? ReplayKey.neutral : Color(white: 0.17), radius: 5)
             .help(L("소스"))
 
-            Picker("", selection: $layout) {
-                Text("4-Up").tag("quad")
-                Text("Waveform").tag("wave")
-                Text("Parade").tag("parade")
-                Text("Vector").tag("vector")
-                Text("Histogram").tag("hist")
+            if AppLook.hardware {
+                HStack(spacing: 4) {
+                    ForEach(Self.layouts, id: \.0) { tag, title in
+                        Button { layout = tag } label: {
+                            Text(title).font(.system(size: 11, weight: .semibold)).foregroundColor(.white)
+                                .padding(.horizontal, 10).frame(height: 24)
+                                .replayKey(layout == tag ? Theme.accent : ReplayKey.neutral)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } else {
+                Picker("", selection: Binding(get: { layout }, set: { layout = $0 })) {
+                    ForEach(Self.layouts, id: \.0) { tag, title in Text(title).tag(tag) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 400)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 400)
 
             HStack(spacing: 6) {
                 Image(systemName: "sun.max").font(.system(size: 11)).foregroundColor(.secondary)
-                Slider(value: $scopes.gain, in: 0.3...6).frame(width: 100)
+                ReplaySlider(value: $scopes.gain, range: 0.3...6, tint: .accentColor).frame(width: 100)
             }
             .help(L("밝기"))
             Spacer(minLength: 8)
@@ -305,8 +322,17 @@ struct ScopesView: View {
                 .font(.system(size: 11).monospacedDigit())
                 .foregroundColor(scopes.clipHigh > 1 ? .orange : .secondary)
                 .lineLimit(1).minimumScaleFactor(0.8)
+            Button { openWindow(id: "scopes-extra") } label: {
+                Image(systemName: "plus.rectangle.on.rectangle").font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                    .frame(width: 30, height: 24)
+                    .replayKey(AppLook.hardware ? ReplayKey.neutral : Color(white: 0.17), radius: 5)
+            }
+            .buttonStyle(.plain)
+            .help(L("스코프 창 하나 더 열기 (카메라마다 따로 보기)"))
         }
     }
+
+    private static let layouts = [("quad", "4-Up"), ("wave", "Waveform"), ("parade", "Parade"), ("vector", "Vector"), ("hist", "Histogram")]
 
     @ViewBuilder private func content(size: CGSize) -> some View {
         let gap: CGFloat = 8
