@@ -28,6 +28,8 @@ final class MultiLayoutInput: InputSource {
     private var imageError: String?
 
     override var alphaPremultiplied: Bool { true }
+    /// Engine hook: a scene take replaces a pending exit (switching away animation).
+    static var cancelExit: (() -> Void)?
 
     override init(config: InputConfig) {
         multiLayout = config.multiLayout
@@ -53,6 +55,13 @@ final class MultiLayoutInput: InputSource {
     /// One box as a layer: zoom and pan inside the box become a crop of the (already cropped) picture.
     static func layer(_ f: MLBoxFrame, _ b: MLBox) -> InputLayer {
         var l = InputLayer(inputID: f.input, x: f.rect.x, y: f.rect.y, w: f.rect.w, h: f.rect.h, fill: b.fill)
+        var b = b
+        if f.plain > 0 {                                 // towards the plain input (to / from full screen on air)
+            let k = 1 - min(1, f.plain)
+            b.zoom = 1 + (b.zoom - 1) * k; b.panX *= k; b.panY *= k
+            b.cropL *= k; b.cropT *= k; b.cropR *= k; b.cropB *= k
+            b.border *= k; b.radius *= k
+        }
         let z = max(1, b.zoom)
         let cw = max(0.01, 1 - b.cropL - b.cropR), ch = max(0.01, 1 - b.cropT - b.cropB)
         let sx = (cw - cw / z) / 2, sy = (ch - ch / z) / 2          // what zoom takes off each side
@@ -79,6 +88,7 @@ final class MultiLayoutInput: InputSource {
     /// Take a scene: the boxes animate to it (its own length and way in / out).
     func take(scene index: Int) {
         guard multiLayout.scenes.indices.contains(index) else { return }
+        MultiLayoutInput.cancelExit?()
         mlLock.lock(); player.take(scene: index, at: CACurrentMediaTime()); let s = player.settings; mlLock.unlock()
         multiLayout = s                        // didSet: edit() sees the live scene unchanged — no jump
     }
@@ -95,6 +105,21 @@ final class MultiLayoutInput: InputSource {
         guard multiLayout.animateOnAir else { return nil }
         mlLock.lock(); defer { mlLock.unlock() }
         return player.exit(to: input, at: CACurrentMediaTime())
+    }
+
+    /// Back to the live scene at once (after an exit, or when an exit's switch didn't happen).
+    func restoreLive() {
+        mlLock.lock(); player.restoreLive(at: CACurrentMediaTime()); mlLock.unlock()
+    }
+
+    /// Replace the settings in one go; `animateLive` takes the (new) live scene with its animation.
+    func apply(_ m: MultiLayoutSettings, animateLive: Bool) {
+        mlLock.lock()
+        if animateLive { player.settings = m; player.take(scene: m.scene, at: CACurrentMediaTime()) }   // from where the boxes are
+        else { player.edit(m, at: CACurrentMediaTime()) }
+        let s = player.settings
+        mlLock.unlock()
+        multiLayout = s
     }
 
     func next() { take(scene: min(multiLayout.scenes.count - 1, multiLayout.scene + 1)) }

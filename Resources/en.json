@@ -909,6 +909,8 @@
  "사진 (슬라이드쇼)": "Photos (slideshow)",
  "PDF 슬라이드": "PDF Slides",
  "가상 세트": "Virtual Set",
+ "이 장면의 입력": "This scene's input",
+ "아래 모양 설정은 모든 장면의 이 상자에 적용됩니다 (방송 중인 장면 포함).": "The look settings below apply to this box in every scene (including the one on air).",
  "Program에 나갈 때: 방금 나가던 입력의 상자가 전체 화면에서 제자리로 줄어들고 다른 상자들이 들어옵니다. 상자에 있는 입력으로 돌아갈 때: 그 상자가 전체 화면으로 커진 다음 전환됩니다.": "Going to Program: the box of the input that was on air shrinks from full screen into its place and the other boxes come in. Switching to an input that is in a box: that box grows to full screen first, then the switch happens.",
  "미리보기: 방송에는 영향 없음. TAKE로 방송에 보냅니다.": "Preview: nothing on air changes. TAKE sends it on air.",
  "미리보기 장면을 방송으로 (Enter)": "Take the preview scene on air (Enter)",

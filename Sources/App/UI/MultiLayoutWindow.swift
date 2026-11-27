@@ -160,8 +160,8 @@ struct MultiLayoutEditor: View {
         .contextMenu {
             Button(L("이름 바꾸기")) { renaming = i }
             Button(L("복제")) { duplicate(i) }
-            if i > 0 { Button(L("위로")) { ml.multiLayout.scenes.swapAt(i, i - 1); fixLive(moved: i, to: i - 1) } }
-            if i < ml.multiLayout.scenes.count - 1 { Button(L("아래로")) { ml.multiLayout.scenes.swapAt(i, i + 1); fixLive(moved: i, to: i + 1) } }
+            if i > 0 { Button(L("위로")) { move(i, to: i - 1) } }
+            if i < ml.multiLayout.scenes.count - 1 { Button(L("아래로")) { move(i, to: i + 1) } }
             if ml.multiLayout.scenes.count > 1 { Button(L("삭제"), role: .destructive) { deleteScene(i) } }
         }
         .help(L("클릭 = 미리보기에서 설정 · ▶ = 바로 방송 · 더블클릭 = 이름 바꾸기"))
@@ -254,14 +254,23 @@ struct MultiLayoutEditor: View {
                     .pickerStyle(.segmented).labelsHidden()
             }
             Toggle(L("이 장면에서 보이기"), isOn: sb.visible)
-            inputPicker(L("입력"), b.inputID)
-            inputPicker(L("이 장면에서만 다른 입력"), sb.input, none: L("상자 입력 그대로"))
+            if edited == live {
+                inputPicker(L("입력"), b.inputID)
+                inputPicker(L("이 장면에서만 다른 입력"), sb.input, none: L("상자 입력 그대로"))
+            } else {
+                // preview: an input chosen here is this scene's own (the box's input is on air)
+                inputPicker(L("이 장면의 입력"), sb.input, none: L("상자 입력 그대로"))
+            }
             Group {
                 Text(L("위치 · 크기 (%)")).font(.system(size: 11, weight: .bold)).foregroundColor(.secondary)
                 HStack {
                     number("X", sb.rect.x); number("Y", sb.rect.y)
                     number(L("너비"), sb.rect.w); number(L("높이"), sb.rect.h)
                 }
+            }
+            if edited != live {
+                Text(L("아래 모양 설정은 모든 장면의 이 상자에 적용됩니다 (방송 중인 장면 포함)."))
+                    .font(.caption).foregroundColor(Theme.preview).fixedSize(horizontal: false, vertical: true)
             }
             Picker(L("맞추기"), selection: b.fill) {
                 Text(L("채우기 (잘라서)")).tag(true)
@@ -402,6 +411,7 @@ struct MultiLayoutEditor: View {
         s.id = UUID(); s.name += " 2"
         m.scenes.insert(s, at: i + 1)
         if m.scene > i { m.scene += 1 }
+        if let e = editing, e > i { editing = e + 1 }
         ml.multiLayout = m
     }
 
@@ -410,13 +420,19 @@ struct MultiLayoutEditor: View {
         m.scenes.remove(at: i)
         let wasLive = m.scene == i
         if m.scene > i || m.scene >= m.scenes.count { m.scene = max(0, m.scene - 1) }
-        ml.multiLayout = m
-        if wasLive { ml.take(scene: m.scene) }
+        ml.apply(m, animateLive: wasLive)        // the scene that takes over animates in
         editing = nil
+        renaming = nil
     }
 
-    private func fixLive(moved i: Int, to j: Int) {
-        if live == i { ml.multiLayout.scene = j } else if live == j { ml.multiLayout.scene = i }
+    /// Swap two scenes in one change (live and preview follow their scene), so nothing on air moves.
+    private func move(_ i: Int, to j: Int) {
+        var m = ml.multiLayout
+        m.scenes.swapAt(i, j)
+        if m.scene == i { m.scene = j } else if m.scene == j { m.scene = i }
+        if let e = editing { editing = e == i ? j : e == j ? i : e }
+        if let r = renaming { renaming = r == i ? j : r == j ? i : r }
+        ml.multiLayout = m
     }
 
     private func saveToLibrary() {

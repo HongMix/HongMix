@@ -151,6 +151,9 @@ struct MLBoxFrame: Equatable {
     var input: UUID?
     var rect: MLRect
     var opacity = 1.0
+    /// 0 = the box's own look (border, corners, zoom, crop), 1 = the plain input as it is on Program
+    /// (going from / to full screen on air, so the cut doesn't jump).
+    var plain = 0.0
 }
 
 /// Ease in and out (cubic): slow start, slow arrival.
@@ -203,7 +206,7 @@ struct MLPlayer {
         from = (0..<MLScene.boxCount).map { k in
             let b = to.boxes[k]
             guard b.visible, let input, (b.input ?? settings.boxes[k].inputID) == input else { return nil }
-            return MLBoxFrame(box: k, input: input, rect: .full)
+            return MLBoxFrame(box: k, input: input, rect: .full, plain: 1)
         }
         instant = false
         start = t
@@ -228,12 +231,23 @@ struct MLPlayer {
         return live.seconds
     }
 
+    /// Back to the live scene at once (an exit whose switch didn't happen, or the MultiLayout left Program).
+    mutating func restoreLive(at t: Double) {
+        guard settings.scenes.indices.contains(settings.scene) else { return }
+        to = settings.scenes[settings.scene]
+        from = Array(repeating: nil, count: MLScene.boxCount)
+        top = nil
+        instant = true
+        inputWas = Array(repeating: nil, count: MLScene.boxCount)
+    }
+
     /// New settings from the editor. The live scene's new places show at once (no animation while
     /// dragging); a box that now shows another input crossfades.
     mutating func edit(_ new: MultiLayoutSettings, at t: Double) {
         let now = boxes(at: t)
         settings = new
-        guard to != nil, settings.scenes.indices.contains(settings.scene) else { return }
+        guard settings.scenes.indices.contains(settings.scene) else { return }
+        if to == nil { restoreLive(at: t); return }          // e.g. the first scene added to an empty list
         let live = settings.scenes[settings.scene]
         if live != to {
             from = now
@@ -274,10 +288,12 @@ struct MLPlayer {
             let b = to.boxes[k], was = from[k]
             if b.visible {
                 let input = b.input ?? settings.boxes[k].inputID
+                let plain = k == top ? 1.0 : 0.0
                 let start = was ?? MLPlayer.hidden(b.rect, to.appear)
-                guard let start, p < 1 else { return MLBoxFrame(box: k, input: input, rect: b.rect) }
+                guard let start, p < 1 else { return MLBoxFrame(box: k, input: input, rect: b.rect, plain: plain) }
                 return MLBoxFrame(box: k, input: input, rect: start.rect.lerp(to: b.rect, p),
-                                  opacity: start.opacity + (1 - start.opacity) * p)
+                                  opacity: start.opacity + (1 - start.opacity) * p,
+                                  plain: start.plain + (plain - start.plain) * p)
             }
             guard let was, p < 1, let end = MLPlayer.hidden(was.rect, to.appear) else { return nil }
             return MLBoxFrame(box: k, input: was.input, rect: was.rect.lerp(to: end.rect, p),

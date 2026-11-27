@@ -179,4 +179,29 @@ p.enter(from: cam2, at: 30)
 near(p.frames(at: 30.5).first { $0.box == 1 }?.rect, pipBR, "back on air: the real scene again")
 check(p.settings.scene == 0, "the live scene stays the same")
 
+// A switch that does not happen after all (or the MultiLayout leaving Program): back to the live scene at once
+p = MLPlayer(settings: set)
+p.take(scene: 0, at: 0)
+_ = p.exit(to: cam2, at: 10)
+p.restoreLive(at: 10.2)
+check(p.frames(at: 10.2).map(\.box).sorted() == [0, 1], "restored: every box of the live scene")
+near(p.frames(at: 10.2).first { $0.box == 1 }?.rect, pipBR, "restored: in its place at once")
+
+// While growing to full screen (and coming back from it) a box drops its look, so the cut to the plain input doesn't jump
+p = MLPlayer(settings: set)
+p.take(scene: 0, at: 0)
+check(p.frames(at: 1).allSatisfy { $0.plain == 0 }, "normally a box has its full look")
+_ = p.exit(to: cam2, at: 10)
+check(p.frames(at: 10.25).last?.plain == 0.5 && p.frames(at: 10.5).last?.plain == 1, "exit: the look fades out as the box grows")
+p.enter(from: cam2, at: 20)
+check(p.frames(at: 20).first { $0.box == 1 }?.plain == 1 && p.frames(at: 20.5).first { $0.box == 1 }?.plain == 0, "enter: the look comes back as it shrinks")
+
+// A project whose scene list was empty: the first scene added goes on air
+var none = MultiLayoutSettings(); none.boxes[0].inputID = cam1
+p = MLPlayer(settings: none)
+p.take(scene: 0, at: 0)
+none.scenes = [scene("New", [full])]
+p.edit(none, at: 1)
+check(p.frames(at: 1).map(\.input) == [cam1], "first scene shows")
+
 if failures == 0 { print("multilayout: all checks passed") } else { print("multilayout: \(failures) failed"); exit(1) }

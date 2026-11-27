@@ -421,6 +421,7 @@ final class SwitcherEngine: ObservableObject {
         WebStreamHub.shared.engine = self
         tcpAPI.engine = self
         InputSource.eventSink = { [weak self] input, e in self?.fireTriggers(input, e) }
+        MultiLayoutInput.cancelExit = { [weak self] in self?.cancelLayoutExit() }
     }
 
     private func watch(_ id: UUID, _ publisher: ObservableObjectPublisher) {
@@ -855,6 +856,7 @@ final class SwitcherEngine: ObservableObject {
     }
 
     private func leftLive(_ id: UUID?, overlay: Bool = false) {
+        if !overlay, let ml = input(withID: id) as? MultiLayoutInput, id != programID { ml.restoreLive() }   // off air: the whole scene again
         if let id = id, let i = input(withID: id) {
             let stillThere = overlay ? (0..<SwitcherEngine.overlayCount).contains { overlayOn[$0] && overlayIDs[$0] == id }
                                      : id == programID
@@ -925,7 +927,7 @@ final class SwitcherEngine: ObservableObject {
     /// [MultiLayout] Program is a MultiLayout and `incoming` shows in one of its boxes: that box grows to
     /// full screen first (the other boxes go), then `action` switches. A second switch during it goes at once.
     private func afterLayoutExit(to incoming: UUID?, _ action: @escaping () -> Void) {
-        if layoutExitToken != nil { layoutExitToken = nil; action(); return }
+        if layoutExitToken != nil { cancelLayoutExit(); action(); return }
         guard let ml = input(withID: programID) as? MultiLayoutInput, incoming != programID,
               let d = ml.exitAir(to: incoming), d > 0 else { action(); return }
         let token = UUID()
@@ -934,7 +936,20 @@ final class SwitcherEngine: ObservableObject {
             guard let self, self.layoutExitToken == token else { return }
             self.layoutExitToken = nil
             action()
+            // the switch may still not happen (Preview changed, audio wait replaced): never leave the
+            // MultiLayout on Program showing only the grown box
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self, weak ml] in
+                guard let self, let ml, self.programID == ml.id, !self.transitioning else { return }
+                ml.restoreLive()
+            }
         }
+    }
+
+    /// Another switch (T-bar, stinger, FTB, a scene take) replaces a pending MultiLayout exit.
+    func cancelLayoutExit() {
+        guard layoutExitToken != nil else { return }
+        layoutExitToken = nil
+        (input(withID: programID) as? MultiLayoutInput)?.restoreLive()
     }
 
     private func performCut(to incoming: UUID?) {
@@ -1017,6 +1032,7 @@ final class SwitcherEngine: ObservableObject {
     }
 
     func setTBar(_ value: Double) {
+        cancelLayoutExit()
         let v = Float(max(0, min(1, value)))
         tbar = Double(v)
         var completed = false
@@ -1055,6 +1071,7 @@ final class SwitcherEngine: ObservableObject {
     // Stingers (1-based)
 
     func stinger(_ slot: Int) {
+        cancelLayoutExit()
         guard slot == 1, let sid = stingers[0].inputID, let s = input(withID: sid), previewID != nil else {
             lastMessage = Lf("Stinger %@: 미디어 입력이 지정되지 않음", "\(slot)")
             return
@@ -1156,6 +1173,7 @@ final class SwitcherEngine: ObservableObject {
     }
 
     func toggleFTB() {
+        cancelLayoutExit()
         var on = false
         withState { s in
             s.ftbTarget = s.ftbTarget > 0 ? 0 : 1
