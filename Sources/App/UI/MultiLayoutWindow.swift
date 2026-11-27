@@ -320,7 +320,7 @@ struct MultiLayoutEditor: View {
             Text(L("상자 위에 그려집니다: 프레임, 로고, 자막 바.")).font(.caption).foregroundColor(.secondary)
             slider(L("입력 바꿀 때 크로스페이드"), $ml.multiLayout.inputFade, 0...2, "%.1f s")
             Toggle(L("방송에 나갈 때 애니메이션"), isOn: $ml.multiLayout.animateOnAir)
-            Text(L("Cut이나 전환으로 이 MultiLayout이 Program에 나가면, 방금 나가던 입력의 상자가 전체 화면에서 제자리로 줄어들고 다른 상자들이 들어옵니다."))
+            Text(L("Program에 나갈 때: 방금 나가던 입력의 상자가 전체 화면에서 제자리로 줄어들고 다른 상자들이 들어옵니다. 상자에 있는 입력으로 돌아갈 때: 그 상자가 전체 화면으로 커진 다음 전환됩니다."))
                 .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }

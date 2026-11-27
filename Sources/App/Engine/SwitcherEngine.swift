@@ -915,7 +915,26 @@ final class SwitcherEngine: ObservableObject {
 
     func cut() {
         let incoming = previewID
-        whenIncomingAudioIsReady(incoming) { [weak self] in self?.performCut(to: incoming) }
+        afterLayoutExit(to: incoming) { [weak self] in
+            self?.whenIncomingAudioIsReady(incoming) { [weak self] in self?.performCut(to: incoming) }
+        }
+    }
+
+    private var layoutExitToken: UUID?
+
+    /// [MultiLayout] Program is a MultiLayout and `incoming` shows in one of its boxes: that box grows to
+    /// full screen first (the other boxes go), then `action` switches. A second switch during it goes at once.
+    private func afterLayoutExit(to incoming: UUID?, _ action: @escaping () -> Void) {
+        if layoutExitToken != nil { layoutExitToken = nil; action(); return }
+        guard let ml = input(withID: programID) as? MultiLayoutInput, incoming != programID,
+              let d = ml.exitAir(to: incoming), d > 0 else { action(); return }
+        let token = UUID()
+        layoutExitToken = token
+        DispatchQueue.main.asyncAfter(deadline: .now() + d) { [weak self] in
+            guard let self, self.layoutExitToken == token else { return }
+            self.layoutExitToken = nil
+            action()
+        }
     }
 
     private func performCut(to incoming: UUID?) {
@@ -940,7 +959,9 @@ final class SwitcherEngine: ObservableObject {
     }
 
     func cutDirect(_ id: UUID) {
-        whenIncomingAudioIsReady(id) { [weak self] in self?.performCutDirect(id) }
+        afterLayoutExit(to: id) { [weak self] in
+            self?.whenIncomingAudioIsReady(id) { [weak self] in self?.performCutDirect(id) }
+        }
     }
 
     private func performCutDirect(_ id: UUID) {
@@ -964,7 +985,8 @@ final class SwitcherEngine: ObservableObject {
         var alreadyTransitioning = false
         withState { alreadyTransitioning = $0.transitionActive || $0.stinger != nil }
         guard !alreadyTransitioning else { return }
-        whenIncomingAudioIsReady(incoming) { [weak self] in
+        afterLayoutExit(to: incoming) { [weak self] in
+        self?.whenIncomingAudioIsReady(incoming) { [weak self] in
             guard let self, self.previewID == incoming else { return }
             var started = false
             withState { s in
@@ -979,6 +1001,7 @@ final class SwitcherEngine: ObservableObject {
             guard started else { return }
             self.goLive(incoming)
             self.transitioning = true
+        }
         }
     }
 

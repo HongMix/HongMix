@@ -167,6 +167,8 @@ struct MLPlayer {
     private var to: MLScene?
     private var start = 0.0
     private var instant = false
+    /// A box drawn above the others (the one growing to full screen when leaving air).
+    private var top: Int?
     /// Per box: the input it showed before its input changed, and when (for the crossfade).
     private var inputWas: [(input: UUID?, at: Double)?] = Array(repeating: nil, count: MLScene.boxCount)
 
@@ -177,6 +179,7 @@ struct MLPlayer {
         let now = boxes(at: t)
         from = (0..<MLScene.boxCount).map { k in now[k] }
         instant = to == nil                     // the first scene is simply there
+        top = nil
         to = settings.scenes[index]
         settings.scene = index
         start = t
@@ -194,6 +197,8 @@ struct MLPlayer {
     /// The MultiLayout goes on air after `input` (Cut / transition): the box showing that input starts full
     /// screen and moves to its place, the other boxes come in the live scene's way.
     mutating func enter(from input: UUID?, at t: Double) {
+        if settings.scenes.indices.contains(settings.scene) { to = settings.scenes[settings.scene] }   // after an exit
+        top = nil
         guard let to else { return }
         from = (0..<MLScene.boxCount).map { k in
             let b = to.boxes[k]
@@ -202,6 +207,25 @@ struct MLPlayer {
         }
         instant = false
         start = t
+    }
+
+    /// The switcher leaves this MultiLayout for `input`: if a box of the live scene shows it, that box grows
+    /// to full screen on top and the others go (the scene's way). Returns how long that takes (then the
+    /// switcher cuts), or nil when no box shows the input.
+    mutating func exit(to input: UUID?, at t: Double) -> Double? {
+        guard let input, settings.scenes.indices.contains(settings.scene) else { return nil }
+        let live = settings.scenes[settings.scene]
+        guard let k = (0..<MLScene.boxCount).first(where: { live.boxes[$0].visible && (live.boxes[$0].input ?? settings.boxes[$0].inputID) == input })
+        else { return nil }
+        var out = live
+        for j in 0..<MLScene.boxCount where j != k { out.boxes[j].visible = false }
+        out.boxes[k].rect = .full
+        from = boxes(at: t)
+        to = out
+        top = k
+        instant = false
+        start = t
+        return live.seconds
     }
 
     /// New settings from the editor. The live scene's new places show at once (no animation while
@@ -227,7 +251,9 @@ struct MLPlayer {
 
     func frames(at t: Double) -> [MLBoxFrame] {
         var out: [MLBoxFrame] = []
-        for f in boxes(at: t) {
+        var all = boxes(at: t)
+        if let top, let f = all[top] { all.remove(at: top); all.append(f) }
+        for f in all {
             guard let f else { continue }
             if let w = inputWas[f.box], w.input != f.input, settings.inputFade > 0, t - w.at < settings.inputFade {
                 var old = f; old.input = w.input

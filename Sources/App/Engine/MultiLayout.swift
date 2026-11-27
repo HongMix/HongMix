@@ -89,6 +89,14 @@ final class MultiLayoutInput: InputSource {
         mlLock.lock(); player.enter(from: input, at: CACurrentMediaTime()); mlLock.unlock()
     }
 
+    /// Program leaves for `input`: its box grows to full screen first. Returns the seconds to wait before
+    /// switching (nil = switch at once).
+    func exitAir(to input: UUID?) -> Double? {
+        guard multiLayout.animateOnAir else { return nil }
+        mlLock.lock(); defer { mlLock.unlock() }
+        return player.exit(to: input, at: CACurrentMediaTime())
+    }
+
     func next() { take(scene: min(multiLayout.scenes.count - 1, multiLayout.scene + 1)) }
     func previous() { take(scene: max(0, multiLayout.scene - 1)) }
 
