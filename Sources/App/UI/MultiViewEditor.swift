@@ -301,10 +301,12 @@ private struct CellCanvas: View {
                  arrowEdge: .bottom) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
-                    TextField(L("이름표"), text: labelBinding(i), prompt: Text(L("자동")))
+                    Text(L("이름표")).font(.system(size: 10, weight: .bold)).foregroundColor(.secondary)
+                    TextField(L("이름표"), text: labelBinding(i), prompt: Text(L("자동 — 입력하면 바뀝니다")))
                         .textFieldStyle(.roundedBorder)
                         .help(L("이 칸에 표시할 이름 (비우면 자동)"))
                     Divider().padding(.vertical, 3)
+                    Text(L("보여줄 화면")).font(.system(size: 10, weight: .bold)).foregroundColor(.secondary)
                     choice(L("자동 (입력 순서대로)"), i, .auto)
                     choice("Preview", i, .preview)
                     choice("Output", i, .program)

@@ -2173,5 +2173,7 @@
  "화면 아래": "Below picture",
  "화면 아래: 이름이 화면 밖 띠에 표시되고, 화면은 조금 작아져 사이에 여백이 생깁니다": "Below picture: labels go in a strip under each picture; pictures get a little smaller, with space between them",
  "이름표": "Label",
- "이 칸에 표시할 이름 (비우면 자동)": "Label shown in this cell (empty = automatic)"
+ "이 칸에 표시할 이름 (비우면 자동)": "Label shown in this cell (empty = automatic)",
+ "자동 — 입력하면 바뀝니다": "Automatic — type to change",
+ "보여줄 화면": "Shows"
 }
