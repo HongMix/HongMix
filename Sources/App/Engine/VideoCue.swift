@@ -16,7 +16,14 @@ final class VideoCueEngine: ObservableObject {
             // picture settings of a cue on air apply at once (the render thread reads its copy under the lock)
             lock.lock()
             for d in 0..<2 { if let c = machine.deckCue[d], list.cues.indices.contains(c) { looks[d] = list.cues[c] } }
+            let ds = decks
             lock.unlock()
+            // the repeat key on a cue that plays: its deck loops (or not) from now on
+            for d in 0..<2 {
+                guard let deck = ds[d], let c = machine.deckCue[d], list.cues.indices.contains(c) else { continue }
+                let loop = list.cues[c].endAction == .loop
+                if deck.looping != loop { deck.looping = loop }
+            }
             if list.background != oldValue.background { applyBackground() }
             publish()
         }
@@ -34,6 +41,7 @@ final class VideoCueEngine: ObservableObject {
     private var fades: [Fade?] = [nil, nil]
     private var looks: [VideoCue?] = [nil, nil]  // render thread's copy of each deck's cue (picture, outputs)
     private var background: InputSource?          // the list's fallback picture (under `lock`)
+    private var panicked = false                   // PANIC hides the background too, until the next GO (under `lock`)
     /// Outputs showing the test card instead of the show (window › Outputs).
     @Published private(set) var testCard: Set<UUID> = []
     private var testCardShown: Set<UUID> = []     // render thread's copy (under `lock`)
@@ -46,9 +54,11 @@ final class VideoCueEngine: ObservableObject {
 
     // MARK: Actions (window, API)
 
-    func go() { run(machine.go()) }
+    func go() { setPanicked(false); run(machine.go()) }
     func stop() { run(machine.stop()) }
-    func panic() { run(machine.panic()) }
+    /// Black and silent at once — the background too, until the next GO.
+    func panic() { setPanicked(true); run(machine.panic()) }
+    private func setPanicked(_ on: Bool) { lock.lock(); panicked = on; lock.unlock() }
     func next() { machine.next(); publish() }
     func previous() { machine.previous(); publish() }
     func select(_ index: Int) { machine.select(index); publish() }
@@ -193,6 +203,7 @@ final class VideoCueEngine: ObservableObject {
             deck = FFmpegInput(config: cfg)
         }
         deck.start()
+        if b.kind == .video { deck.playing = true }     // media inputs start paused; the tick may not be running
         lock.lock(); background = deck; lock.unlock()
     }
 
@@ -234,7 +245,7 @@ final class VideoCueEngine: ObservableObject {
         if let bg, list.background?.kind == .video {
             let covered = (0..<2).contains { d in
                 guard decks[d] != nil, let f = fades[d], f.to == 1, f.done(at: now), let c = looks[d] else { return false }
-                return c.kind != .audio && c.fit != .fit && c.zoom >= 1 && c.panX == 0 && c.panY == 0
+                return c.kind != .audio && c.hiddenOn.isEmpty && c.fit != .fit && c.zoom >= 1 && c.panX == 0 && c.panY == 0
                     && c.cropL + c.cropT + c.cropR + c.cropB == 0
             }
             if bg.playing == covered { bg.playing = !covered }
@@ -257,7 +268,7 @@ final class VideoCueEngine: ObservableObject {
     /// framed by its cue's picture settings.
     func layers(width W: CGFloat, height H: CGFloat, output: UUID) -> [ComposeLayer] {
         let now = CACurrentMediaTime()
-        lock.lock(); let ds = decks, fs = fades, ls = looks, bg = background
+        lock.lock(); let ds = decks, fs = fades, ls = looks, bg = panicked ? nil : background
         let card = testCardShown.contains(output) ? bars?.video.latest() : nil; lock.unlock()
         let full = CGRect(x: 0, y: 0, width: W, height: H)
         var p = LayerParams(); p.premul = 0

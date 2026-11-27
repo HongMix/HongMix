@@ -45,6 +45,11 @@ final class ShortcutManager: ObservableObject {
         "VideoCueGo", "VideoCueStop", "VideoCuePanic", "VideoCueNext", "VideoCuePrevious", "VideoCueSelect",
     ]
 
+    /// Plain keys a window uses itself (by window title); user shortcuts don't take them there.
+    static let windowKeys: [String: Set<String>] = [
+        "Video Cue": ["Space", "Esc"],
+    ]
+
     private static let specialKeys: [UInt16: String] = [
         49: "Space", 36: "Return", 76: "Enter", 48: "Tab", 51: "Backspace", 117: "Delete", 53: "Esc",
         123: "Left", 124: "Right", 125: "Down", 126: "Up", 115: "Home", 119: "End", 116: "PageUp", 121: "PageDown",
@@ -78,6 +83,10 @@ final class ShortcutManager: ObservableObject {
             }
             // never steal keys from text fields or the web page being typed into
             if let r = ev.window?.firstResponder, r is NSText || r is BrowserEventView { return ev }
+            // windows with their own plain keys (Video Cue Space / Esc) keep them
+            if let t = ev.window?.title, let own = ShortcutManager.windowKeys[t],
+               ev.modifierFlags.intersection([.command, .option, .control]).isEmpty,
+               own.contains(ShortcutManager.keyName(ev)) { return ev }
             guard let sc = self.match(ev), let engine = self.engine else { return ev }
             var q: [String: String] = [:]
             if !sc.input.isEmpty { q["input"] = sc.input }

@@ -29,7 +29,11 @@ struct VideoCueWindow: View {
             Divider()
             Group {
                 if let i = editing, cue.list.cues.indices.contains(i) {
-                    CueInspector(c: $cue.list.cues[i], playing: cue.deckCue.contains(i),
+                    let id = cue.list.cues[i].id
+                    // by id: a field committing after another project's list loaded can't write a wrong index
+                    CueInspector(c: Binding(get: { cue.list.cues.first { $0.id == id } ?? cue.list.cues[min(i, cue.list.cues.count - 1)] },
+                                            set: { v in if let k = cue.list.cues.firstIndex(where: { $0.id == id }) { cue.list.cues[k] = v } }),
+                                 playing: cue.deckCue.contains(i),
                                  outputs: engine.inputs.filter { $0 is VideoCueInput }.map { ($0.id, $0.name) },
                                  outSize: CGSize(width: engine.format.width, height: engine.format.height))
                         .id(cue.list.cues[i].id)          // a fresh preview per cue
@@ -550,7 +554,12 @@ private struct CueOutputsPanel: View {
                 Text(L("출력")).font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).textCase(.uppercase)
                 Spacer()
                 Button(L("모니터 번호 표시")) { map.identify() }.controlSize(.small)
-                Button { engine.addInput(InputConfig(kind: .videoCue, name: "Video Cue \(outputs.count + 1)")) } label: {
+                Button {
+                    // the sound already comes from the first output: a second one on Master would double it
+                    var c = InputConfig(kind: .videoCue, name: "Video Cue \(outputs.count + 1)")
+                    if !outputs.isEmpty { c.buses = "" }
+                    engine.addInput(c)
+                } label: {
                     Image(systemName: "plus")
                 }
                 .controlSize(.small).help(L("출력 추가"))

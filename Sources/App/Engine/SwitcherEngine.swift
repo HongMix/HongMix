@@ -2116,7 +2116,7 @@ final class SwitcherEngine: ObservableObject {
         tickMarks.append(("tally", CACurrentMediaTime()))
         let replayAudioIDs = ReplayEngine.shared.sourceAudioIDs
         let cueRings = ins.compactMap { i in (i as? VideoCueInput).map { (output: $0.id, ring: $0.audio) } }
-        if !cueRings.isEmpty { VideoCueEngine.shared.pumpAudio(into: cueRings, frames: frames) }
+        VideoCueEngine.shared.pumpAudio(into: cueRings, frames: frames)   // also with no output: the decks never back up
         let n = audioMixer.mix(inputs: ins, weights: weights, frames: frames, isoIDs: Set(isos.keys).union(replayAudioIDs))
         tickMarks.append(("audio", CACurrentMediaTime()))
         captions.feed(UnsafePointer(audioMixer.bus(captions.feedBus)), frames: n)

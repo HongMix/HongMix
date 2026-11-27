@@ -413,7 +413,8 @@ final class AudioMixer: ObservableObject {
             // mc_input.c releases file audio 100 ms ahead of its media PTS. A 120 ms
             // priming requirement exceeds that lookahead and can make file inputs starve.
             // Use 50 ms for files while preserving the larger live-device safety margin.
-            let cushion = input.kind == .media ? fileInputCushion : liveInputCushion
+            // Video Cue: its ring gets exactly one block right before each mix, so no cushion (no added delay)
+            let cushion = input.kind == .media ? fileInputCushion : input.kind == .videoCue ? 0 : liveInputCushion
             let sourceBuffer = ring.mixSnapshot
             if input.mixBufferGeneration != sourceBuffer.generation {
                 // Pause, seek, or source reset cleared the PCM ring. Discard the stale
