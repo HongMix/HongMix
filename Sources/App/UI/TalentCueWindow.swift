@@ -18,7 +18,7 @@ struct TalentCueWindow: View {
                     .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.25)))
                 HStack {
                     Button(cue.blackout ? L("블랙아웃 해제") : L("블랙아웃")) { cue.blackout.toggle() }
-                        .cueKey(cue.blackout ? Theme.live : nil, prominent: true)
+                        .cueKey(cue.blackout ? Theme.live : nil, prominent: true, cleanTint: cue.blackout ? .red : nil)
                     Button(L("메시지 숨기기")) { cue.hideMessage() }.cueKey().disabled(cue.liveMessageID == nil)
                     Toggle(L("눈에 띄게 (깜빡임)"), isOn: $cue.flash).disabled(cue.liveMessageID == nil)
                     Spacer()
@@ -91,7 +91,7 @@ struct TalentCueWindow: View {
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Button(live ? L("숨기기") : L("표시")) { live ? cue.hideMessage() : cue.show(m.id) }
-                        .cueKey(live ? Theme.live : Theme.accent, prominent: true)
+                        .cueKey(live ? Theme.live : Theme.accent, prominent: true, cleanTint: live ? .red : .accentColor)
                     Button { cue.deleteMessage(m.id) } label: { Image(systemName: "trash") }
                         .buttonStyle(.borderless)
                         .help(L("삭제"))

@@ -54,7 +54,6 @@ enum AppSkin: String, CaseIterable, Identifiable {
 }
 
 enum Theme {
-    // Hardware look on Black & White: a touch of grey (anodised panel) instead of near-black; the clean look keeps its values.
     // Monochrome follows broadcast tally: Program red, Preview green. Other skins keep vMix colours.
     static var program: Color { AppSkin.isMono ? Color(red: 1.0, green: 0.23, blue: 0.19) : Color(red: 0.20, green: 0.66, blue: 0.22) }
     static var preview: Color { AppSkin.isMono ? Color(red: 0.19, green: 0.82, blue: 0.35) : Color(red: 0.93, green: 0.52, blue: 0.10) }
@@ -75,6 +74,7 @@ enum Theme {
         return palette[max(0, min(palette.count - 1, channel - 1))]
     }
     static let live = Color(red: 0.86, green: 0.16, blue: 0.16)
+    // Hardware look on Black & White: a touch of grey (anodised panel) instead of near-black; the clean look keeps its values.
     static var window: Color {
         switch AppSkin.current {
         case .mono: return Color(white: AppLook.hardware ? 0.095 : 0.043)

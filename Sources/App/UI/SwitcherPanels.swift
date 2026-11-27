@@ -2140,7 +2140,13 @@ struct BrushedMetal: View {
 
     static let tile: NSImage = {
         let w = 512, h = 128
-        var px = [UInt8](repeating: 0, count: w * h * 2)        // gray + alpha
+        let cs = CGColorSpaceCreateDeviceGray()
+        // the context owns its pixels (data: nil), so makeImage() never reads freed memory
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 2, space: cs,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let raw = ctx.data else { return NSImage() }
+        let px = raw.bindMemory(to: UInt8.self, capacity: ctx.bytesPerRow * h)
+        let stride = ctx.bytesPerRow
         var rng = SystemRandomNumberGenerator()
         for y in 0..<h {
             let row = Double.random(in: -1...1, using: &rng)        // each line its own tone = the streak
@@ -2148,15 +2154,13 @@ struct BrushedMetal: View {
             for x in 0..<w {
                 smooth = smooth * 0.92 + Double.random(in: -1...1, using: &rng) * 0.08
                 let v = row * 0.7 + smooth * 3.0                     // -1…1-ish
-                let i = (y * w + x) * 2
-                px[i] = v >= 0 ? 255 : 0                             // light or dark
-                px[i + 1] = UInt8(min(255, abs(v) * 22))             // very low alpha
+                let i = y * stride + x * 2
+                let a = UInt8(min(255, abs(v) * 22))                 // very low alpha
+                px[i] = v >= 0 ? a : 0                               // premultiplied: light = white × alpha, dark = black
+                px[i + 1] = a
             }
         }
-        let cs = CGColorSpaceCreateDeviceGray()
-        guard let ctx = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 2, space: cs,
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
-              let img = ctx.makeImage() else { return NSImage() }
+        guard let img = ctx.makeImage() else { return NSImage() }
         return NSImage(cgImage: img, size: NSSize(width: w, height: h))
     }()
 }

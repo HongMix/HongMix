@@ -747,10 +747,10 @@ struct HWKeyStyle: ButtonStyle {
 }
 
 extension View {
-    /// Hardware look: a raised key; otherwise the system button (prominent = filled with `fill` as tint).
-    @ViewBuilder func cueKey(_ fill: Color? = nil, prominent: Bool = false) -> some View {
+    /// Hardware look: a raised key in `fill`; otherwise the system button as before (prominent, tinted `cleanTint`).
+    @ViewBuilder func cueKey(_ fill: Color? = nil, prominent: Bool = false, cleanTint: Color? = nil) -> some View {
         if AppLook.hardware { buttonStyle(HWKeyStyle(fill: fill ?? ReplayKey.neutral)) }
-        else if prominent { buttonStyle(.borderedProminent).tint(fill) }
+        else if prominent { buttonStyle(.borderedProminent).tint(cleanTint) }
         else { self }
     }
 }
