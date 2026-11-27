@@ -18,9 +18,8 @@ struct TalentCueWindow: View {
                     .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.25)))
                 HStack {
                     Button(cue.blackout ? L("블랙아웃 해제") : L("블랙아웃")) { cue.blackout.toggle() }
-                        .tint(cue.blackout ? .red : nil)
-                        .buttonStyle(.borderedProminent)
-                    Button(L("메시지 숨기기")) { cue.hideMessage() }.disabled(cue.liveMessageID == nil)
+                        .cueKey(cue.blackout ? Theme.live : nil, prominent: true)
+                    Button(L("메시지 숨기기")) { cue.hideMessage() }.cueKey().disabled(cue.liveMessageID == nil)
                     Toggle(L("눈에 띄게 (깜빡임)"), isOn: $cue.flash).disabled(cue.liveMessageID == nil)
                     Spacer()
                 }
@@ -31,6 +30,8 @@ struct TalentCueWindow: View {
             }
             .padding(14)
             .frame(width: 460)
+            .frame(maxHeight: .infinity)
+            .background(BrushedMetal(base: AppLook.hardware ? Theme.window : .clear))
             Divider()
             Form {
                 messagesSection
@@ -51,16 +52,16 @@ struct TalentCueWindow: View {
                 Button(cue.timer.running ? L("일시정지") : L("시작")) {
                     cue.timer.running ? cue.pauseTimer() : cue.startTimer()
                 }
-                .buttonStyle(.borderedProminent)
-                Button(L("리셋")) { cue.resetTimer() }
-                Button(L("−1분")) { cue.timer.add(seconds: -60) }
-                Button(L("+1분")) { cue.timer.add(seconds: 60) }
+                .cueKey(Theme.accent, prominent: true)
+                Button(L("리셋")) { cue.resetTimer() }.cueKey()
+                Button(L("−1분")) { cue.timer.add(seconds: -60) }.cueKey()
+                Button(L("+1분")) { cue.timer.add(seconds: 60) }.cueKey()
                 Toggle(L("타이머 표시"), isOn: $cue.timerOnDisplay)
             }
             HStack(spacing: 4) {
                 Text(L("빠른 설정")).font(.caption).foregroundColor(.secondary)
                 ForEach([5, 10, 15, 20, 30, 45, 60], id: \.self) { m in
-                    Button("\(m)′") { cue.setTimer(seconds: Double(m * 60)) }.controlSize(.small)
+                    Button("\(m)′") { cue.setTimer(seconds: Double(m * 60)) }.controlSize(.small).cueKey()
                 }
             }
         }
@@ -90,8 +91,7 @@ struct TalentCueWindow: View {
                         .multilineTextAlignment(.leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Button(live ? L("숨기기") : L("표시")) { live ? cue.hideMessage() : cue.show(m.id) }
-                        .buttonStyle(.borderedProminent)
-                        .tint(live ? .red : .accentColor)
+                        .cueKey(live ? Theme.live : Theme.accent, prominent: true)
                     Button { cue.deleteMessage(m.id) } label: { Image(systemName: "trash") }
                         .buttonStyle(.borderless)
                         .help(L("삭제"))
