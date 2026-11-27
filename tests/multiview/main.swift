@@ -105,4 +105,14 @@ check(abs(pic.midX - cellR.midX) < 0.5, "picture centred")
 check(pic.minY > cellR.minY && strip.maxY < cellR.maxY, "room above the picture and under the label")
 check(strip.minY == pic.maxY && strip.width == pic.width && strip.minX == pic.minX && strip.height == 30, "label strip right under the picture")
 
+// Setting a label pads the list; a smaller layout drops labels of cells that no longer exist
+var sl = MultiViewConfig(name: "L", layout: .grid16)
+sl.setLabel("CAM 12", at: 11)
+check(sl.labels.count == 12 && sl.customLabel(11) == "CAM 12" && sl.customLabel(3) == nil, "setLabel pads with automatic labels")
+sl.setLabel("X", at: 99)
+check(sl.labels.count == 12, "setLabel ignores a cell the layout doesn't have")
+sl.setLayout(.grid9)
+check(sl.labels.count <= 9 && sl.customLabel(11) == nil, "labels of removed cells are dropped")
+check(MultiViewConfig.defaultLabel(.talent, number: nil, name: nil) == "TALENT", "talent label")
+
 if failures == 0 { print("multiview: all checks passed") } else { print("multiview: \(failures) failed"); exit(1) }

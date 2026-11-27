@@ -2142,7 +2142,7 @@ final class SwitcherEngine: ObservableObject {
             return live ? red : (i.id == st.previewID ? green : gray)
         }
         let below = mv.showLabels && mv.labelsBelow
-        let labelH = CGFloat(fmt.height) / 45 * 1.5          // the label bar height drawLabels uses
+        let labelH = MultiViewConfig.labelBarHeight(frameHeight: CGFloat(fmt.height))
         for (idx, cell) in rects.enumerated() {
             var t: TileSpec
             let r = below ? MultiViewConfig.labelBelowRects(cell: cell, labelHeight: labelH).picture : cell

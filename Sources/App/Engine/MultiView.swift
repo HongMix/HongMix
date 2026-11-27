@@ -170,7 +170,18 @@ struct MultiViewConfig: Codable, Identifiable, Equatable {
             if i < old.count && old[i] != oldLayout.defaultSlot(i) { return old[i] }
             return l.defaultSlot(i)
         }
+        labels = Array(labels.prefix(l.cellCount))     // labels stay with their cell number, like the slots
     }
+
+    /// Own label for cell `i` ("" = automatic).
+    mutating func setLabel(_ text: String, at i: Int) {
+        guard (0..<layout.cellCount).contains(i) else { return }
+        if labels.count <= i { labels += Array(repeating: "", count: i + 1 - labels.count) }
+        labels[i] = text
+    }
+
+    /// Height of the label bar on a frame `frameHeight` px high (MetalMixer.drawLabels draws it; labels-below makes room for it).
+    static func labelBarHeight(frameHeight: CGFloat) -> CGFloat { frameHeight / 45 * 1.5 }
 
     static func standard() -> MultiViewConfig { MultiViewConfig(name: "MultiView 1") }
 }

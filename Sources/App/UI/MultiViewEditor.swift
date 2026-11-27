@@ -255,7 +255,7 @@ private struct CellCanvas: View {
             switch targets[k] {
             case .preview: return config.customLabel(k) ?? "PREVIEW"
             case .program: return config.customLabel(k) ?? "PROGRAM"
-            case .talent: return config.customLabel(k) ?? "TALENT DISPLAY"
+            case .talent: return config.customLabel(k) ?? "TALENT"
             case .empty, .auto: return isAuto ? L("자동 (입력 없음)") : L("비어 있음")
             case .input(let id):
                 guard let i = engine.input(withID: id) else { return L("입력 (없음)") }
@@ -309,7 +309,7 @@ private struct CellCanvas: View {
                     Text(L("보여줄 화면")).font(.system(size: 10, weight: .bold)).foregroundColor(.secondary)
                     choice(L("자동 (입력 순서대로)"), i, .auto)
                     choice("Preview", i, .preview)
-                    choice("Output", i, .program)
+                    choice("Program", i, .program)
                     choice("Talent Display", i, .talent)
                     Divider().padding(.vertical, 3)
                     ForEach(engine.inputs) { inp in
@@ -328,12 +328,7 @@ private struct CellCanvas: View {
 
     private func labelBinding(_ i: Int) -> Binding<String> {
         Binding(get: { config.labels.indices.contains(i) ? config.labels[i] : "" },
-                set: { v in
-                    var c = config
-                    if c.labels.count <= i { c.labels += Array(repeating: "", count: i + 1 - c.labels.count) }
-                    c.labels[i] = v
-                    config = c
-                })
+                set: { config.setLabel($0, at: i) })
     }
 
     private func choice(_ title: String, _ i: Int, _ s: MultiViewSlot) -> some View {

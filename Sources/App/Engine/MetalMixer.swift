@@ -559,7 +559,8 @@ final class MetalMixer {
         guard let cg = CGContext(data: base, width: w, height: h, bitsPerComponent: 8,
                                  bytesPerRow: CVPixelBufferGetBytesPerRow(pb),
                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: info) else { return }
-        let fontSize = CGFloat(h) / 45
+        let barH = MultiViewConfig.labelBarHeight(frameHeight: CGFloat(h))
+        let fontSize = barH / 1.5
         let font = CTFontCreateWithName("Helvetica-Bold" as CFString, fontSize, nil)
         for tile in tiles {
             guard let text = tile.label else { continue }
@@ -571,7 +572,6 @@ final class MetalMixer {
             let bounds = CTLineGetBoundsWithOptions(line, [])
             let r = tile.rect
             // CG origin is bottom-left
-            let barH = fontSize * 1.5
             let barRect = tile.labelBelow
                 ? CGRect(x: r.minX, y: CGFloat(h) - r.maxY - barH, width: r.width, height: barH)
                 : CGRect(x: r.minX, y: CGFloat(h) - r.maxY, width: min(r.width, bounds.width + fontSize), height: barH)
