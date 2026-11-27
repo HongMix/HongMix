@@ -31,6 +31,12 @@ final class MonitorRenderer {
         get { lock.lock(); defer { lock.unlock() }; return _placement }
         set { lock.lock(); _placement = newValue; lock.unlock() }
     }
+    /// Input Settings preview: also show colour correction, colour key and opacity (tiles leave them off).
+    private var _fullLook = false
+    var fullLook: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return _fullLook }
+        set { lock.lock(); _fullLook = newValue; lock.unlock() }
+    }
     private var _size: CGSize = .zero
     private var lastFrame: CVPixelBuffer?
     private var lastSize: CGSize = .zero
@@ -75,11 +81,12 @@ final class MonitorRenderer {
         let size = _size
         let src = _source
         let placementSource = _placement
+        let full = _fullLook
         lock.unlock()
         guard size.width >= 2, size.height >= 2, let pipeline = MonitorRenderer.sharedPipeline else { return nil }
         if fps < 50 && now - lastDraw < 1.0 / Double(max(1, fps)) - 0.002 { return nil }
         let frame = src()
-        let placement = placementSource?().flatMap { $0.isIdentityPlacement ? nil : $0 }
+        let placement = placementSource?().flatMap { $0.isIdentityPlacement && !full ? nil : $0 }
         if let f = frame, f === lastFrame, size == lastSize, placement == lastPlacement { return nil }   // nothing new
         if frame == nil && lastFrame == nil && size == lastSize { return nil }
         if layer.drawableSize != size { layer.drawableSize = size }
@@ -96,7 +103,7 @@ final class MonitorRenderer {
             if let a = placement, let tile = MonitorRenderer.tilePipeline {
                 // Same placement maths as Program; colour/key stay off so the tile is quick and readable.
                 var pa = a
-                pa.resetColor(); pa.keyOn = false; pa.alpha = 1
+                if !full { pa.resetColor(); pa.keyOn = false; pa.alpha = 1 }
                 lp = pa.layerParams(premultiplied: false)
                 lp.has = 1
                 lp.srcW = Float(tex.width); lp.srcH = Float(tex.height)
@@ -312,6 +319,8 @@ struct MonitorView: NSViewRepresentable {
     var onActiveChange: ((Bool) -> Void)? = nil
     /// Input tiles: show the input placed as in Program (fill/stretch, zoom, crop).
     var placement: (() -> VideoAdjust?)? = nil
+    /// Show colour correction, key and opacity as well (Input Settings preview).
+    var fullLook = false
     let source: () -> CVPixelBuffer?
 
     func makeNSView(context: Context) -> MonitorLayerView {
@@ -319,6 +328,7 @@ struct MonitorView: NSViewRepresentable {
         let r = MonitorRenderer(layer: v.metalLayer, fps: fps, source: source)
         r.countDraws = countDraws
         r.placement = placement
+        r.fullLook = fullLook
         v.renderer = r
         v.visibilityChange = onActiveChange
         return v
@@ -327,6 +337,7 @@ struct MonitorView: NSViewRepresentable {
     func updateNSView(_ v: MonitorLayerView, context: Context) {
         v.renderer?.source = source
         v.renderer?.placement = placement
+        v.renderer?.fullLook = fullLook
         v.renderer?.fps = fps
         v.visibilityChange = onActiveChange
     }
