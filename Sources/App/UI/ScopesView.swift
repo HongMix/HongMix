@@ -236,7 +236,14 @@ struct ScopesView: View {
     @EnvironmentObject var engine: SwitcherEngine
     @Environment(\.openWindow) private var openWindow
     @StateObject private var scopes = ScopeAnalyzer()
-    @AppStorage("scopesLayout") private var layout = "quad"
+    /// An extra window (the "+"): its own layout, so two cameras can show different scopes
+    var extra = false
+    @AppStorage("scopesLayout") private var savedLayout = "quad"
+    @ViewState private var ownLayout = "quad"
+    private var layout: String {
+        get { extra ? ownLayout : savedLayout }
+        nonmutating set { if extra { ownLayout = newValue } else { savedLayout = newValue } }
+    }
 
     private var sourceName: String {
         switch scopes.source {
@@ -297,7 +304,7 @@ struct ScopesView: View {
                     }
                 }
             } else {
-                Picker("", selection: $layout) {
+                Picker("", selection: Binding(get: { layout }, set: { layout = $0 })) {
                     ForEach(Self.layouts, id: \.0) { tag, title in Text(title).tag(tag) }
                 }
                 .pickerStyle(.segmented)
@@ -307,7 +314,7 @@ struct ScopesView: View {
 
             HStack(spacing: 6) {
                 Image(systemName: "sun.max").font(.system(size: 11)).foregroundColor(.secondary)
-                ReplaySlider(value: $scopes.gain, range: 0.3...6).frame(width: 100)
+                ReplaySlider(value: $scopes.gain, range: 0.3...6, tint: .accentColor).frame(width: 100)
             }
             .help(L("밝기"))
             Spacer(minLength: 8)

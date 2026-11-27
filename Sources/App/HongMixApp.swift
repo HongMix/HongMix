@@ -95,7 +95,7 @@ struct HongMixApp: App {
         .defaultSize(width: 960, height: 560)
         // extra Scopes windows (the "+" in a Scopes window), each with its own source — several cameras at once
         WindowGroup("Scopes", id: "scopes-extra") {
-            ScopesView()
+            ScopesView(extra: true)
                 .id(language + skin + look)
                 .environmentObject(engine)
                 .preferredColorScheme(.dark)
