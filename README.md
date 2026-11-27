@@ -10,25 +10,25 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.4.0</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.4.1</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.4.0
-- Instant Replay with AI slow motion no longer disturbs Program; HongMix automatically falls back to GPU blending when Program is busy.
-- AI slow motion is off by default for new projects, with an explanation in Replay settings.
-- Replay, Scopes, Talent Cue, MultiView, Audio Mixer and display-output windows open faster.
-- The Replay window performs fewer disk checks and redraws; the API adds `OpenWindow` and `CloseWindow`.
-- Build 198 passed translation, core, MultiView, DMG and signing checks. See [English notes](docs/RELEASE-NOTES-2.4.0.md) or [한국어](docs/RELEASE-NOTES-2.4.0.ko.md).
+### Latest update · 2.4.1
+- Fixes Preview/Program monitor stutter during AUTO transitions introduced in 2.4.0. Program output itself was not dropping frames.
+- Moving the T-bar or starting AUTO no longer redraws the whole interface.
+- Window prewarming was removed to keep transitions smooth; opening a secondary window for the first time can take 0.1–0.4 seconds.
+- Includes the 2.4.0 Replay protection: AI slow motion falls back to GPU blending whenever Program is busy.
+- Build 202 passed translation, core, MultiView, DMG and signing checks. See [English notes](docs/RELEASE-NOTES-2.4.1.md) or [한국어](docs/RELEASE-NOTES-2.4.1.ko.md).
 
 Thanks to [@otiumvisuals](https://github.com/otiumvisuals), who contributed MultiView, Talent Cue and the hardware look in 2.3.7, plus MultiView labels, Scopes windows and hardware-look refinements in 2.3.10. Render-thread improvement ideas came from Hawk_Super on Reddit.
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.4.0/en-replay-settings.png" alt="HongMix 2.4.0 Replay settings" width="100%"><br><sub>AI slow motion is optional and protected from Program load</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.4.0/en-replay-settings.png" alt="HongMix Replay settings" width="100%"><br><sub>AI slow motion is optional and protected from Program load</sub></td>
     <td width="50%" align="center"><img src="docs/screenshots/2.3.10/en-main.png" alt="HongMix main switcher" width="100%"><br><sub>Live production switcher</sub></td>
   </tr>
 </table>

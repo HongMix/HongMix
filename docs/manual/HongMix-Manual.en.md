@@ -1,4 +1,4 @@
-# HongMix 2.4.0 User Manual
+# HongMix 2.4.1 User Manual
 
 HongMix is a live production switcher for Apple Silicon Macs. Its layout, keyboard shortcuts and remote API follow vMix, so vMix operators, Bitfocus Companion and Stream Deck setups feel at home.
 
@@ -31,13 +31,13 @@ Everything HongMix needs (FFmpeg, SRT, the NDI runtime and the Chromium web engi
 
 ### Option A: PKG installer (recommended)
 
-1. Double-click **HongMix-2.4.0.pkg**.
+1. Double-click **HongMix-2.4.1.pkg**.
 2. If macOS says the file is from an **unidentified developer**, right-click the file and choose **Open**, then **Open** again. (Alternatively: **System Settings › Privacy & Security**, then **Open Anyway**.)
 3. Click **Continue**, then **Install**. HongMix is installed in **Applications**.
 
 ### Option B: DMG
 
-1. Open **HongMix-2.4.0.dmg**.
+1. Open **HongMix-2.4.1.dmg**.
 2. Drag **HongMix** into the **Applications** folder.
 
 ### First launch

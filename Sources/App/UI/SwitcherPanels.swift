@@ -77,6 +77,7 @@ private struct OverlayChannelButton: View {
 // Overlay 1–8, Stinger, FTB. HongMix orange marks the transition AUTO and the T-bar will use.
 
 struct TransitionColumn: View {
+    @ObservedObject private var transitionUI = TransitionUI.shared   // AUTO lamp + T-bar (not via engine refresh)
     @EnvironmentObject var engine: SwitcherEngine
 
     var body: some View {

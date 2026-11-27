@@ -181,6 +181,13 @@ final class EngineStats: ObservableObject {
     let history = HealthHistory()
 }
 
+/// Transition state shown by the transition panel (AUTO lamp, T-bar). Main thread.
+final class TransitionUI: ObservableObject {
+    static let shared = TransitionUI()
+    @Published var transitioning = false
+    @Published var tbar: Double = 0
+}
+
 final class SwitcherEngine: ObservableObject {
     static let overlayCount = 8
 
@@ -192,7 +199,12 @@ final class SwitcherEngine: ObservableObject {
     @Published private(set) var overlayIDs: [UUID?] = Array(repeating: nil, count: overlayCount)
     @Published private(set) var overlayOn: [Bool] = Array(repeating: false, count: overlayCount)
     @Published private(set) var ftbOn = false
-    @Published private(set) var transitioning = false
+    /// AUTO/T-bar state lives in `TransitionUI` (observed by the transition panel only): a transition start
+    /// or a T-bar drag used to rebuild every view that observes the engine (~0.3 s, monitors froze).
+    private(set) var transitioning: Bool {
+        get { TransitionUI.shared.transitioning }
+        set { if TransitionUI.shared.transitioning != newValue { TransitionUI.shared.transitioning = newValue } }
+    }
     @Published var transitionSlots: [TransitionSlot] = [
         TransitionSlot(type: .fade, durationMs: 500),
         TransitionSlot(type: .merge, durationMs: 1000),
@@ -258,7 +270,10 @@ final class SwitcherEngine: ObservableObject {
         get { MixerDock.shared.visible }
         set { MixerDock.shared.visible = newValue }
     }
-    @Published var tbar: Double = 0
+    var tbar: Double {
+        get { TransitionUI.shared.tbar }
+        set { if TransitionUI.shared.tbar != newValue { TransitionUI.shared.tbar = newValue } }
+    }
     @Published private(set) var format: VideoFormat
     /// Per-second statistics live in their own observable so updating them doesn't redraw the window.
     let stats = EngineStats()

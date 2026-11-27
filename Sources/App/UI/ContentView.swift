@@ -249,44 +249,16 @@ struct AudioMixerWindow: View {
     }
 }
 
-/// Main window, laid out like a classic software switcher:
-///   [ Preview | Transitions | Output ]
-///   [ Inputs ......................  | Audio mixer ]
-///   [ Add Input | Record | External | Stream | Fullscreen ......... status ]
 /// Whether the audio mixer is docked in the main window (see SwitcherEngine.mixerVisible).
 final class MixerDock: ObservableObject {
     static let shared = MixerDock()
     @Published var visible = true
 }
 
-/// SwiftUI builds a window's view tree the first time it opens: 0.1–0.3 s on the main thread, during which
-/// monitors and buttons freeze. Once built, it opens in ~15–60 ms. Shortly after launch, build the heavy
-/// secondary windows once, invisibly (alpha 0, closed right away), so the operator never pays the first open.
-/// (The Audio Mixer pops out of the main window: its dock state lives in MixerDock, so the main window only
-/// re-lays out once while it is built here, at launch.)
-enum WindowPrewarm {
-    private static var done = false
-    static func run(_ open: @escaping (String) -> Void) {
-        guard !done, !UserDefaults.standard.bool(forKey: "disableWindowPrewarm") else { return }
-        done = true
-        let windows = [("replay", "Replay"), ("talentcue", "Talent Cue"), ("multiview", "MultiView"), ("scopes", "Scopes"),
-                       ("audiomixer", "Audio Mixer")]
-        for (k, (id, title)) in windows.enumerated() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0 + Double(k) * 0.5) {
-                // already open (restored by macOS or opened by the operator): leave it alone
-                if NSApp.windows.contains(where: { $0.isVisible && $0.title == title }) { return }
-                open(id)
-                guard let w = NSApp.windows.first(where: { $0.title == title }) else { return }
-                w.alphaValue = 0                      // before the first display: never seen
-                DispatchQueue.main.async {
-                    w.performClose(nil)
-                    w.alphaValue = 1
-                }
-            }
-        }
-    }
-}
-
+/// Main window, laid out like a classic software switcher:
+///   [ Preview | Transitions | Output ]
+///   [ Inputs ......................  | Audio mixer ]
+///   [ Add Input | Record | External | Stream | Fullscreen ......... status ]
 struct ContentView: View {
     @ObservedObject private var mixerDock = MixerDock.shared
     @EnvironmentObject var engine: SwitcherEngine
@@ -382,7 +354,6 @@ struct ContentView: View {
         .onAppear {
             let open = openWindow
             ContentView.apiOpenWindow = { open(id: $0) }
-            WindowPrewarm.run { open(id: $0) }
         }
         .sheet(item: $sheet) { req in SheetRequestView(req: req, sheet: $sheet).environmentObject(engine) }
         .sheet(item: $outputsSheet) { kind in
