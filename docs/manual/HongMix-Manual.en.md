@@ -1,4 +1,4 @@
-# HongMix 2.3.8 User Manual
+# HongMix 2.3.10 User Manual
 
 HongMix is a live production switcher for Apple Silicon Macs. Its layout, keyboard shortcuts and remote API follow vMix, so vMix operators, Bitfocus Companion and Stream Deck setups feel at home.
 
@@ -31,13 +31,13 @@ Everything HongMix needs (FFmpeg, SRT, the NDI runtime and the Chromium web engi
 
 ### Option A: PKG installer (recommended)
 
-1. Double-click **HongMix-2.3.8.pkg**.
+1. Double-click **HongMix-2.3.10.pkg**.
 2. If macOS says the file is from an **unidentified developer**, right-click the file and choose **Open**, then **Open** again. (Alternatively: **System Settings › Privacy & Security**, then **Open Anyway**.)
 3. Click **Continue**, then **Install**. HongMix is installed in **Applications**.
 
 ### Option B: DMG
 
-1. Open **HongMix-2.3.8.dmg**.
+1. Open **HongMix-2.3.10.dmg**.
 2. Drag **HongMix** into the **Applications** folder.
 
 ### First launch
@@ -437,7 +437,7 @@ To close a full-screen output: **Esc**, double-click or right-click. If a displa
 
 1. Open **Tools › All Outputs…**, add a MultiView and open its editor.
 2. Choose one of seven layouts: 2+8, 8+2, large left, large right, 2×2, 3×3 or 4×4.
-3. Choose what each cell shows and whether names and tally borders appear.
+3. Choose what each cell shows, give it an optional name, and show labels **On picture** or **Below picture**. Automatic labels can use **With input name** (default) or only **PREVIEW · PROGRAM**.
 4. Route a MultiView to Output 2–4, an NDI/DeckLink output, a display monitor or an output window. Under heavy load, MultiView lowers its frame rate before Program does.
 
 ### Talent Cue (stage timer)
@@ -460,7 +460,7 @@ For a moderator, copy the protected phone link shown in Talent Cue. It has its o
 - **Tools › Scheduler…**: run any function (start streaming, record, cut …) at set times or days.
 - **Tools › Rundown / Cue Sheet**: the show's running order with actions per item; **NEXT** runs the next item.
 - **Tools › Save Snapshot**: saves the current Program as PNG.
-- **Scopes** (bottom bar): waveform, RGB parade, vectorscope and histogram in their own window.
+- **Scopes** (bottom bar): waveform, RGB parade, vectorscope and histogram. Use **+** to open another Scopes window, for example one per camera.
 
 ---
 
@@ -666,6 +666,7 @@ Open **Settings** with **⌘,**. Tabs: **Video**, **Network**, **General**, **Ab
 | **언어 / Language** | 한국어 or English. The window switches right away; streaming and recording keep running. |
 | **Appearance › Skin** | **Black & White** (default) or **Default** (classic HongMix look). |
 | **Appearance › Hardware look** | Console-style mixer strips and raised controls. Turn it off for the previous flat look. |
+| **Appearance › Brushed-metal background** | Adds a subtle metal texture behind the hardware look. Off by default. |
 | **Playback › File frame-rate conform (60 ↔ 59.94)** | Plays 60.00 fps files 0.1 % slower in a 59.94 program, removing a frame drop about every 17 s. Audio is conformed too. |
 | **Playback › Input thumbnail smoothness** | 6, 15 or 30 fps for the small tile pictures only. Program, Preview, streaming and recording always run at the full rate. |
 | **Playback › Loop new video inputs** | Default Loop state for newly added videos. |

@@ -10,29 +10,30 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.8</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.10</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.3.8
-- **Recommended for everyone on 2.3.7:** fixes Program frames dropping on cuts, transitions and at launch when the hardware look is enabled.
-- Raised-key shadows now use lightweight offset fills instead of extra GPU shadow passes, while keeping the same appearance.
-- In the operator's 4K 59.94 project, launch, 20 fades and 10 cuts each went from measurable drops in 2.3.7 to zero in two repeated 2.3.8 tests.
-- Core, translation, checksum, DMG and deep-signing checks passed for build 173. See [English notes](docs/RELEASE-NOTES-2.3.8.md) or [한국어](docs/RELEASE-NOTES-2.3.8.ko.md).
+### Latest update · 2.3.10
+- Smooth Browser-input video while the main window is visible, and no brief speaker click while HongMix loads.
+- Lighter MultiCorder ISO rendering and GPU-cached MultiView labels.
+- Per-cell MultiView names, labels on or below the picture, and selectable automatic-name styles.
+- Multiple Scopes windows, hardware-look refinements, optional brushed-metal background and smaller operator touches.
+- Build 187 passed translation, core, MultiView, DMG and signing checks. See [English notes](docs/RELEASE-NOTES-2.3.10.md) or [한국어](docs/RELEASE-NOTES-2.3.10.ko.md).
 
-Thanks to [@otiumvisuals](https://github.com/otiumvisuals), who contributed MultiView, Talent Cue, the hardware look and more in 2.3.7.
+Thanks to [@otiumvisuals](https://github.com/otiumvisuals), who contributed MultiView, Talent Cue and the hardware look in 2.3.7, plus MultiView labels, Scopes windows and hardware-look refinements in 2.3.10. Render-thread improvement ideas came from Hawk_Super on Reddit.
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.7/en-main.png" alt="HongMix 2.3.7 main switcher with hardware look" width="100%"><br><sub>Hardware look · system load in the top bar</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.7/en-multiview.png" alt="HongMix 2.3.7 MultiView editor" width="100%"><br><sub>Multiple MultiViews · seven layouts</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/en-main.png" alt="HongMix 2.3.10 main switcher" width="100%"><br><sub>Refined hardware look</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/en-multiview.png" alt="HongMix 2.3.10 MultiView editor" width="100%"><br><sub>Per-cell names and label position</sub></td>
   </tr>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.7/en-talentcue.png" alt="HongMix 2.3.7 Talent Cue controls" width="100%"><br><sub>Talent Cue timer and presenter messages</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.7/en-mixer.png" alt="HongMix 2.3.7 separate Audio Mixer window" width="100%"><br><sub>Audio Mixer in its own window</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/en-settings.png" alt="HongMix 2.3.10 appearance settings" width="100%"><br><sub>Optional brushed-metal background</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/en-talentcue.png" alt="HongMix 2.3.10 Talent Cue controls" width="100%"><br><sub>Hardware-style Talent Cue controls</sub></td>
   </tr>
 </table>
 
