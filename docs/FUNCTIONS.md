@@ -120,6 +120,7 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `VideoCueGo / VideoCueStop / VideoCuePanic` |  | Video Cue: 다음 큐 시작(크로스페이드) · 현재 큐 페이드아웃 · 즉시 검은 화면과 무음. |
 | `VideoCueNext / VideoCuePrevious / VideoCueSelect` | VideoCueSelect: Value=큐 번호(1부터) | 다음 GO로 시작할 큐를 고릅니다. |
 | `VideoCueAdd` | Value=파일 경로 | 큐 목록 끝에 영상·이미지·오디오 파일을 추가합니다. |
+| `VideoCueBackground` | Value=none \| color,#RRGGBB \| image,경로 \| video,경로 | 큐가 없을 때 보이는 배경을 정합니다 (영상은 소리 없이 반복). |
 | `StartCaptions / StopCaptions / StartStopCaptions` |  | 실시간 자막을 시작·중지합니다. |
 | `CaptionsTest / ClearCaptions` |  | 시험 문장을 보내거나 현재 자막을 지웁니다. |
 | `SetCaptionLayout` | Value=right\|bottom\|band | 자막 레이아웃 프리셋을 정합니다. |

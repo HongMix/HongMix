@@ -65,7 +65,7 @@ final class VideoCueEngine: ObservableObject {
     }
 
     /// API: VideoCueGo, VideoCueStop, VideoCuePanic, VideoCueNext, VideoCuePrevious, VideoCueSelect (Value = cue
-    /// number), VideoCueAdd (Value = file path). Returns an error text, nil = done.
+    /// number), VideoCueAdd (Value = file path), VideoCueBackground. Returns an error text, nil = done.
     func api(_ fn: String, _ value: String) -> String? {
         // the HTTP/TCP API calls in on its own queues; the machine and the decks belong to the main thread
         guard Thread.isMainThread else { return DispatchQueue.main.sync { api(fn, value) } }
@@ -78,6 +78,17 @@ final class VideoCueEngine: ObservableObject {
         case "videocueselect":
             guard let n = Int(value), list.cues.indices.contains(n - 1) else { return "Value=1…\(list.cues.count)" }
             select(n - 1)
+        case "videocuebackground":     // Value = none | color,#RRGGBB | image,path | video,path
+            let parts = value.split(separator: ",", maxSplits: 1).map(String.init)
+            guard let k = parts.first?.lowercased() else { return "Value=none|color,#RRGGBB|image,path|video,path" }
+            if k == "none" { list.background = nil; return nil }
+            guard parts.count == 2, let kind = CueBackground.Kind(rawValue: k) else { return "Value=none|color,#RRGGBB|image,path|video,path" }
+            var b = CueBackground(kind: kind)
+            if kind == .color { b.color = parts[1] } else {
+                guard FileManager.default.fileExists(atPath: parts[1]) else { return "File not found" }
+                b.path = parts[1]
+            }
+            list.background = b
         case "videocueadd":
             guard !value.isEmpty, FileManager.default.fileExists(atPath: value) else { return "Value=file path" }
             add(paths: [value])
