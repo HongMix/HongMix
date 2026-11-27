@@ -502,13 +502,33 @@ final class MetalMixer {
         return out
     }
 
-    /// Renders tiles into a new frame (black background). Labels are drawn on the CPU afterwards.
-    func renderTiles(_ tiles: [TileSpec]) -> CVPixelBuffer? {
+    /// Renders tiles into a new frame (black background), labels included.
+    func renderTiles(_ tiles: [TileSpec]) -> CVPixelBuffer? { renderTiles(batch: [tiles]).first ?? nil }
+
+    /// Several tile frames in one command buffer: the render thread waits for the GPU once per batch
+    /// instead of once per frame (MultiCorder ISO recordings).
+    func renderTiles(batch: [[TileSpec]]) -> [CVPixelBuffer?] {
+        guard !batch.isEmpty, let cmd = queue.makeCommandBuffer() else { return batch.map { _ in nil } }
+        var keep: [CVMetalTexture] = []
+        var cpuLabels: [(CVPixelBuffer, [TileSpec])] = []
+        let outs = batch.map { tiles -> CVPixelBuffer? in
+            guard let out = encodeTiles(tiles, cmd, &keep) else { return nil }
+            let labeled = tiles.filter { $0.label != nil }
+            if !labeled.isEmpty, !encodeLabels(labeled, into: out, cmd) { cpuLabels.append((out, labeled)) }
+            return out
+        }
+        cmd.commit()
+        cmd.waitUntilCompleted()
+        keep.removeAll()
+        for (out, labeled) in cpuLabels { drawLabels(labeled, into: out) }
+        return outs
+    }
+
+    private func encodeTiles(_ tiles: [TileSpec], _ cmd: MTLCommandBuffer, _ keep: inout [CVMetalTexture]) -> CVPixelBuffer? {
         guard let out = PixelBufferFactory.makeBuffer(pool: pool), let outTex = outputTexture(out),
-              let cmd = queue.makeCommandBuffer(), let enc = cmd.makeComputeCommandEncoder() else {
+              let enc = cmd.makeComputeCommandEncoder() else {
             return nil
         }
-        var keep: [CVMetalTexture] = []
         enc.setComputePipelineState(tilePipeline)
         // full-frame black first
         var all = [TileSpec(buffer: nil, params: LayerParams(),
@@ -540,14 +560,109 @@ final class MetalMixer {
                                 threadsPerThreadgroup: threadgroup(tilePipeline))
         }
         enc.endEncoding()
-        cmd.commit()
-        cmd.waitUntilCompleted()
-        keep.removeAll()
-        let labeled = tiles.filter { $0.label != nil }
-        if !labeled.isEmpty { drawLabels(labeled, into: out) }
         return out
     }
 
+    // MARK: MultiView labels
+
+    /// A label drawn once (bar + text, premultiplied BGRA) and its place in the frame (top-left origin).
+    private struct LabelImage {
+        let texture: MTLTexture
+        let x: Int, y: Int
+    }
+    /// Labels rarely change: each is drawn on the CPU once and then blended in on the GPU, in the same
+    /// command buffer as the tiles (before, every MultiView frame locked its IOSurface and redrew every label).
+    private var labelCache: [String: LabelImage] = [:]
+    private lazy var labelPipeline: MTLRenderPipelineState? = {
+        let rd = MTLRenderPipelineDescriptor()
+        rd.vertexFunction = ctx.library.makeFunction(name: "displayVertex")
+        guard rd.vertexFunction != nil, let f = ctx.library.makeFunction(name: "labelFragment") else { return nil }
+        rd.fragmentFunction = f
+        let ca = rd.colorAttachments[0]!
+        ca.pixelFormat = .bgra8Unorm
+        ca.isBlendingEnabled = true
+        ca.rgbBlendOperation = .add; ca.alphaBlendOperation = .add
+        ca.sourceRGBBlendFactor = .one; ca.sourceAlphaBlendFactor = .one
+        ca.destinationRGBBlendFactor = .oneMinusSourceAlpha; ca.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        return try? ctx.device.makeRenderPipelineState(descriptor: rd)
+    }()
+
+    /// Blends the tiles' labels over `out` (encoded after the tiles). False: no GPU path, draw on the CPU.
+    private func encodeLabels(_ tiles: [TileSpec], into out: CVPixelBuffer, _ cmd: MTLCommandBuffer) -> Bool {
+        guard let pso = labelPipeline, let outTex = outputTexture(out) else { return false }
+        let images = tiles.compactMap { t in t.label.flatMap { labelImage($0, rect: t.rect) } }
+        guard !images.isEmpty else { return true }
+        let rp = MTLRenderPassDescriptor()
+        rp.colorAttachments[0].texture = outTex
+        rp.colorAttachments[0].loadAction = .load
+        rp.colorAttachments[0].storeAction = .store
+        guard let enc = cmd.makeRenderCommandEncoder(descriptor: rp) else { return false }
+        enc.setRenderPipelineState(pso)
+        for im in images {
+            let w = im.texture.width, h = im.texture.height
+            enc.setViewport(MTLViewport(originX: Double(im.x), originY: Double(im.y), width: Double(w), height: Double(h),
+                                        znear: 0, zfar: 1))
+            enc.setScissorRect(MTLScissorRect(x: im.x, y: im.y, width: w, height: h))
+            var origin = SIMD2<UInt32>(UInt32(im.x), UInt32(im.y))
+            enc.setFragmentTexture(im.texture, index: 0)
+            enc.setFragmentBytes(&origin, length: MemoryLayout<SIMD2<UInt32>>.stride, index: 0)
+            enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        }
+        enc.endEncoding()
+        return true
+    }
+
+    /// Same pixels as `drawLabels`: the bitmap sits on the frame's pixel grid, so the bar's (fractional)
+    /// edges and the text land exactly where the CPU path drew them.
+    private func labelImage(_ text: String, rect r: CGRect) -> LabelImage? {
+        let W = format.width, H = format.height
+        let key = "\(text)\u{1}\(r.minX),\(r.minY),\(r.width),\(r.height)"
+        if let im = labelCache[key] { return im }
+        let fontSize = CGFloat(H) / 45
+        let line = labelLine(text, fontSize: fontSize)
+        let bounds = CTLineGetBoundsWithOptions(line, [])
+        let glyphs = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+        let barH = fontSize * 1.5
+        let barW = min(r.width, bounds.width + fontSize)
+        let textX = fontSize * 0.5, textY = fontSize * 0.4   // from the bar's bottom-left
+        // bitmap area in frame pixels (top-left origin): the bar, plus any glyph that reaches past it
+        let x0 = max(0, Int(r.minX.rounded(.down)))
+        let right = r.minX + max(barW, textX + max(bounds.width, glyphs.maxX) + 2)
+        let top = r.maxY - max(barH, textY + max(bounds.maxY, glyphs.maxY) + 2)
+        let y0 = max(0, Int(top.rounded(.down)))
+        let x1 = min(W, Int(right.rounded(.up))), y1 = min(H, Int(r.maxY.rounded(.up)))
+        guard x1 > x0, y1 > y0 else { return nil }
+        let bw = x1 - x0, bh = y1 - y0
+        let info = CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        guard let cg = CGContext(data: nil, width: bw, height: bh, bitsPerComponent: 8, bytesPerRow: bw * 4,
+                                 space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: info) else { return nil }
+        // frame rows are flipped in CG: the bar's bottom edge (frame y = r.maxY) sits at bitmap y = y1 - r.maxY
+        let barRect = CGRect(x: r.minX - CGFloat(x0), y: CGFloat(y1) - r.maxY, width: barW, height: barH)
+        cg.setFillColor(CGColor(gray: 0, alpha: 0.65))
+        cg.fill(barRect)
+        cg.textPosition = CGPoint(x: barRect.minX + textX, y: barRect.minY + textY)
+        CTLineDraw(line, cg)
+        guard let data = cg.data else { return nil }
+        let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: bw, height: bh, mipmapped: false)
+        d.usage = [.shaderRead]
+        guard let tex = ctx.device.makeTexture(descriptor: d) else { return nil }
+        tex.replace(region: MTLRegionMake2D(0, 0, bw, bh), mipmapLevel: 0, withBytes: data, bytesPerRow: bw * 4)
+        if labelCache.count >= 256 { labelCache.removeAll() }
+        let im = LabelImage(texture: tex, x: x0, y: y0)
+        labelCache[key] = im
+        return im
+    }
+
+    private func labelLine(_ text: String, fontSize: CGFloat) -> CTLine {
+        let font = CTFontCreateWithName("Helvetica-Bold" as CFString, fontSize, nil)
+        let attrs: [NSAttributedString.Key: Any] = [
+            NSAttributedString.Key(kCTFontAttributeName as String): font,
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: 1, alpha: 1),
+        ]
+        return CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
+    }
+
+    /// CPU fallback (only if the label shader is missing): draws the labels into the finished frame.
     private func drawLabels(_ tiles: [TileSpec], into pb: CVPixelBuffer) {
         CVPixelBufferLockBaseAddress(pb, [])
         defer { CVPixelBufferUnlockBaseAddress(pb, []) }
@@ -558,14 +673,9 @@ final class MetalMixer {
                                  bytesPerRow: CVPixelBufferGetBytesPerRow(pb),
                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: info) else { return }
         let fontSize = CGFloat(h) / 45
-        let font = CTFontCreateWithName("Helvetica-Bold" as CFString, fontSize, nil)
         for tile in tiles {
             guard let text = tile.label else { continue }
-            let attrs: [NSAttributedString.Key: Any] = [
-                NSAttributedString.Key(kCTFontAttributeName as String): font,
-                NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: 1, alpha: 1),
-            ]
-            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
+            let line = labelLine(text, fontSize: fontSize)
             let bounds = CTLineGetBoundsWithOptions(line, [])
             let r = tile.rect
             // CG origin is bottom-left

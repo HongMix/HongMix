@@ -330,6 +330,16 @@ vertex VOut displayVertex(uint vid [[vertex_id]]) {
     return o;
 }
 
+// MultiView label: a cached label image (premultiplied BGRA, drawn once on the CPU) blended over the
+// tile frame. The viewport is the image's rect; `origin` is its top-left pixel in the frame.
+fragment float4 labelFragment(VOut in [[stage_in]],
+                              texture2d<float> lab [[texture(0)]],
+                              constant uint2 &origin [[buffer(0)]]) {
+    uint2 p = uint2(in.pos.xy) - origin;
+    if (p.x >= lab.get_width() || p.y >= lab.get_height()) discard_fragment();
+    return lab.read(p);
+}
+
 // fit = (srcW, srcH, dstW, dstH)
 fragment float4 displayFragment(VOut in [[stage_in]],
                                 texture2d<float> tex [[texture(0)]],

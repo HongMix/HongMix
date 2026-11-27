@@ -138,10 +138,27 @@ public:
         cl->AppendSwitch("disable-renderer-backgrounding");
         cl->AppendSwitch("disable-backgrounding-occluded-windows");
         cl->AppendSwitch("use-mock-keychain");          // never prompt for the login keychain
+        // Page audio reaches the mixer through CefAudioHandler only. Without this, Chromium's audio
+        // service still opened the real speaker device for ~0.1 s while HongMix was loading, and many
+        // interfaces / speakers click ("pop") when an output stream opens.
+        cl->AppendSwitch("disable-audio-output");
     }
+    // Chromium asks for its next slice of work, either right away or after `delay_ms`. Immediate work runs
+    // on the main run loop's next pass, not through a dispatch timer. Dispatch timers are coalesced with
+    // other timers, and with the main window on screen Chromium's frame work then ran late: a Browser input
+    // playing YouTube delivered 25 of 30 frames per second. Delayed work uses a timer with no tolerance.
     void OnScheduleMessagePumpWork(int64_t delay_ms) override {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay_ms > 0 ? delay_ms : 0) * NSEC_PER_MSEC),
-                       dispatch_get_main_queue(), ^{ doPump(); });
+        CFRunLoopRef main = CFRunLoopGetMain();
+        if (delay_ms <= 0) {
+            CFRunLoopPerformBlock(main, kCFRunLoopCommonModes, ^{ doPump(); });
+            CFRunLoopWakeUp(main);
+            return;
+        }
+        CFRunLoopTimerRef t = CFRunLoopTimerCreateWithHandler(kCFAllocatorDefault,
+            CFAbsoluteTimeGetCurrent() + delay_ms / 1000.0, 0, 0, 0, ^(CFRunLoopTimerRef) { doPump(); });
+        CFRunLoopTimerSetTolerance(t, 0);
+        CFRunLoopAddTimer(main, t, kCFRunLoopCommonModes);
+        CFRelease(t);
     }
     IMPLEMENT_REFCOUNTING(App);
 };

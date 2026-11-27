@@ -2109,10 +2109,18 @@ final class SwitcherEngine: ObservableObject {
             }
         }
 
-        // 6. MultiCorder ISO recordings
+        // 6. MultiCorder ISO recordings: all ISO frames in one GPU pass (one wait instead of one per ISO);
+        // an input already rendered full-frame this tick for an output or monitor is reused.
         if !isos.isEmpty, let mixer = mixer {
-            for (id, h) in isos {
-                guard let f = mixer.renderTiles([fullTile(find(id), rect: full)]) else { continue }
+            let list = Array(isos)
+            var isoFrames = list.map { sourceCache[.input($0.key)] }
+            let missing = isoFrames.indices.filter { isoFrames[$0] == nil }
+            if !missing.isEmpty {
+                let r = mixer.renderTiles(batch: missing.map { [fullTile(find(list[$0].key), rect: full)] })
+                for (k, i) in missing.enumerated() { isoFrames[i] = r[k] }
+            }
+            for (k, (id, h)) in list.enumerated() {
+                guard let f = isoFrames[k] else { continue }
                 mc_output_push_pixelbuffer(h, Unmanaged.passUnretained(f).toOpaque(), tick)
                 if st.isoMasterAudio {
                     mc_output_push_audio(h, UnsafePointer(audioMixer.bus(0)), Int32(n))
