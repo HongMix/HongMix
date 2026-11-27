@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 import QuickLookThumbnailing
+import AVFoundation
 
 /// Window "Video Cue": the cue list (drop files), GO / STOP / PANIC, what plays and what's next, and the
 /// selected cue's settings. Space = GO and Esc = STOP while this window is in front.
@@ -23,16 +24,23 @@ struct VideoCueWindow: View {
             .padding(14)
             .frame(width: 440)
             Divider()
-            VStack(spacing: 0) {
-                cueList
+            cueList
+            Divider()
+            Group {
                 if let i = editing, cue.list.cues.indices.contains(i) {
-                    Divider()
                     CueInspector(c: $cue.list.cues[i], playing: cue.deckCue.contains(i),
-                                 outputs: engine.inputs.filter { $0 is VideoCueInput }.map { ($0.id, $0.name) })
+                                 outputs: engine.inputs.filter { $0 is VideoCueInput }.map { ($0.id, $0.name) },
+                                 outSize: CGSize(width: engine.format.width, height: engine.format.height))
+                        .id(cue.list.cues[i].id)          // a fresh preview per cue
+                } else {
+                    Text(L("큐를 클릭하면 여기서 미리 보고 설정합니다."))
+                        .foregroundColor(.secondary).multilineTextAlignment(.center).padding(30)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .frame(width: 400)
         }
-        .frame(minWidth: 960, minHeight: 600)
+        .frame(minWidth: 1300, minHeight: 640)
         .background(AppLook.hardware ? Theme.window : Color(white: 0.08))
     }
 
@@ -224,8 +232,49 @@ private struct CueInspector: View {
     @Binding var c: VideoCue
     let playing: Bool
     let outputs: [(id: UUID, name: String)]
+    let outSize: CGSize
+    @StateObject private var frames = CueFrames()
+    @ViewState private var scrub = 0.0
 
     var body: some View {
+        VStack(spacing: 0) {
+            CuePreview(image: frames.image, cue: c, outSize: outSize)
+                .padding([.horizontal, .top], 12)
+            if c.kind != .still && frames.duration > 0 { timing.padding(.horizontal, 12).padding(.top, 8) }
+            form
+        }
+        .onAppear { frames.open(c); scrub = c.inPoint; frames.show(at: c.inPoint) }
+    }
+
+    /// In / out on the file's timeline: drag to look, then set the start or the end there.
+    private var timing: some View {
+        VStack(spacing: 6) {
+            GeometryReader { g in
+                let d = max(frames.duration, 0.001), w = g.size.width
+                let end = c.outPoint > 0 ? c.outPoint : d
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.12)).frame(height: 4)
+                    Capsule().fill(Theme.preview.opacity(0.8))
+                        .frame(width: max(2, w * (end - c.inPoint) / d), height: 4)
+                        .offset(x: w * c.inPoint / d)
+                }
+                .frame(maxHeight: .infinity)
+            }
+            .frame(height: 8)
+            Slider(value: Binding(get: { scrub }, set: { scrub = $0; frames.show(at: $0) }), in: 0...max(frames.duration, 0.001))
+                .controlSize(.small)
+            HStack {
+                Button(L("시작 지점을 여기로")) { c.inPoint = scrub; if c.outPoint > 0 && c.outPoint <= scrub { c.outPoint = 0 } }
+                Spacer()
+                Text(VideoCueWindow.clock(scrub)).font(.system(size: 12, weight: .semibold).monospacedDigit())
+                Spacer()
+                Button(L("끝 지점을 여기로")) { if scrub > c.inPoint { c.outPoint = scrub } }
+            }
+            .controlSize(.small)
+        }
+    }
+
+    private var form: some View {
         Form {
             TextField(L("이름"), text: $c.name, prompt: Text(c.displayName))
             if c.kind == .still {
@@ -240,7 +289,7 @@ private struct CueInspector: View {
                 ForEach(VideoCue.EndAction.allCases, id: \.self) { Text($0.label).tag($0) }
             }
             if playing {
-                Text(L("재생 중인 큐의 변경은 다음 GO부터 적용됩니다.")).font(.caption).foregroundColor(.secondary)
+                Text(L("재생 중인 큐의 시작·끝·페이드 변경은 다음 GO부터 적용됩니다.")).font(.caption).foregroundColor(.secondary)
             }
             if c.kind != .audio {
                 Section(L("화면")) {
@@ -271,7 +320,6 @@ private struct CueInspector: View {
             }
         }
         .formStyle(.grouped)
-        .frame(height: 360)
     }
 
     private func percent(_ k: WritableKeyPath<VideoCue, Double>) -> Binding<Double> {
@@ -374,5 +422,110 @@ private struct CueThumb: View {
         }
         .frame(width: 64, height: 36)
         .clipShape(RoundedRectangle(cornerRadius: 2))
+    }
+}
+
+/// A frame of the selected cue's file for the sidebar preview: stills as they are, video at any moment
+/// (AVFoundation; files only FFmpeg can read get their Quick Look thumbnail and no timeline).
+@MainActor final class CueFrames: ObservableObject {
+    @Published private(set) var image: CGImage?
+    @Published private(set) var duration = 0.0
+    private var generator: AVAssetImageGenerator?
+    private var path = ""
+
+    func open(_ cue: VideoCue) {
+        path = cue.path
+        let url = URL(fileURLWithPath: cue.path)
+        if cue.kind == .still {
+            if let src = CGImageSourceCreateWithURL(url as CFURL, nil) {
+                image = CGImageSourceCreateThumbnailAtIndex(src, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                                                      kCGImageSourceThumbnailMaxPixelSize: 1280,
+                                                                      kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary)
+            }
+            return
+        }
+        let asset = AVURLAsset(url: url)
+        let gen = AVAssetImageGenerator(asset: asset)
+        gen.appliesPreferredTrackTransform = true
+        gen.maximumSize = CGSize(width: 1280, height: 720)
+        gen.requestedTimeToleranceBefore = CMTime(seconds: 0.2, preferredTimescale: 600)
+        gen.requestedTimeToleranceAfter = CMTime(seconds: 0.2, preferredTimescale: 600)
+        generator = gen
+        Task { [weak self] in
+            let d = (try? await asset.load(.duration)).map(CMTimeGetSeconds) ?? 0
+            guard let self, self.path == cue.path else { return }
+            if d.isFinite && d > 0 { self.duration = d } else { self.fallback() }
+        }
+    }
+
+    /// The frame at `seconds` (the newest request wins).
+    func show(at seconds: Double) {
+        guard let gen = generator else { return }
+        gen.cancelAllCGImageGeneration()
+        gen.generateCGImageAsynchronously(for: CMTime(seconds: seconds, preferredTimescale: 600)) { [weak self] img, _, _ in
+            guard let img else { return }
+            DispatchQueue.main.async { self?.image = img }
+        }
+    }
+
+    private func fallback() {
+        generator = nil
+        let req = QLThumbnailGenerator.Request(fileAt: URL(fileURLWithPath: path), size: CGSize(width: 640, height: 360),
+                                               scale: 1, representationTypes: .thumbnail)
+        QLThumbnailGenerator.shared.generateBestRepresentation(for: req) { [weak self] rep, _ in
+            guard let cg = rep?.cgImage else { return }
+            DispatchQueue.main.async { self?.image = cg }
+        }
+    }
+}
+
+/// The cue as it will look on the output: the output's shape, the picture placed by the cue's fit / zoom / pan /
+/// crop (the same geometry as `sampleLayer` in Mixer.metal and PositionEditor).
+private struct CuePreview: View {
+    let image: CGImage?
+    let cue: VideoCue
+    let outSize: CGSize
+
+    var body: some View {
+        GeometryReader { g in
+            let W = g.size.width, H = g.size.height
+            ZStack(alignment: .topLeading) {
+                Color.black
+                if let image {
+                    let full = rect(for: image, crop: false), shown = rect(for: image, crop: true)
+                    Image(decorative: image, scale: 1).resizable()
+                        .frame(width: full.width * W, height: full.height * H)
+                        .offset(x: full.minX * W, y: full.minY * H)
+                        .mask(alignment: .topLeading) {
+                            Rectangle().frame(width: shown.width * W, height: shown.height * H)
+                                .offset(x: (shown.minX - full.minX) * W, y: (shown.minY - full.minY) * H)
+                        }
+                } else if cue.kind == .audio {
+                    Image(systemName: "music.note").font(.system(size: 34)).foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .clipped()
+        }
+        .aspectRatio(outSize.width / max(1, outSize.height), contentMode: .fit)
+        .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.white.opacity(0.2)))
+    }
+
+    /// Normalised rectangle (y down) of the picture, before (`crop: false`) or after cropping.
+    private func rect(for img: CGImage, crop: Bool) -> CGRect {
+        let sa = CGFloat(img.width) / CGFloat(max(1, img.height)), da = outSize.width / max(1, outSize.height)
+        var w: CGFloat, h: CGFloat
+        switch cue.fit {
+        case .stretch: w = 1; h = 1
+        case .fill: w = sa > da ? sa / da : 1; h = sa > da ? 1 : da / sa
+        case .fit: w = sa > da ? 1 : sa / da; h = sa > da ? da / sa : 1
+        }
+        var x = (1 - w) / 2, y = (1 - h) / 2
+        if crop {
+            x += cue.cropL * w; y += cue.cropT * h
+            w *= max(0, 1 - cue.cropL - cue.cropR); h *= max(0, 1 - cue.cropT - cue.cropB)
+        }
+        let z = cue.zoom
+        return CGRect(x: (x - 0.5) * z + 0.5 + cue.panX / 2, y: (y - 0.5) * z + 0.5 - cue.panY / 2, width: w * z, height: h * z)
     }
 }
