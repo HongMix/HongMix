@@ -187,7 +187,9 @@ final class SwitcherEngine: ObservableObject {
     // Published UI state (main thread only)
     @Published private(set) var inputs: [InputSource] = []
     @Published private(set) var outputs: [OutputChannel] = []
-    @Published private(set) var programID: UUID?
+    @Published private(set) var programID: UUID? { didSet { if oldValue != programID { programBefore = oldValue } } }
+    /// What was on Program before (a MultiLayout going on air animates out of it).
+    private var programBefore: UUID?
     @Published private(set) var previewID: UUID?
     @Published private(set) var overlayIDs: [UUID?] = Array(repeating: nil, count: overlayCount)
     @Published private(set) var overlayOn: [Bool] = Array(repeating: false, count: overlayCount)
@@ -845,6 +847,8 @@ final class SwitcherEngine: ObservableObject {
         fireTriggers(i, overlay ? .overlayIn : .transitionIn)
         startTransportIfAuto(i)
         if let t = i as? TitleInput { t.setOffAir(false) }   // full rate before the first on-air frame
+        // [MultiLayout] on Program: animate in from what was there (a transition calls this before the swap)
+        if !overlay, let ml = i as? MultiLayoutInput { ml.enterAir(from: programID == i.id ? programBefore : programID) }
         i.didGoLive()
         // vMix behaviour: media placed in a layer follows its parent onto Program/overlay.
         for child in layerSources(of: i.id) { layerEnteredAir(child) }

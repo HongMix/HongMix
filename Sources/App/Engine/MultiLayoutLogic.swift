@@ -101,6 +101,7 @@ struct MultiLayoutSettings: Codable, Equatable {
     var inputFade = 0.3                      // a box changing input crossfades (0 = cut)
     var background = MLBackground()
     var foregroundPath = ""                  // a PNG with transparency drawn over the boxes (frame, logo, lower third)
+    var animateOnAir = true                  // going on air plays the live scene's way in (enter(from:))
 
     init() {}
 
@@ -112,7 +113,7 @@ struct MultiLayoutSettings: Codable, Equatable {
         return s
     }
 
-    private enum K: String, CodingKey { case boxes, scenes, scene, inputFade, background, foregroundPath }
+    private enum K: String, CodingKey { case boxes, scenes, scene, inputFade, background, foregroundPath, animateOnAir }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: K.self)
         var b = (try? c.decode([MLBox].self, forKey: .boxes)) ?? []
@@ -123,6 +124,7 @@ struct MultiLayoutSettings: Codable, Equatable {
         inputFade = (try? c.decode(Double.self, forKey: .inputFade)) ?? 0.3
         background = (try? c.decode(MLBackground.self, forKey: .background)) ?? MLBackground()
         foregroundPath = (try? c.decode(String.self, forKey: .foregroundPath)) ?? ""
+        animateOnAir = (try? c.decode(Bool.self, forKey: .animateOnAir)) ?? true
     }
 }
 
@@ -187,6 +189,19 @@ struct MLPlayer {
         let now = boxes(at: t)
         settings.boxes[k].inputID = id
         noteInputChange(box: k, was: now[k], at: t)
+    }
+
+    /// The MultiLayout goes on air after `input` (Cut / transition): the box showing that input starts full
+    /// screen and moves to its place, the other boxes come in the live scene's way.
+    mutating func enter(from input: UUID?, at t: Double) {
+        guard let to else { return }
+        from = (0..<MLScene.boxCount).map { k in
+            let b = to.boxes[k]
+            guard b.visible, let input, (b.input ?? settings.boxes[k].inputID) == input else { return nil }
+            return MLBoxFrame(box: k, input: input, rect: .full)
+        }
+        instant = false
+        start = t
     }
 
     /// New settings from the editor. The live scene's new places show at once (no animation while

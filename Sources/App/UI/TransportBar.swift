@@ -12,6 +12,9 @@ struct TransportBar: View {
             if let d = input as? SlideDeckInput {
                 // PDF / PowerPoint / Photos: ◀ Previous · n / N · Next ▶ (2.3.3)
                 IsolatedHost(id: d.id) { SlideControls(deck: d) }
+            } else if let m = input as? MultiLayoutInput {
+                // MultiLayout: its scenes (a click takes one, animated)
+                IsolatedHost(id: m.id) { MLSceneControls(ml: m) }
             } else if let i = input, i.supportsTransport {
                 // Own hosting view: the playhead/timecode change ~20×/s, and in the main window's
                 // SwiftUI graph every change re-ran layout for the whole switcher (main-thread stalls).

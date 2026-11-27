@@ -1241,6 +1241,7 @@ struct InputBox: View {
 
             listNowPlaying
             if let deck = input as? SlideDeckInput { TileSlideStrip(deck: deck) }
+            if let ml = input as? MultiLayoutInput { TileSceneStrip(ml: ml) }
 
             // Row 1: Close · Restart · Play/Pause · Cut · Loop  (Quick Play removed)
             HStack(spacing: 3) {

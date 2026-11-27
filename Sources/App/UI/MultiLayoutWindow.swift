@@ -25,7 +25,7 @@ struct MultiLayoutWindow: View {
                     Text(c.name).foregroundColor(.secondary)
                 }
                 Spacer()
-                Button { addLayout() } label: { Label(L("새 MultiLayout"), systemImage: "plus") }
+                Button { addLayout() } label: { Label(L("새 MultiLayout"), systemImage: "plus") }.cueKey()
             }
             .padding(.horizontal, 14).padding(.vertical, 8)
             Divider()
@@ -34,13 +34,13 @@ struct MultiLayoutWindow: View {
             } else {
                 VStack(spacing: 10) {
                     Text(L("스위처에 MultiLayout 입력이 아직 없습니다.")).foregroundColor(.secondary)
-                    Button(L("MultiLayout 입력 추가")) { addLayout() }
+                    Button(L("MultiLayout 입력 추가")) { addLayout() }.cueKey(Theme.accent, prominent: true)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(minWidth: 1280, minHeight: 720)
-        .background(AppLook.hardware ? Theme.window : Color(white: 0.08))
+        .background(BrushedMetal(base: AppLook.hardware ? Theme.window : Color(white: 0.08)))
     }
 
     private func addLayout() {
@@ -114,9 +114,9 @@ struct MultiLayoutEditor: View {
             .frame(maxHeight: 300)
             HStack(spacing: 6) {
                 Button { ml.previous() } label: { Image(systemName: "chevron.left").frame(maxWidth: .infinity) }
-                    .help(L("이전 장면 (←)"))
+                    .cueKey().help(L("이전 장면 (←)"))
                 Button { ml.next() } label: { Image(systemName: "chevron.right").frame(maxWidth: .infinity) }
-                    .help(L("다음 장면 (→)"))
+                    .cueKey().help(L("다음 장면 (→)"))
             }
         }
     }
@@ -137,7 +137,7 @@ struct MultiLayoutEditor: View {
             }
         }
         .padding(.horizontal, 6).padding(.vertical, 4)
-        .background(RoundedRectangle(cornerRadius: 5).fill(isLive ? Theme.live.opacity(0.85) : Color.white.opacity(0.05)))
+        .replayKey(isLive ? Theme.live : (AppLook.hardware ? ReplayKey.neutral : Color.white.opacity(0.05)), radius: 5)
         .contentShape(Rectangle())
         .onTapGesture { ml.take(scene: i) }                 // at once (no wait for a double-click)
         .simultaneousGesture(TapGesture(count: 2).onEnded { renaming = i })
@@ -165,7 +165,7 @@ struct MultiLayoutEditor: View {
                             if ml.shownInputs.contains(i.id) { Circle().fill(Theme.live).frame(width: 6, height: 6) }
                         }
                         .padding(.horizontal, 6).padding(.vertical, 3)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.04)))
+                        .replayKey(AppLook.hardware ? ReplayKey.neutral : Color.white.opacity(0.04), radius: 4)
                         .contentShape(Rectangle())
                         .draggable(i.id.uuidString)
                         .onTapGesture(count: 2) { ml.setInput(i.id, box: box) }
@@ -197,7 +197,7 @@ struct MultiLayoutEditor: View {
                     }
                 }
             }
-            Button(L("내 레이아웃으로 저장")) { saveToLibrary() }
+            Button(L("내 레이아웃으로 저장")) { saveToLibrary() }.cueKey()
                 .help(L("이 장면의 상자 위치를 모든 MultiLayout에서 쓸 수 있게 저장"))
         }
     }
@@ -214,7 +214,9 @@ struct MultiLayoutEditor: View {
             .pickerStyle(.segmented).labelsHidden().frame(width: 300)
             .help(L("새로 나타나거나 사라지는 상자의 움직임"))
             Text(L("시간")).foregroundColor(.secondary)
-            Slider(value: $ml.multiLayout.scenes[live].seconds, in: 0...3, step: 0.1).frame(width: 140)
+            ReplaySlider(value: Binding(get: { ml.multiLayout.scenes[live].seconds },
+                                        set: { ml.multiLayout.scenes[live].seconds = ($0 * 10).rounded() / 10 }), range: 0...3)
+                .frame(width: 140)
             Text(ml.multiLayout.scenes[live].seconds == 0 ? L("컷") : String(format: "%.1f s", ml.multiLayout.scenes[live].seconds))
                 .font(.system(size: 11, design: .monospaced)).frame(width: 40, alignment: .leading)
             Spacer()
@@ -271,7 +273,7 @@ struct MultiLayoutEditor: View {
                 }
                 ml.multiLayout = m
             }
-            .help(L("테두리, 둥근 모서리, 맞추기를 복사 (입력은 그대로)"))
+            .cueKey().help(L("테두리, 둥근 모서리, 맞추기를 복사 (입력은 그대로)"))
         }
     }
 
@@ -299,6 +301,9 @@ struct MultiLayoutEditor: View {
             fileRow(ml.multiLayout.foregroundPath, pick: { ml.multiLayout.foregroundPath = $0 })
             Text(L("상자 위에 그려집니다: 프레임, 로고, 자막 바.")).font(.caption).foregroundColor(.secondary)
             slider(L("입력 바꿀 때 크로스페이드"), $ml.multiLayout.inputFade, 0...2, "%.1f s")
+            Toggle(L("방송에 나갈 때 애니메이션"), isOn: $ml.multiLayout.animateOnAir)
+            Text(L("Cut이나 전환으로 이 MultiLayout이 Program에 나가면, 방금 나가던 입력의 상자가 전체 화면에서 제자리로 줄어들고 다른 상자들이 들어옵니다."))
+                .font(.caption).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -327,7 +332,7 @@ struct MultiLayoutEditor: View {
                 Spacer()
                 Text(String(format: f, v.wrappedValue)).font(.system(size: 10, design: .monospaced)).foregroundColor(.secondary)
             }
-            Slider(value: v, in: r)
+            ReplaySlider(value: v, range: r)
         }
     }
 
@@ -634,5 +639,69 @@ extension MLPreset {
         case .pipBL: return L("PIP 왼쪽 아래")
         case .twoPip: return L("PIP 2개 (아래 좌우)")
         }
+    }
+}
+
+/// Input tile of a MultiLayout: ◀ 1 2 3 … ▶ — a click takes that scene (animated); right-click lists the names.
+struct TileSceneStrip: View {
+    @ObservedObject var ml: MultiLayoutInput
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Button { ml.previous() } label: { Image(systemName: "chevron.left").frame(width: 16, height: 16) }
+                .help(L("이전 장면 (MultiLayoutPrevious)"))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 3) {
+                    ForEach(Array(ml.multiLayout.scenes.enumerated()), id: \.element.id) { i, s in
+                        Button { ml.take(scene: i) } label: {
+                            Text("\(i + 1)").font(.system(size: 10, weight: .bold)).monospacedDigit()
+                                .foregroundColor(i == ml.multiLayout.scene ? .white : Theme.buttonText)
+                                .frame(minWidth: 18, minHeight: 16)
+                                .replayKey(i == ml.multiLayout.scene ? Theme.live : ReplayKey.neutral, radius: 3)
+                        }
+                        .buttonStyle(.plain)
+                        .help(s.name)
+                    }
+                }
+            }
+            Button { ml.next() } label: { Image(systemName: "chevron.right").frame(width: 16, height: 16) }
+                .help(L("다음 장면 (MultiLayoutNext)"))
+        }
+        .font(.system(size: 10))
+        .buttonStyle(.borderless)
+        .padding(.horizontal, 4)
+        .frame(height: 20)
+        .background(Theme.panel.opacity(0.9))
+        .contextMenu {
+            ForEach(Array(ml.multiLayout.scenes.enumerated()), id: \.element.id) { i, s in
+                Button("\(i + 1). \(s.name)") { ml.take(scene: i) }
+            }
+        }
+    }
+}
+
+/// Under the Preview / Output monitors when a MultiLayout is there: its scenes by name.
+struct MLSceneControls: View {
+    @ObservedObject var ml: MultiLayoutInput
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button { ml.previous() } label: { Image(systemName: "chevron.left") }.buttonStyle(.borderless)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(Array(ml.multiLayout.scenes.enumerated()), id: \.element.id) { i, s in
+                        Button { ml.take(scene: i) } label: {
+                            Text("\(i + 1) \(s.name)").font(.system(size: 10, weight: .semibold)).lineLimit(1)
+                                .foregroundColor(i == ml.multiLayout.scene ? .white : Theme.buttonText)
+                                .padding(.horizontal, 6).frame(minHeight: 18)
+                                .replayKey(i == ml.multiLayout.scene ? Theme.live : ReplayKey.neutral, radius: 3)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            Button { ml.next() } label: { Image(systemName: "chevron.right") }.buttonStyle(.borderless)
+        }
+        .padding(.horizontal, 6)
     }
 }

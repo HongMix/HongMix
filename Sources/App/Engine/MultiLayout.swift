@@ -83,6 +83,12 @@ final class MultiLayoutInput: InputSource {
         multiLayout = s                        // didSet: edit() sees the live scene unchanged — no jump
     }
 
+    /// Going on Program after `input`: its box grows out of the full screen, the others come in.
+    func enterAir(from input: UUID?) {
+        guard multiLayout.animateOnAir else { return }
+        mlLock.lock(); player.enter(from: input, at: CACurrentMediaTime()); mlLock.unlock()
+    }
+
     func next() { take(scene: min(multiLayout.scenes.count - 1, multiLayout.scene + 1)) }
     func previous() { take(scene: max(0, multiLayout.scene - 1)) }
 

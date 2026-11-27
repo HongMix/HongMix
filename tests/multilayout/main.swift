@@ -149,4 +149,19 @@ edited.boxes[0].radius = 12
 p.edit(edited, at: 8)
 check(p.settings.boxes[0].radius == 12 && p.frames(at: 8).count == 1, "look changes apply without a transition")
 
+// Going on air from another input: that input's box starts full screen and shrinks to its place;
+// the other boxes come in the scene's way (fly from the nearest edge)
+set = MultiLayoutSettings(); set.boxes[0].inputID = cam1; set.boxes[1].inputID = cam2
+set.scenes = [scene("Talk", [left, pipBR])]
+p = MLPlayer(settings: set)
+p.take(scene: 0, at: 0)
+p.enter(from: cam2, at: 10)
+near(p.frames(at: 10).first { $0.box == 1 }?.rect, full, "the input that was on air starts full screen")
+near(p.frames(at: 10).first { $0.box == 0 }?.rect, MLRect(x: -0.5, y: 0, w: 0.5, h: 1), "the other box flies in from the left")
+near(p.frames(at: 10.5).first { $0.box == 1 }?.rect, pipBR, "and shrinks into its place")
+check(p.frames(at: 10.5).map(\.box).sorted() == [0, 1], "all boxes in place")
+p.enter(from: slides, at: 20)                       // an input that is in no box: every box comes in
+near(p.frames(at: 20).first { $0.box == 1 }?.rect, MLRect(x: 1, y: 0.6, w: 0.3, h: 0.3), "no box had it: all come in")
+check(set.animateOnAir && (try! JSONDecoder().decode(MultiLayoutSettings.self, from: Data("{}".utf8))).animateOnAir, "on by default")
+
 if failures == 0 { print("multilayout: all checks passed") } else { print("multilayout: \(failures) failed"); exit(1) }
