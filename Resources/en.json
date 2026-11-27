@@ -909,6 +909,8 @@
  "사진 (슬라이드쇼)": "Photos (slideshow)",
  "PDF 슬라이드": "PDF Slides",
  "가상 세트": "Virtual Set",
+ "상자 최대 8개에 입력을 하나씩 넣고, 장면을 고르면 상자들이 애니메이션으로 이동합니다. 상자, 장면, 배경은 MultiLayouts 창(아래쪽 버튼)에서 편집합니다.": "Up to 8 boxes, each with an input; choosing a scene moves the boxes with an animation. Edit boxes, scenes and the background in the MultiLayouts window (button at the bottom).",
+ "장면 없음": "No scene",
  "폴더에 사진이 없음": "No photos in the folder",
  "사진 %@ / %@": "Photo %@ / %@",
  "폴더를 열 수 없음": "Can't open the folder",

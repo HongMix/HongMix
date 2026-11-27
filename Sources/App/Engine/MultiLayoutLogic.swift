@@ -99,10 +99,20 @@ struct MultiLayoutSettings: Codable, Equatable {
     var scenes: [MLScene] = []
     var scene = 0                            // the scene on air
     var inputFade = 0.3                      // a box changing input crossfades (0 = cut)
+    var background = MLBackground()
+    var foregroundPath = ""                  // a PNG with transparency drawn over the boxes (frame, logo, lower third)
 
     init() {}
 
-    private enum K: String, CodingKey { case boxes, scenes, scene, inputFade }
+    /// A new MultiLayout: a few scenes to start from (box 1 and 2 are the same inputs in each).
+    static var starter: MultiLayoutSettings {
+        var s = MultiLayoutSettings()
+        func make(_ name: String, _ p: MLPreset) -> MLScene { var sc = MLScene(name: name); sc.apply(p.rects); return sc }
+        s.scenes = [make("Side by side", .sideBySide), make("Full", .full), make("PIP", .pipBR), make("Quad", .quad)]
+        return s
+    }
+
+    private enum K: String, CodingKey { case boxes, scenes, scene, inputFade, background, foregroundPath }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: K.self)
         var b = (try? c.decode([MLBox].self, forKey: .boxes)) ?? []
@@ -111,7 +121,18 @@ struct MultiLayoutSettings: Codable, Equatable {
         scenes = (try? c.decode([MLScene].self, forKey: .scenes)) ?? []
         scene = (try? c.decode(Int.self, forKey: .scene)) ?? 0
         inputFade = (try? c.decode(Double.self, forKey: .inputFade)) ?? 0.3
+        background = (try? c.decode(MLBackground.self, forKey: .background)) ?? MLBackground()
+        foregroundPath = (try? c.decode(String.self, forKey: .foregroundPath)) ?? ""
     }
+}
+
+/// Behind the boxes: a colour, a picture, or another input (a looping video, a camera, a title …).
+struct MLBackground: Codable, Equatable {
+    enum Kind: String, Codable, CaseIterable { case color, image, input }
+    var kind = Kind.color
+    var color = "#101014"
+    var path = ""
+    var inputID: UUID? = nil
 }
 
 /// An own layout in the shared library (Application Support), usable in any MultiLayout.
@@ -166,6 +187,21 @@ struct MLPlayer {
         let now = boxes(at: t)
         settings.boxes[k].inputID = id
         noteInputChange(box: k, was: now[k], at: t)
+    }
+
+    /// New settings from the editor. The live scene's new places show at once (no animation while
+    /// dragging); a box that now shows another input crossfades.
+    mutating func edit(_ new: MultiLayoutSettings, at t: Double) {
+        let now = boxes(at: t)
+        settings = new
+        guard to != nil, settings.scenes.indices.contains(settings.scene) else { return }
+        let live = settings.scenes[settings.scene]
+        if live != to {
+            from = now
+            to = live
+            instant = true
+        }
+        for k in 0..<MLScene.boxCount { noteInputChange(box: k, was: now[k], at: t) }
     }
 
     private mutating func noteInputChange(box k: Int, was: MLBoxFrame?, at t: Double) {

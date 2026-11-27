@@ -116,6 +116,7 @@ check(ml.scenes.count == 1 && ml.scenes[0].boxes.count == 8, "a scene always has
 check(ml.scenes[0].boxes[0].visible && ml.scenes[0].boxes[0].rect == left && !ml.scenes[0].boxes[1].visible, "given boxes kept, the rest hidden")
 check(ml.scenes[0].appear == .grow && ml.scenes[0].seconds == 0.5, "animation kept, default length")
 check(ml.boxes.count == 8 && ml.boxes[0].zoom == 1 && ml.boxes[0].fill && ml.inputFade == 0.3 && ml.scene == 0, "box looks and crossfade default")
+check(ml.background.kind == .color && ml.foregroundPath.isEmpty, "no background picture or foreground by default")
 let unknown = #"{"scenes":[{"name":"X","appear":"spin"}],"inputFade":"fast"}"#.data(using: .utf8)!
 let mlu = try! JSONDecoder().decode(MultiLayoutSettings.self, from: unknown)
 check(mlu.scenes[0].appear == .fly && mlu.inputFade == 0.3, "unknown values fall back instead of losing the layout")
@@ -123,9 +124,29 @@ var full8 = MultiLayoutSettings()
 full8.boxes[2].inputID = cam1; full8.boxes[2].radius = 24; full8.boxes[2].zoom = 1.5; full8.boxes[2].borderColor = "#FF0000"
 var t1 = scene("T", [left, pipBR], seconds: 0.8, appear: .fade); t1.boxes[1].input = slides
 full8.scenes = [t1]; full8.scene = 0; full8.inputFade = 0
+full8.background = MLBackground(kind: .input, color: "#000000", path: "", inputID: cam2); full8.foregroundPath = "/x/frame.png"
 check(try! JSONDecoder().decode(MultiLayoutSettings.self, from: JSONEncoder().encode(full8)) == full8, "everything survives saving")
 // The shared library of own layouts
 let mine = MLLayout(name: "Interview", rects: [left, pipBR])
 check(try! JSONDecoder().decode([MLLayout].self, from: JSONEncoder().encode([mine])) == [mine], "own layouts survive saving")
+
+// Editing while on air: a moved box in the live scene is there at once; another box input crossfades;
+// edits to a scene that is not on air change nothing on screen
+set = MultiLayoutSettings(); set.boxes[0].inputID = cam1
+set.scenes = [scene("A", [full]), scene("B", [left])]
+p = MLPlayer(settings: set)
+p.take(scene: 0, at: 0)
+var edited = p.settings; edited.scenes[0].boxes[0].rect = pipBR
+p.edit(edited, at: 5)
+near(p.frames(at: 5).first?.rect, pipBR, "moved in the live scene: there at once")
+edited.scenes[1].boxes[0].rect = full
+p.edit(edited, at: 6)
+near(p.frames(at: 6).first?.rect, pipBR, "edit of a scene not on air: nothing changes")
+edited.boxes[0].inputID = cam2
+p.edit(edited, at: 7)
+check(p.frames(at: 7.15).map(\.input) == [cam1, cam2], "box input changed in the settings: crossfade")
+edited.boxes[0].radius = 12
+p.edit(edited, at: 8)
+check(p.settings.boxes[0].radius == 12 && p.frames(at: 8).count == 1, "look changes apply without a transition")
 
 if failures == 0 { print("multilayout: all checks passed") } else { print("multilayout: \(failures) failed"); exit(1) }

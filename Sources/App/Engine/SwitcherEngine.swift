@@ -703,7 +703,8 @@ final class SwitcherEngine: ObservableObject {
             if let v = cur as? VirtualInput, let src = v.source, !seen.contains(src.id) {
                 seen.insert(src.id); out.append(src); stack.append(src)
             }
-            for l in cur.layers where l.visible {
+            // [MultiLayout] its boxes are generated layers (the live scene)
+            for l in (cur is MultiLayoutInput ? cur.layersSnapshot : cur.layers) where l.visible {
                 guard let cid = l.inputID, !seen.contains(cid), let child = input(withID: cid) else { continue }
                 seen.insert(cid); out.append(child); stack.append(child)
             }
@@ -1852,7 +1853,7 @@ final class SwitcherEngine: ObservableObject {
                 let bc = HexColor.parse(l.borderColor) ?? (1, 1, 1, 1)
                 parts.append(ComposeLayer(buffer: buf, params: p, rect: rect, border: Float(l.border),
                                           borderColor: (Float(bc.0), Float(bc.1), Float(bc.2)),
-                                          rotation: Float(l.rotation * .pi / 180)))
+                                          rotation: Float(l.rotation * .pi / 180), radius: Float(l.radius)))
             }
             if let top {                         // [Virtual Set] foreground (desk), full frame, premultiplied
                 var p = LayerParams(); p.premul = 1

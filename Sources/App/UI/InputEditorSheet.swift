@@ -25,6 +25,7 @@ struct InputEditorSheet: View {
         case videoCall = "Video Call"
         case virtualSet = "Virtual Set"
         case replay = "Instant Replay"
+        case multiLayout = "MultiLayout"
 
         var id: String { rawValue }
         var available: Bool {
@@ -50,6 +51,7 @@ struct InputEditorSheet: View {
             case .videoCall: return "phone.connection"
             case .virtualSet: return "cube"
             case .replay: return "gobackward"
+            case .multiLayout: return "rectangle.3.group"
             }
         }
         static func of(_ k: InputKind) -> Category {
@@ -67,6 +69,7 @@ struct InputEditorSheet: View {
             case .photos: return .photos            // SlideInputs.swift (editor UI pending)
             case .pdfSlides: return .powerpoint
             case .virtualSet: return .virtualSet
+            case .multiLayout: return .multiLayout
             }
         }
     }
@@ -145,6 +148,7 @@ struct InputEditorSheet: View {
         case .photos: return "Photos"                // SlideInputs.swift (editor UI pending)
         case .pdfSlides: return "Slides"
         case .virtualSet: return "Virtual Set"
+        case .multiLayout: return "MultiLayout"
         }
     }
 
@@ -164,6 +168,7 @@ struct InputEditorSheet: View {
         case .photos: return .photos
         case .powerpoint: return .pdfSlides
         case .virtualSet: return .virtualSet
+        case .multiLayout: return .multiLayout
         default: return .media
         }
     }
@@ -241,6 +246,11 @@ struct InputEditorSheet: View {
         case .photos: photosSection
         case .powerpoint: pdfSection
         case .virtualSet: virtualSetSection
+        case .multiLayout:
+            Section("MultiLayout") {
+                Text(L("상자 최대 8개에 입력을 하나씩 넣고, 장면을 고르면 상자들이 애니메이션으로 이동합니다. 상자, 장면, 배경은 MultiLayouts 창(아래쪽 버튼)에서 편집합니다."))
+                    .font(.caption).foregroundColor(.secondary)
+            }
         default:
             Section {
                 Text(Lf("%@ 입력은 HongMix에서 아직 지원하지 않습니다.", "\(category.rawValue)"))
@@ -921,6 +931,7 @@ struct InputEditorSheet: View {
             }
         case .title: if c.title == nil { c.title = TitleDocument(template: .lowerThird) }
         case .audio: c.audioFollowsVideo = false
+        case .multiLayout: if editing == nil && c.multiLayout.scenes.isEmpty { c.multiLayout = .starter }
         default: break
         }
         if let e = editing {

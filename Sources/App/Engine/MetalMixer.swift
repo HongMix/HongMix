@@ -92,6 +92,7 @@ struct ComposeParams {
     var bh: Float = 0
     var cosA: Float = 1
     var sinA: Float = 0
+    var radius: Float = 0
 }
 
 /// One layer of an input composition (pixels, top-left origin).
@@ -99,7 +100,7 @@ struct ComposeLayer {
     /// Same source frame (identity — the buffer is retained, so it can't be recycled meanwhile) and same
     /// parameters: drawing it again would give the same pixels.
     func same(as o: ComposeLayer) -> Bool {
-        guard buffer === o.buffer, rect == o.rect, border == o.border, rotation == o.rotation,
+        guard buffer === o.buffer, rect == o.rect, border == o.border, rotation == o.rotation, radius == o.radius,
               borderColor == o.borderColor else { return false }
         return withUnsafeBytes(of: params) { a in withUnsafeBytes(of: o.params) { b in a.elementsEqual(b) } }
     }
@@ -111,6 +112,8 @@ struct ComposeLayer {
     var borderColor: (Float, Float, Float) = (1, 1, 1)
     /// radians, clockwise around the rect centre
     var rotation: Float = 0
+    /// rounded corners, px
+    var radius: Float = 0
 }
 
 /// One source for the program mixer (layer slots: 0 A, 1 B, 2-5 overlays, 6 stinger).
@@ -337,7 +340,7 @@ final class MetalMixer {
             lp.srcW = Float(src.width); lp.srcH = Float(src.height)
             var cp = ComposeParams(w: Float(rr.width), h: Float(rr.height), border: l.border,
                                    borderR: l.borderColor.0, borderG: l.borderColor.1, borderB: l.borderColor.2,
-                                   bw: Float(r.width), bh: Float(r.height), cosA: ca, sinA: sa)
+                                   bw: Float(r.width), bh: Float(r.height), cosA: ca, sinA: sa, radius: l.radius)
             enc.setViewport(MTLViewport(originX: r.minX, originY: r.minY, width: r.width, height: r.height, znear: 0, zfar: 1))
             enc.setScissorRect(MTLScissorRect(x: Int(x0), y: Int(y0), width: Int(x1 - x0), height: Int(y1 - y0)))
             enc.setFragmentTexture(src.luma, index: 0)
