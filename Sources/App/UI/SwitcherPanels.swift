@@ -724,7 +724,7 @@ struct InputGrid: View {
             }
         }
         .frame(width: inputDockLeft ? 290 : nil)
-        .background(Theme.window)
+        .background(BrushedMetal(base: Theme.window))
         .contextMenu {
             Picker(L("입력 크기"), selection: $inputSize) {
                 Text(L("작게")).tag(0)
@@ -958,6 +958,8 @@ struct RightClickCatcher: NSViewRepresentable {
 }
 
 struct InputBox: View {
+    /// Hardware look: squarer corners (like a hardware multiviewer); the clean look keeps Theme.radius.
+    private var tileRadius: CGFloat { AppLook.hardware ? 3 : Theme.radius }
     @EnvironmentObject var engine: SwitcherEngine
     @ObservedObject var input: InputSource
     let number: Int
@@ -1119,9 +1121,9 @@ struct InputBox: View {
             }
         }
         .background(Theme.panel)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).stroke(dropTarget ? Color.white : Color.clear, lineWidth: 2))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
+        .clipShape(RoundedRectangle(cornerRadius: tileRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: tileRadius, style: .continuous).stroke(dropTarget ? Color.white : Color.clear, lineWidth: 2))
+        .overlay(RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
             .stroke(headerColor == Theme.panel ? (AppSkin.isMono ? Theme.hairline : Color.black.opacity(0.5)) : headerColor, lineWidth: 2))
         .draggable(input.id.uuidString) {
             Text("\(number). \(input.name)").padding(6).background(Theme.panel)
@@ -2125,4 +2127,43 @@ private struct TileSlideStrip: View {
         .frame(height: 20)
         .background(Theme.panel.opacity(0.9))
     }
+}
+
+/// Hardware look: a faint brushed-aluminium grain over a background colour. The texture is made once
+/// (a small tile, horizontal streaks) and tiled; nothing animates, so it costs nothing per frame.
+struct BrushedMetal: View {
+    var base: Color
+    var body: some View {
+        if AppLook.hardware {
+            base.overlay(Image(nsImage: Self.tile).resizable(resizingMode: .tile).opacity(0.5))
+        } else {
+            base
+        }
+    }
+
+    static let tile: NSImage = {
+        let w = 512, h = 128
+        let cs = CGColorSpaceCreateDeviceGray()
+        // the context owns its pixels (data: nil), so makeImage() never reads freed memory
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 2, space: cs,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let raw = ctx.data else { return NSImage() }
+        let px = raw.bindMemory(to: UInt8.self, capacity: ctx.bytesPerRow * h)
+        let stride = ctx.bytesPerRow
+        var rng = SystemRandomNumberGenerator()
+        for y in 0..<h {
+            let row = Double.random(in: -1...1, using: &rng)        // each line its own tone = the streak
+            var smooth = 0.0
+            for x in 0..<w {
+                smooth = smooth * 0.92 + Double.random(in: -1...1, using: &rng) * 0.08
+                let v = row * 0.7 + smooth * 3.0                     // -1…1-ish
+                let i = y * stride + x * 2
+                let a = UInt8(min(255, abs(v) * 22))                 // very low alpha
+                px[i] = v >= 0 ? a : 0                               // premultiplied: light = white × alpha, dark = black
+                px[i + 1] = a
+            }
+        }
+        guard let img = ctx.makeImage() else { return NSImage() }
+        return NSImage(cgImage: img, size: NSSize(width: w, height: h))
+    }()
 }

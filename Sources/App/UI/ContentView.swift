@@ -74,27 +74,28 @@ enum Theme {
         return palette[max(0, min(palette.count - 1, channel - 1))]
     }
     static let live = Color(red: 0.86, green: 0.16, blue: 0.16)
+    // Hardware look on Black & White: a touch of grey (anodised panel) instead of near-black; the clean look keeps its values.
     static var window: Color {
         switch AppSkin.current {
-        case .mono: return Color(white: 0.043)
+        case .mono: return Color(white: AppLook.hardware ? 0.095 : 0.043)
         case .classic: return Color(red: 0.13, green: 0.14, blue: 0.16)
         }
     }
     static var panel: Color {
         switch AppSkin.current {
-        case .mono: return Color(white: 0.082)
+        case .mono: return Color(white: AppLook.hardware ? 0.135 : 0.082)
         case .classic: return Color(red: 0.18, green: 0.19, blue: 0.21)
         }
     }
     static var panelDark: Color {
         switch AppSkin.current {
-        case .mono: return Color(white: 0.06)
+        case .mono: return Color(white: AppLook.hardware ? 0.105 : 0.06)
         case .classic: return Color(red: 0.10, green: 0.11, blue: 0.12)
         }
     }
     static var button: Color {
         switch AppSkin.current {
-        case .mono: return Color(white: 0.135)
+        case .mono: return Color(white: AppLook.hardware ? 0.17 : 0.135)
         case .classic: return Color(red: 0.27, green: 0.28, blue: 0.31)
         }
     }
@@ -227,7 +228,7 @@ struct AudioMixerWindow: View {
     var body: some View {
         AudioMixerPanel(sheet: $sheet, inputStripsCollapsed: $collapsed)
             .frame(minWidth: 320, minHeight: 360)
-            .background(Theme.window)
+            .background(BrushedMetal(base: Theme.window))
             .onAppear { AudioMixerWindow.open += 1; engine.mixerVisible = false }
             .onDisappear {
                 AudioMixerWindow.open -= 1
@@ -328,7 +329,7 @@ struct ContentView: View {
             BottomBar(sheet: $sheet, outputsSheet: $outputsSheet)
         }
         .background(
-            Theme.window
+            BrushedMetal(base: Theme.window)
         )
         .sheet(item: $sheet) { req in SheetRequestView(req: req, sheet: $sheet).environmentObject(engine) }
         .sheet(item: $outputsSheet) { kind in
@@ -623,8 +624,8 @@ struct MonitorPane: View {
             TransportBar(input: input)
         }
         .background(Color.black)
-        .clipShape(RoundedRectangle(cornerRadius: mono ? 10 : 0, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: mono ? 10 : 0, style: .continuous).stroke(color, lineWidth: mono ? 1.5 : 2))
+        .clipShape(RoundedRectangle(cornerRadius: mono ? (AppLook.hardware ? 4 : 10) : 0, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: mono ? (AppLook.hardware ? 4 : 10) : 0, style: .continuous).stroke(color.opacity(mono && AppLook.hardware ? 0.5 : 1), lineWidth: mono ? 1.5 : 2))
         .frame(maxWidth: .infinity)
     }
 }

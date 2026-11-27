@@ -42,7 +42,7 @@ struct ReplayView: View {
             eventList
         }
         .padding(12)
-        .background(Color(white: 0.08))
+        .background(BrushedMetal(base: AppLook.hardware ? Theme.window : Color(white: 0.08)))
         .frame(minWidth: 1200, minHeight: 820)
         .sheet(isPresented: $showSettings) { ReplaySettingsSheet().environmentObject(engine) }
         .sheet(isPresented: Binding(get: { !exportEvents.isEmpty }, set: { if !$0 { exportEvents = [] } })) {
@@ -726,6 +726,32 @@ extension View {
     func replayKey(_ fill: Color, radius: CGFloat = 4) -> some View {
         background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(fill))
             .hmBevel(cornerRadius: radius)
+    }
+}
+
+/// A hardware-look key as a button style (Talent Cue window). Static fills only: no shadow or blur passes.
+struct HWKeyStyle: ButtonStyle {
+    var fill: Color = ReplayKey.neutral
+    func makeBody(configuration: Configuration) -> some View { Face(label: configuration.label, fill: fill, pressed: configuration.isPressed) }
+
+    private struct Face<Label: View>: View {
+        @Environment(\.isEnabled) private var enabled
+        let label: Label, fill: Color, pressed: Bool
+        var body: some View {
+            label.font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
+                .padding(.horizontal, 10).frame(minHeight: 24)
+                .replayKey(fill)
+                .opacity(!enabled ? 0.4 : pressed ? 0.75 : 1)
+        }
+    }
+}
+
+extension View {
+    /// Hardware look: a raised key in `fill`; otherwise the system button as before (prominent, tinted `cleanTint`).
+    @ViewBuilder func cueKey(_ fill: Color? = nil, prominent: Bool = false, cleanTint: Color? = nil) -> some View {
+        if AppLook.hardware { buttonStyle(HWKeyStyle(fill: fill ?? ReplayKey.neutral)) }
+        else if prominent { buttonStyle(.borderedProminent).tint(cleanTint) }
+        else { self }
     }
 }
 
