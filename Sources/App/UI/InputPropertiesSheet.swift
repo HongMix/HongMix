@@ -28,7 +28,8 @@ struct InputPropertiesSheet: View {
                     .lineLimit(1).truncationMode(.middle)
                 InputFormatLabel(slot: input.video, size: 11)
                 Spacer()
-                MonitorView(fps: 12, placement: { [weak input] in input?.videoAdjust }) { input.monitorFrame() }
+                MonitorView(fps: 12, placement: { [weak input] in input?.videoAdjust }, fullLook: true,
+                            premultiplied: { [weak input] in input.map { $0.composed != nil || $0.alphaPremultiplied } ?? false }) { input.monitorFrame() }
                     .frame(width: 160, height: 90)
                     .background(Color.black)
             }
@@ -240,10 +241,11 @@ struct InputPropertiesSheet: View {
     /// correction, key and opacity (the same preview the Position tab has, without its handles).
     private func withPreview<V: View>(_ form: V) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            form.frame(width: 480)
+            form.frame(minWidth: 480, maxWidth: 620)
             VStack(alignment: .leading, spacing: 6) {
                 Text(L("미리보기 (출력과 같은 배치)")).font(.subheadline.bold())
-                MonitorView(fps: 30, placement: { [weak input] in input?.videoAdjust }, fullLook: true) { [weak input] in
+                MonitorView(fps: 30, placement: { [weak input] in input?.videoAdjust }, fullLook: true,
+                            premultiplied: { [weak input] in input.map { $0.composed != nil || $0.alphaPremultiplied } ?? false }) { [weak input] in
                     input?.monitorFrame()
                 }
                 .aspectRatio(16.0 / 9.0, contentMode: .fit)

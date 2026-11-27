@@ -32,6 +32,12 @@ final class MonitorRenderer {
         set { lock.lock(); _placement = newValue; lock.unlock() }
     }
     /// Input Settings preview: also show colour correction, colour key and opacity (tiles leave them off).
+    private var _premultiplied: (() -> Bool)?
+    /// fullLook: whether the source frame is premultiplied (an input's composed frame is), as in Program.
+    var premultiplied: (() -> Bool)? {
+        get { lock.lock(); defer { lock.unlock() }; return _premultiplied }
+        set { lock.lock(); _premultiplied = newValue; lock.unlock() }
+    }
     private var _fullLook = false
     var fullLook: Bool {
         get { lock.lock(); defer { lock.unlock() }; return _fullLook }
@@ -82,6 +88,7 @@ final class MonitorRenderer {
         let src = _source
         let placementSource = _placement
         let full = _fullLook
+        let premulSource = _premultiplied
         lock.unlock()
         guard size.width >= 2, size.height >= 2, let pipeline = MonitorRenderer.sharedPipeline else { return nil }
         if fps < 50 && now - lastDraw < 1.0 / Double(max(1, fps)) - 0.002 { return nil }
@@ -101,10 +108,11 @@ final class MonitorRenderer {
             keep.append(contentsOf: tex.keep)
             var lp: LayerParams
             if let a = placement, let tile = MonitorRenderer.tilePipeline {
-                // Same placement maths as Program; colour/key stay off so the tile is quick and readable.
+                // Same placement maths as Program. Tiles leave colour/key off (quick, readable); the Input
+                // Settings preview (fullLook) keeps them, with the frame's alpha read as Program reads it.
                 var pa = a
                 if !full { pa.resetColor(); pa.keyOn = false; pa.alpha = 1 }
-                lp = pa.layerParams(premultiplied: false)
+                lp = pa.layerParams(premultiplied: full && (premulSource?() ?? false))
                 lp.has = 1
                 lp.srcW = Float(tex.width); lp.srcH = Float(tex.height)
                 enc.setRenderPipelineState(tile)
@@ -321,6 +329,7 @@ struct MonitorView: NSViewRepresentable {
     var placement: (() -> VideoAdjust?)? = nil
     /// Show colour correction, key and opacity as well (Input Settings preview).
     var fullLook = false
+    var premultiplied: (() -> Bool)? = nil
     let source: () -> CVPixelBuffer?
 
     func makeNSView(context: Context) -> MonitorLayerView {
@@ -329,6 +338,7 @@ struct MonitorView: NSViewRepresentable {
         r.countDraws = countDraws
         r.placement = placement
         r.fullLook = fullLook
+        r.premultiplied = premultiplied
         v.renderer = r
         v.visibilityChange = onActiveChange
         return v
@@ -338,6 +348,7 @@ struct MonitorView: NSViewRepresentable {
         v.renderer?.source = source
         v.renderer?.placement = placement
         v.renderer?.fullLook = fullLook
+        v.renderer?.premultiplied = premultiplied
         v.renderer?.fps = fps
         v.visibilityChange = onActiveChange
     }
