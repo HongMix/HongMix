@@ -1,4 +1,4 @@
-# HongMix 2.3.10 User Manual
+# HongMix 2.4.0 User Manual
 
 HongMix is a live production switcher for Apple Silicon Macs. Its layout, keyboard shortcuts and remote API follow vMix, so vMix operators, Bitfocus Companion and Stream Deck setups feel at home.
 
@@ -31,13 +31,13 @@ Everything HongMix needs (FFmpeg, SRT, the NDI runtime and the Chromium web engi
 
 ### Option A: PKG installer (recommended)
 
-1. Double-click **HongMix-2.3.10.pkg**.
+1. Double-click **HongMix-2.4.0.pkg**.
 2. If macOS says the file is from an **unidentified developer**, right-click the file and choose **Open**, then **Open** again. (Alternatively: **System Settings › Privacy & Security**, then **Open Anyway**.)
 3. Click **Continue**, then **Install**. HongMix is installed in **Applications**.
 
 ### Option B: DMG
 
-1. Open **HongMix-2.3.10.dmg**.
+1. Open **HongMix-2.4.0.dmg**.
 2. Drag **HongMix** into the **Applications** folder.
 
 ### First launch
@@ -473,6 +473,8 @@ For a moderator, copy the protected phone link shown in Talent Cue. It has its o
 3. Start recording. Mark moments, and play them back at normal speed or in slow motion.
 4. Export: press ⬇ on a clip (Command-click to select several). Choose 16:9, 9:16 or 1:1, one or all angles, normal / 50 % / AI slow motion, 0–2 s handles and H.264, HEVC or ProRes. Exports run in the background.
 
+AI slow motion is off by default in new projects because it uses substantial GPU resources. If enabled, HongMix automatically switches to GPU blending and pauses background AI work whenever Program is busy. Turn AI slow motion off if you still see on-air stutter on your Mac.
+
 ### Live captions
 
 1. Choose **Tools › Captions…**.
@@ -643,9 +645,11 @@ http://192.0.2.10:8088/api/?Function=Fade&Duration=1000
 http://192.0.2.10:8088/api/?Function=OverlayInput1In&Input=5
 http://192.0.2.10:8088/api/?Function=SetText&Input=3&SelectedName=Headline.Text&Value=Hello
 http://192.0.2.10:8088/api/?Function=LayerPreset&Input=4&Value=1,Interview
+http://192.0.2.10:8088/api/?Function=OpenWindow&Value=replay
+http://192.0.2.10:8088/api/?Function=CloseWindow&Value=Replay
 ```
 
-HongMix-specific functions include `SetFitMode`, `SetZoomX` / `SetZoomY`, `LayerLayout`, `SetLayer`, `LayerPreset` / `LayerPresetSave`, `SetLUT`, `SetDelay` / `DelayDump`, `RundownNext` and the ducking functions. Calling `/api/` without a function returns the vMix-style XML state, including `<inputSrtStats>` per SRT input.
+HongMix-specific functions include `SetFitMode`, `SetZoomX` / `SetZoomY`, `LayerLayout`, `SetLayer`, `LayerPreset` / `LayerPresetSave`, `SetLUT`, `SetDelay` / `DelayDump`, `RundownNext`, `OpenWindow`, `CloseWindow` and the ducking functions. `OpenWindow` accepts `replay`, `scopes`, `audiomixer`, `talentcue`, `multiview`, `rundown` or `ptz`; `CloseWindow` takes the window title. Calling `/api/` without a function returns the vMix-style XML state, including `<inputSrtStats>` per SRT input.
 
 Full list: [docs/FUNCTIONS.md](../FUNCTIONS.md).
 

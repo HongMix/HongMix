@@ -1,4 +1,4 @@
-# HongMix 2.3.10 사용 설명서
+# HongMix 2.4.0 사용 설명서
 
 HongMix는 Apple Silicon 맥용 라이브 프로덕션 스위처입니다. 화면 구성·단축키·원격 API가 vMix와 같아서 vMix 사용자, Bitfocus Companion, Stream Deck 환경을 그대로 쓸 수 있습니다.
 
@@ -31,13 +31,13 @@ FFmpeg, SRT, NDI 런타임, Chromium 웹 엔진이 모두 앱 안에 들어 있�
 
 ### 방법 A: PKG 설치 파일 (권장)
 
-1. **HongMix-2.3.10.pkg**를 더블클릭합니다.
+1. **HongMix-2.4.0.pkg**를 더블클릭합니다.
 2. "확인되지 않은 개발자" 경고가 뜨면 파일을 우클릭 → **열기** → **열기**를 누릅니다. (또는 **시스템 설정 › 개인정보 보호 및 보안**에서 **그래도 열기**)
 3. **계속** → **설치**를 누릅니다. **응용 프로그램** 폴더에 HongMix가 설치됩니다.
 
 ### 방법 B: DMG
 
-1. **HongMix-2.3.10.dmg**를 엽니다.
+1. **HongMix-2.4.0.dmg**를 엽니다.
 2. **HongMix**를 **Applications** 폴더로 드래그합니다.
 
 ### 처음 실행
@@ -473,6 +473,8 @@ API 예: `SetText Input=3 SelectedName=Headline.Text Value=안녕하세요`
 3. 녹화를 시작하고 장면을 마크한 뒤 일반 속도나 슬로모션으로 재생합니다.
 4. 내보내기: 클립의 ⬇를 누릅니다 (여러 개는 Command-클릭). 16:9·9:16·1:1, 한 각도/모든 각도, 일반·50%·AI 슬로모션, 0~2초 핸들, H.264·HEVC·ProRes를 고릅니다. 백그라운드에서 처리됩니다.
 
+AI 슬로모션은 GPU를 많이 사용하므로 새 프로젝트에서는 기본으로 꺼져 있습니다. 켜면 Program이 바쁠 때 HongMix가 자동으로 GPU 블렌딩으로 바꾸고 백그라운드 AI 작업을 잠시 멈춥니다. 사용 중인 맥에서 송출 화면이 끊기면 AI 슬로모션을 끄세요.
+
 ### 실시간 자막
 
 1. **도구 › 자막…**을 고릅니다.
@@ -643,9 +645,11 @@ http://192.0.2.10:8088/api/?Function=Fade&Duration=1000
 http://192.0.2.10:8088/api/?Function=OverlayInput1In&Input=5
 http://192.0.2.10:8088/api/?Function=SetText&Input=3&SelectedName=Headline.Text&Value=Hello
 http://192.0.2.10:8088/api/?Function=LayerPreset&Input=4&Value=1,Interview
+http://192.0.2.10:8088/api/?Function=OpenWindow&Value=replay
+http://192.0.2.10:8088/api/?Function=CloseWindow&Value=Replay
 ```
 
-HongMix 전용 함수: `SetFitMode`, `SetZoomX` / `SetZoomY`, `LayerLayout`, `SetLayer`, `LayerPreset` / `LayerPresetSave`, `SetLUT`, `SetDelay` / `DelayDump`, `RundownNext`, 더킹 함수 등. 함수 없이 `/api/`를 부르면 vMix 형식 XML 상태를 돌려주며, SRT 입력마다 `<inputSrtStats>`가 들어 있습니다.
+HongMix 전용 함수: `SetFitMode`, `SetZoomX` / `SetZoomY`, `LayerLayout`, `SetLayer`, `LayerPreset` / `LayerPresetSave`, `SetLUT`, `SetDelay` / `DelayDump`, `RundownNext`, `OpenWindow`, `CloseWindow`, 더킹 함수 등. `OpenWindow`의 Value는 `replay`, `scopes`, `audiomixer`, `talentcue`, `multiview`, `rundown`, `ptz` 중 하나이며, `CloseWindow`의 Value에는 창 제목을 넣습니다. 함수 없이 `/api/`를 부르면 vMix 형식 XML 상태를 돌려주며, SRT 입력마다 `<inputSrtStats>`가 들어 있습니다.
 
 전체 목록: [docs/FUNCTIONS.md](../FUNCTIONS.md)
 

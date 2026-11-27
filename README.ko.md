@@ -10,30 +10,26 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.3.10 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.4.0 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.3.10
-- 메인 창이 보일 때 브라우저 입력 영상이 끊기던 문제와 HongMix 로딩 중 스피커에서 짧게 튀던 소리를 고쳤습니다.
-- MultiCorder ISO 렌더링과 GPU에 저장하는 MultiView 이름표로 부하를 줄였습니다.
-- MultiView 칸별 이름, 화면 안·아래 이름표, 자동 이름 방식을 선택할 수 있습니다.
-- 스코프 창 여러 개, 하드웨어 룩 개선, 선택형 금속 배경과 작은 운영 편의 기능을 추가했습니다.
-- 빌드 187의 번역·핵심·MultiView·DMG·서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.3.10.ko.md) · [English](docs/RELEASE-NOTES-2.3.10.md)
+### 최신 업데이트 · 2.4.0
+- AI 슬로모션을 켜도 인스턴트 리플레이가 Program 송출을 끊지 않으며, 송출이 바쁘면 자동으로 GPU 블렌딩으로 바꿉니다.
+- 새 프로젝트에서는 AI 슬로모션이 기본으로 꺼지고, 리플레이 설정에 안내가 나옵니다.
+- Replay·Scopes·Talent Cue·MultiView·오디오 믹서·디스플레이 출력 창이 더 빨리 열립니다.
+- 리플레이 창의 디스크 확인과 화면 갱신을 줄였고, API에 `OpenWindow`와 `CloseWindow`를 추가했습니다.
+- 빌드 198의 번역·핵심·MultiView·DMG·서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.4.0.ko.md) · [English](docs/RELEASE-NOTES-2.4.0.md)
 
 2.3.7의 MultiView·Talent Cue·하드웨어 룩과 2.3.10의 MultiView 이름표·스코프 창·하드웨어 룩 개선을 기여해 주신 [@otiumvisuals](https://github.com/otiumvisuals) 님께 감사드립니다. 렌더 스레드 개선 아이디어는 Reddit의 Hawk_Super 님께 받았습니다.
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/ko-main.png" alt="HongMix 2.3.10 메인 스위처" width="100%"><br><sub>다듬은 하드웨어 룩</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/ko-multiview.png" alt="HongMix 2.3.10 MultiView 편집기" width="100%"><br><sub>칸별 이름과 이름표 위치</sub></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/ko-settings.png" alt="HongMix 2.3.10 화면 모양 설정" width="100%"><br><sub>선택형 금속 배경</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/ko-talentcue.png" alt="HongMix 2.3.10 Talent Cue 조작 창" width="100%"><br><sub>하드웨어형 Talent Cue 조작계</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.4.0/ko-replay-settings.png" alt="HongMix 2.4.0 리플레이 설정" width="100%"><br><sub>AI 슬로모션 선택과 송출 부하 보호</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/ko-main.png" alt="HongMix 메인 스위처" width="100%"><br><sub>라이브 프로덕션 스위처</sub></td>
   </tr>
 </table>
 

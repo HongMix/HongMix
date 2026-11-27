@@ -15,6 +15,13 @@ enum ReplayColors {
 }
 
 /// Instant Replay controller (Window id "replay"): recording, A/B decks, CAM 1–4 sources, transport, clips.
+/// Re-renders only its own content when the replay's fast state (deck positions, status) changes.
+struct ReplayLive<Content: View>: View {
+    @ObservedObject var live = ReplayEngine.shared.live
+    @ViewBuilder let content: (ReplayLiveState) -> Content
+    var body: some View { content(live) }
+}
+
 struct ReplayView: View {
     @EnvironmentObject var engine: SwitcherEngine
     @ObservedObject var replay = ReplayEngine.shared
@@ -87,20 +94,24 @@ struct ReplayView: View {
             .buttonStyle(.plain)
             .fixedSize()
             .keyboardShortcut("r", modifiers: [.command, .shift])
-            VStack(alignment: .leading, spacing: 2) {
-                Text(statusLine).font(.system(size: 11, weight: .semibold).monospacedDigit())
-                    .lineLimit(1).minimumScaleFactor(0.8)
-                Text(diskLine).font(.system(size: 10).monospacedDigit()).foregroundColor(.secondary).lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+            ReplayLive { live in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(statusLine(live.status)).font(.system(size: 11, weight: .semibold).monospacedDigit())
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Text(diskLine(live.status)).font(.system(size: 10).monospacedDigit()).foregroundColor(.secondary).lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(minWidth: 160, alignment: .leading)
+                .help(diskLine(live.status))
             }
-            .frame(minWidth: 160, alignment: .leading)
-            .help(diskLine)
             Spacer()
-            timecodeReadout(label: "REC TC", value: replay.recordTimecode(), color: replay.recording ? .red : .secondary,
-                            sub: replay.recording ? "REC" : " ", subColor: .red)
-            timecodeReadout(label: L("SELECTED · TC / 녹화 시각"), value: replay.selectedTimecode(), color: Theme.preview,
-                            sub: replay.selectedClock(), subColor: ReplayColors.clock)
-                .help(L("선택한 덱 위치의 TC와 그 장면이 실제로 녹화된 시각"))
+            ReplayLive { _ in
+                timecodeReadout(label: "REC TC", value: replay.recordTimecode(), color: replay.recording ? .red : .secondary,
+                                sub: replay.recording ? "REC" : " ", subColor: .red)
+                timecodeReadout(label: L("SELECTED · TC / 녹화 시각"), value: replay.selectedTimecode(), color: Theme.preview,
+                                sub: replay.selectedClock(), subColor: ReplayColors.clock)
+                    .help(L("선택한 덱 위치의 TC와 그 장면이 실제로 녹화된 시각"))
+            }
             TimelineView(.periodic(from: .now, by: 1.0 / max(1, engine.format.fps))) { context in
                 timecodeReadout(label: "SYSTEM TC", value: replay.systemTimecode(context.date), color: .green,
                                 sub: "REC START  \(replay.recordingStartText())", subColor: .secondary)
@@ -145,16 +156,14 @@ struct ReplayView: View {
         .overlay(Rectangle().strokeBorder(color.opacity(0.5), lineWidth: 1))
     }
 
-    private var statusLine: String {
-        let s = replay.status
+    private func statusLine(_ s: ReplayStatus) -> String {
         let cams = replay.recording ? s.cameras : replay.settings.assignedCount
         let buf = Int(s.bufferedSeconds)
         return String(format: "%@ · %d cam · %@ %02d:%02d:%02d", replay.recording ? "Recording" : "Stopped", cams,
                       L("버퍼"), buf / 3600, (buf / 60) % 60, buf % 60)
     }
 
-    private var diskLine: String {
-        let s = replay.status
+    private func diskLine(_ s: ReplayStatus) -> String {
         let est = replay.estimate(cameras: max(1, replay.recording ? s.cameras : replay.settings.assignedCount))
         return Lf("사용 %@ · 남은 공간 %@ · 약 %@시간 · %@ ×%@%@",
                   OutputConfig.bytesText(s.bytes), OutputConfig.bytesText(est.free), String(format: "%.1f", est.hours),
@@ -171,7 +180,10 @@ struct ReplayView: View {
     }
 
     private func channelPanel(_ c: Int) -> some View {
-        let ui = replay.channelsUI[c]
+        ReplayLive { live in self.channelPanelBody(c, live.channels[c]) }
+    }
+
+    private func channelPanelBody(_ c: Int, _ ui: ReplayChannelUI) -> some View {
         let sel = replay.selected.contains(c)
         let deckColor = ReplayColors.deck[c]
         return VStack(alignment: .leading, spacing: 6) {
@@ -282,9 +294,13 @@ struct ReplayView: View {
     }
 
     private func sourceBox(_ k: Int) -> some View {
+        ReplayLive { live in self.sourceBoxBody(k, live.channels) }
+    }
+
+    private func sourceBoxBody(_ k: Int, _ channels: [ReplayChannelUI]) -> some View {
         let id = replay.settings.slots[k]
         let input = id.flatMap { engine.input(withID: $0) }
-        let decks = (0..<2).filter { replay.channelsUI[$0].camera == k }
+        let decks = (0..<2).filter { channels[$0].camera == k }
         let recordingSlot = replay.recording && replay.recordingSlots.indices.contains(k) && replay.recordingSlots[k] != nil
         let border: Color = decks.contains(0) ? ReplayColors.deck[0] : (decks.contains(1) ? ReplayColors.deck[1] : Color(white: 0.2))
         return VStack(alignment: .leading, spacing: 5) {
@@ -356,18 +372,22 @@ struct ReplayView: View {
     // MARK: Transport
 
     private var transport: some View {
+        ReplayLive { live in self.transportBody(live.channels) }
+    }
+
+    private func transportBody(_ channels: [ReplayChannelUI]) -> some View {
         HStack(spacing: 6) {
             tbtn("backward.end.fill", L("5초 뒤로")) { replay.jump(seconds: -5) }
             tbtn("backward.frame.fill", L("1프레임 뒤로")) { replay.jump(frames: -1) }
                 .keyboardShortcut(.leftArrow, modifiers: [])
-            let playing = replay.selected.contains { replay.channelsUI[$0].playing }
+            let playing = replay.selected.contains { channels[$0].playing }
             tbtn(playing ? "pause.fill" : "play.fill", L("재생 / 일시정지 (Space)"), wide: true) { replay.playPause() }
                 .keyboardShortcut(.space, modifiers: [])
             tbtn("forward.frame.fill", L("1프레임 앞으로")) { replay.jump(frames: 1) }
                 .keyboardShortcut(.rightArrow, modifiers: [])
             tbtn("forward.end.fill", L("5초 앞으로")) { replay.jump(seconds: 5) }
             Divider().frame(height: 24)
-            let cur = replay.channelsUI[replay.selected.min() ?? 0]
+            let cur = channels[replay.selected.min() ?? 0]
             ForEach([0.25, 0.5, 0.75, 1.0, 2.0], id: \.self) { v in
                 Button { replay.setSpeed(v) } label: {
                     Text(String(format: "%.0f%%", v * 100)).font(.system(size: 11, weight: .bold).monospacedDigit())
@@ -643,6 +663,8 @@ struct ReplaySettingsSheet: View {
                 }
                 Section(L("슬로모션")) {
                     Toggle(L("AI 프레임 보간 (클립 저장 시 자동, 빠른 맥은 실시간)"), isOn: $replay.settings.aiSlow)
+                    Text(L("GPU를 많이 씁니다. 송출 프레임이 밀리면 자동으로 GPU 블렌딩으로 바꾸고, 클립 AI 작업도 잠시 멈춥니다. 방송 중 끊김이 보이면 꺼 두세요."))
+                        .font(.caption).foregroundColor(.secondary)
                     Toggle(L("GPU 블렌딩 (AI 준비 전·AI 미지원 맥에서 즉시 부드럽게)"), isOn: $replay.settings.smoothSlow)
                     if !replay.aiInfo.isEmpty {
                         Text(replay.aiInfo).font(.caption).foregroundColor(.secondary)

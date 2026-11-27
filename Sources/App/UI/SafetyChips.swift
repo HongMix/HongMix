@@ -53,6 +53,7 @@ final class AppFocusWatch: ObservableObject {
 /// Orange line under the top bar while something is on air and another app has the keyboard:
 /// HongMix keyboard shortcuts don't reach HongMix then (Companion / MIDI / API still work).
 struct ControlFocusBanner: View {
+    @ObservedObject private var displayOutput = FullscreenOutput.shared   // display output state (not via engine refresh)
     @EnvironmentObject var engine: SwitcherEngine
     @ObservedObject var watch = AppFocusWatch.shared
     var forceShow = false       // screenshots

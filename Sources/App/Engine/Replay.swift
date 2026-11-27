@@ -26,7 +26,7 @@ struct ReplaySettings: Codable, Equatable {
     var formatRev = 2                     // 2 = HEVC default (1.3.37); older projects are migrated
     var smoothSlow = true                 // GPU blending between frames in slow motion
     var audioFollowsCamera = true         // replay plays the shown angle's own audio (else program audio)
-    var aiSlow = true                     // AI frame interpolation for slow motion
+    var aiSlow = false                    // AI frame interpolation for slow motion (heavy on the GPU: off by default)
     var folder: String = ""               // "" = ~/Movies/HongMix/Replay
     var maxGB: Double = 0                 // 0 = use the free space (minus a reserve)
     var autoDelete = true                 // delete the oldest footage when the limit is reached
@@ -159,6 +159,12 @@ final class ReplayInput: InputSource {
     }
 }
 
+/// Fast-changing Replay window state, observed only by the small views that show it.
+final class ReplayLiveState: ObservableObject {
+    @Published var channels = [ReplayChannelUI(), ReplayChannelUI()]
+    @Published var status = ReplayStatus()
+}
+
 final class ReplayEngine: ObservableObject {
     static let shared = ReplayEngine()
     static let cams = ReplaySettings.maxCameras
@@ -176,8 +182,14 @@ final class ReplayEngine: ObservableObject {
     @Published private(set) var recording = false
     @Published private(set) var recordingStartedAt: Date?
     @Published private(set) var events: [ReplayEvent] = []
-    @Published private(set) var channelsUI = [ReplayChannelUI(), ReplayChannelUI()]
-    @Published private(set) var status = ReplayStatus()
+    /// Deck positions (~10×/s) and status (1×/s) live in `live`, not in this object's own published state:
+    /// otherwise every update rebuilt the whole Replay window, clip list included, on the main thread.
+    let live = ReplayLiveState()
+    var channelsUI: [ReplayChannelUI] { live.channels }
+    private(set) var status: ReplayStatus {
+        get { live.status }
+        set { live.status = newValue }
+    }
     @Published private(set) var pendingIn: Int64?
     @Published private(set) var aiClips: [UUID: ReplayAIClipState] = [:]
     /// Clip export (Replay › ⬇): progress 0…1 per event being exported, last result message.
@@ -309,6 +321,12 @@ final class ReplayEngine: ObservableObject {
         var ids = Set<UUID>()
         for k in 0..<Self.cams where outs[k] != nil { if let id = recCameras[k] { ids.insert(id) } }
         return ids
+    }
+
+    /// Inputs the render hook asks a frame for this tick (CAM slots with a source).
+    var renderCameraIDs: [UUID] {
+        lock.lock(); defer { lock.unlock() }
+        return recCameras.compactMap { $0 }
     }
 
     /// Sources of the current recording, CAM 1–4 (nil = empty).
@@ -594,11 +612,42 @@ final class ReplayEngine: ObservableObject {
 
     private static let reserve: Int64 = 5_000_000_000
 
+    /// Free space of the replay folder, measured in the background at most every 3 s. The volume query
+    /// (`volumeAvailableCapacityForImportantUsage`) can take hundreds of ms while the disk is busy writing
+    /// replay footage; it used to run on the main thread on every redraw of the Replay window (~10×/s),
+    /// stalling the UI for up to 2 s. nil = not measured yet.
+    private let freeLock = NSLock()
+    private var freeValue: (path: String, bytes: Int64)?
+    private var freeAt: CFTimeInterval = 0
+    private var freeQuerying = false
+    private let freeQueue = DispatchQueue(label: "HongMix.replay.freespace", qos: .utility)
+
+    private func cachedFreeSpace() -> Int64? {
+        let path = settings.folderPath
+        freeLock.lock()
+        let v = freeValue?.path == path ? freeValue?.bytes : nil
+        let stale = v == nil || CACurrentMediaTime() - freeAt > 3
+        let start = stale && !freeQuerying
+        if start { freeQuerying = true }
+        freeLock.unlock()
+        if start {
+            freeQueue.async { [weak self] in
+                let bytes = OutputConfig.freeSpace(at: path) ?? 0
+                guard let self = self else { return }
+                self.freeLock.lock()
+                self.freeValue = (path, bytes); self.freeAt = CACurrentMediaTime(); self.freeQuerying = false
+                self.freeLock.unlock()
+            }
+        }
+        return v
+    }
+
     private func refreshLimit() {
         lock.lock(); let st = store; lock.unlock()
         guard let st = st else { return }
         let used = mc_replay_store_bytes(st)
-        let free = OutputConfig.freeSpace(at: settings.folderPath) ?? 0
+        // not measured yet: keep the current limit (a 0 here would shrink the buffer and delete footage)
+        guard let free = cachedFreeSpace() else { return }
         var limit: Int64 = 0
         if settings.autoDelete {
             let room = used + max(0, free - ReplayEngine.reserve)
@@ -647,7 +696,7 @@ final class ReplayEngine: ObservableObject {
         } else {
             s.bufferedSeconds = 0; s.bytes = 0; s.error = nil
         }
-        s.free = OutputConfig.freeSpace(at: settings.folderPath) ?? 0
+        s.free = cachedFreeSpace() ?? status.free
         let perHour = Double(estimate(cameras: max(1, cams > 0 ? cams : settings.assignedCount)).perHour)
         s.hoursLeft = perHour > 0 ? Double(max(0, s.free - ReplayEngine.reserve)) / perHour : 0
         if s != status { status = s }
@@ -657,7 +706,7 @@ final class ReplayEngine: ObservableObject {
     /// Estimated recording time for the given settings and disk (shown before recording starts).
     func estimate(cameras: Int) -> (perHour: Int64, hours: Double, free: Int64) {
         let fmt = engine?.format ?? format
-        let free = OutputConfig.freeSpace(at: settings.folderPath) ?? 0
+        let free = cachedFreeSpace() ?? status.free
         let kbps = settings.kbpsPerCamera(width: fmt.width, height: fmt.height, fps: fmt.fps)
         let perHour = Int64((kbps * 1000 / 8 * Double(max(1, cameras)) + 48_000 * 8) * 3600)
         let usable = settings.maxGB > 0 ? min(Int64(settings.maxGB * 1e9), free - ReplayEngine.reserve) : free - ReplayEngine.reserve
@@ -782,7 +831,9 @@ final class ReplayEngine: ObservableObject {
                     smoothed = pb; mode = "AI"
                 } else if let a = frame(f, cam: s.camera, st: st, channel: c, kind: kind),
                           let b = frame(f + 1, cam: s.camera, st: st, channel: c, kind: kind) {
-                    if useAI, let rt = rtAI, let p = pool,
+                    // Real-time AI only while the program has room: for 30 s after a dropped or tight program
+                    // frame, slow motion uses GPU blending (the AI pass competes with the program mix for the GPU).
+                    if useAI, !(engine?.programStressed(within: 30) ?? false), let rt = rtAI, let p = pool,
                        let out = rt.interpolate(a, b, phases: [Float(phase)], bgraPool: p)?.first {
                         smoothed = out; mode = "AI RT"
                     } else if smooth, let dst = pixelBuffer(), blender.blend(a, b, phase: phase, into: dst) {
@@ -857,7 +908,7 @@ final class ReplayEngine: ObservableObject {
                                     smoothing: s.smoothing)
         }
         lock.unlock()
-        if ui != channelsUI { channelsUI = ui }
+        if ui != channelsUI { live.channels = ui }
     }
 
     private func modify(_ channels: Set<Int>? = nil, _ f: (inout ChannelState, Int64) -> Void) {
@@ -872,8 +923,19 @@ final class ReplayEngine: ObservableObject {
 
     /// Loads the ML interpolator for the program size in the background, measures this Mac once,
     /// and decides between real-time AI and background AI clips.
+    /// When ReplayEngine.shared was created: at launch.
+    private let createdAt = CACurrentMediaTime()
+
     func prepareAI() {
         guard settings.aiSlow else { return }
+        // Loading the model builds Metal libraries. While HongMix is still starting (window prewarm, the
+        // browser engine and the monitors build Metal state too) this crashed inside Metal (2.4.0 test
+        // build 191). Wait until the app has been up for 20 s; the request is kept and runs then.
+        let wait = 20 - (CACurrentMediaTime() - createdAt)
+        if wait > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in self?.prepareAI() }
+            return
+        }
         guard ReplayCaps.aiSupported else {
             aiInfo = L("이 맥/macOS 는 AI 보간 미지원 — GPU 블렌딩으로 부드럽게")
             return
@@ -991,6 +1053,9 @@ final class ReplayEngine: ObservableObject {
         var prev = decode(e.inFrame)
         let total = Double(e.outFrame - e.inFrame)
         for fr in e.inFrame..<e.outFrame {
+            if cancelled() { ok = false; break }
+            // Background work: pause while the program is dropping or tight, resume when it has room again.
+            while engine?.programStressed(within: 5) == true && !cancelled() { usleep(200_000) }
             if cancelled() { ok = false; break }
             let next = decode(fr + 1)
             if let a = prev, let b = next {

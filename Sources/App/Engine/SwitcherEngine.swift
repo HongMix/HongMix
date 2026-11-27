@@ -252,7 +252,12 @@ final class SwitcherEngine: ObservableObject {
     /// failed to open or hit a write error (disk full) still showed "recording".
     @Published private(set) var multiCorderError: String?
     private var multiCorderGen = 0
-    @Published var mixerVisible = true
+    /// Embedded audio mixer shown in the main window. Lives in `MixerDock` so popping the mixer out (or back)
+    /// re-lays out only the main window instead of refreshing every view that observes the engine.
+    var mixerVisible: Bool {
+        get { MixerDock.shared.visible }
+        set { MixerDock.shared.visible = newValue }
+    }
     @Published var tbar: Double = 0
     @Published private(set) var format: VideoFormat
     /// Per-second statistics live in their own observable so updating them doesn't redraw the window.
@@ -273,6 +278,15 @@ final class SwitcherEngine: ObservableObject {
     let dataSources = DataSourceManager()
     private(set) var renderMs: Double = 0
     private(set) var droppedTicks: Int = 0
+    /// When the program last dropped a frame or a tick used more than 70 % of its frame time (render thread
+    /// writes, any thread reads). Optional GPU work — replay AI slow motion — backs off while this is recent.
+    private let stressLock = NSLock()
+    private var lastStress: CFTimeInterval = 0
+    func programStressed(within seconds: Double) -> Bool {
+        stressLock.lock(); defer { stressLock.unlock() }
+        return lastStress > 0 && CACurrentMediaTime() - lastStress < seconds
+    }
+    private func noteStress() { stressLock.lock(); lastStress = CACurrentMediaTime(); stressLock.unlock() }
     /// When renderer drops happened (last 10 min) — the pre-show check judges the recent ones, not the
     /// launch hiccup counted since start.
     private var dropTimes: [(t: Date, n: Int)] = []
@@ -1601,6 +1615,7 @@ final class SwitcherEngine: ObservableObject {
             autoreleasepool { renderTick(tick) }
             let t1 = CACurrentMediaTime()
             let ms = (t1 - t0) * 1000
+            if ms > frameNs / 1_000_000 * 0.7 { noteStress() }
             stateLock.lock()
             renderMsAccum += ms
             renderMsCount += 1
@@ -1646,6 +1661,7 @@ final class SwitcherEngine: ObservableObject {
                 let sleeping = systemAsleep || CACurrentMediaTime() < ignoreDropsUntil
                 if !sleeping { droppedCount += Int(lateness / frameAbs) + 1 }
                 stateLock.unlock()
+                if !sleeping { noteStress() }
                 if sleeping {                         // resume the clock without counting the gap
                     start = now - toAbs(Double(tick) * frameNs)
                     continue
@@ -2029,6 +2045,23 @@ final class SwitcherEngine: ObservableObject {
             if let f = f { sourceCache[src] = f }
             return f
         }
+        // Full-frame renders of single inputs (replay cameras, MultiCorder ISO) for this tick: one GPU pass for
+        // all that are missing, shared between replay and ISO, reusing an output's .input(id) frame.
+        var fullCache: [UUID: CVPixelBuffer] = [:]
+        func fullFrames(_ ids: [UUID]) -> [UUID: CVPixelBuffer] {
+            var missing: [UUID] = []
+            for id in ids where fullCache[id] == nil {
+                if let f = sourceCache[.input(id)] { fullCache[id] = f }
+                else if find(id) != nil, !missing.contains(id) { missing.append(id) }   // a removed input: no frame
+            }
+            if !missing.isEmpty, let mixer = mixer {
+                let r = mixer.renderTiles(batch: missing.map { [fullTile(find($0), rect: full)] })
+                for (k, id) in missing.enumerated() { if let f = r[k] { fullCache[id] = f } }
+            }
+            var out: [UUID: CVPixelBuffer] = [:]
+            for id in ids { if let f = fullCache[id] { out[id] = f } }
+            return out
+        }
         // Preview monitor: the preview input composed with its Position settings (shares the .preview bus frame)
         // Only when the preview input is actually repositioned/cropped/keyed — otherwise the monitor shows the
         // input directly (saves a full GPU pass + wait every frame).
@@ -2081,10 +2114,11 @@ final class SwitcherEngine: ObservableObject {
         captions.feed(UnsafePointer(audioMixer.bus(captions.feedBus)), frames: n)
         // Instant replay: record the selected cameras (program format) + master audio, feed live angles
         if ReplayEngine.shared.wantsFrames {
+            // every replay camera in one GPU pass (one wait, not one per camera), reusing frames already drawn
+            let replayFrames = fullFrames(ReplayEngine.shared.renderCameraIDs)
             ReplayEngine.shared.renderHook(tick: tick, audio: UnsafePointer(audioMixer.bus(0)), frames: n,
                                            sourceAudio: { [audioMixer] id in audioMixer.iso(id) }) { id in
-                guard let i = find(id) else { return nil }
-                return mixer?.renderTiles([fullTile(i, rect: full)])
+                replayFrames[id]
             }
         }
         if st.ftb > 0 {
@@ -2111,16 +2145,11 @@ final class SwitcherEngine: ObservableObject {
 
         // 6. MultiCorder ISO recordings: all ISO frames in one GPU pass (one wait instead of one per ISO);
         // an input already rendered full-frame this tick for an output or monitor is reused.
-        if !isos.isEmpty, let mixer = mixer {
+        if !isos.isEmpty {
             let list = Array(isos)
-            var isoFrames = list.map { sourceCache[.input($0.key)] }
-            let missing = isoFrames.indices.filter { isoFrames[$0] == nil }
-            if !missing.isEmpty {
-                let r = mixer.renderTiles(batch: missing.map { [fullTile(find(list[$0].key), rect: full)] })
-                for (k, i) in missing.enumerated() { isoFrames[i] = r[k] }
-            }
-            for (k, (id, h)) in list.enumerated() {
-                guard let f = isoFrames[k] else { continue }
+            let isoFrames = fullFrames(list.map(\.key))
+            for (id, h) in list {
+                guard let f = isoFrames[id] else { continue }
                 mc_output_push_pixelbuffer(h, Unmanaged.passUnretained(f).toOpaque(), tick)
                 if st.isoMasterAudio {
                     mc_output_push_audio(h, UnsafePointer(audioMixer.bus(0)), Int32(n))

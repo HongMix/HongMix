@@ -19,6 +19,7 @@ extension SwitcherEngine {
 /// Window "MultiView": make several MultiViews, pick a layout and what each cell shows,
 /// and send one straight to a monitor.
 struct MultiViewEditor: View {
+    @ObservedObject private var displayOutput = FullscreenOutput.shared   // display output state (not via engine refresh)
     @EnvironmentObject var engine: SwitcherEngine
     @ObservedObject var map = DisplayMap.shared
     @ViewState private var selected: UUID? = nil

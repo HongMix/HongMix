@@ -73,6 +73,8 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `IdentifyMonitors` |  | 연결된 화면에 모니터 번호를 잠시 표시합니다. |
 | `Snapshot` | [Value=파일 경로] | Output을 PNG로 저장합니다 (기본 위치 ~/Pictures/HongMix). |
 | `SnapshotInput` | Input [Value=경로] | 입력 화면을 PNG로 저장합니다. |
+| `OpenWindow` | Value=replay\|scopes\|audiomixer\|talentcue\|multiview\|rundown\|ptz | 지정한 도구 창을 엽니다. |
+| `CloseWindow` | Value=창 제목 | 제목이 일치하는 도구 창을 닫습니다. |
 
 ## 입력 (Input)
 

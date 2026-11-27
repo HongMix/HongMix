@@ -29,7 +29,7 @@ enum DisplayOutputMode: String, CaseIterable {
 /// • Default display: a screen other than the one the switcher is on (like vMix's secondary monitor).
 /// • If it has to use the switcher's own screen: menu bar/Dock hidden, Esc / double-click / right-click exits.
 /// • Displays plugged/unplugged while showing: follows the chosen display or closes cleanly.
-final class FullscreenOutput: NSObject {
+final class FullscreenOutput: NSObject, ObservableObject {
     static let shared = FullscreenOutput()
     private var window: FullscreenWindow?
     private weak var engine: SwitcherEngine?
@@ -162,7 +162,7 @@ final class FullscreenOutput: NSObject {
             hide()
             show(engine: engine)
         }
-        engine.objectWillChange.send()
+        objectWillChange.send()   // the views that show the display output observe it (not the whole engine)
     }
 
     /// Older call sites (index into NSScreen.screens).
@@ -183,7 +183,7 @@ final class FullscreenOutput: NSObject {
             show(engine: engine, fill: fill, windowFrame: frame)
         }
         else if isShowing { engine.setFullscreenSource(src) }
-        engine.objectWillChange.send()
+        objectWillChange.send()   // the views that show the display output observe it (not the whole engine)
     }
 
     func setMode(_ newMode: DisplayOutputMode, engine: SwitcherEngine) {
@@ -192,7 +192,7 @@ final class FullscreenOutput: NSObject {
         if reopen { hide() }
         mode = newMode
         if reopen { show(engine: engine) }
-        engine.objectWillChange.send()
+        objectWillChange.send()   // the views that show the display output observe it (not the whole engine)
     }
 
     /// Select a mode and make it visible. The old picker only changed a preference, which made
@@ -201,7 +201,7 @@ final class FullscreenOutput: NSObject {
         if isShowing { hide() }
         mode = newMode
         show(engine: engine)
-        engine.objectWillChange.send()
+        objectWillChange.send()   // the views that show the display output observe it (not the whole engine)
     }
 
     func toggle(engine: SwitcherEngine) {
@@ -307,7 +307,7 @@ final class FullscreenOutput: NSObject {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { self?.reopenIfBack() }
             }
         }
-        engine.objectWillChange.send()
+        objectWillChange.send()   // the views that show the display output observe it (not the whole engine)
     }
 
     /// The unplugged monitor is back (same vendor/model/serial): show the output on it again.
@@ -414,7 +414,7 @@ final class FullscreenOutput: NSObject {
         screenObserver = nil
         engine?.setFullscreenSource(nil)
         engine?.fullscreenSlot.clear()
-        engine?.objectWillChange.send()
+        objectWillChange.send()   // the views that show the display output observe it (not the whole engine)
         FullscreenOutput.switcherWindow?.makeKeyAndOrderFront(nil)
     }
 }

@@ -10,30 +10,26 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.3.10</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.4.0</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.3.10
-- Smooth Browser-input video while the main window is visible, and no brief speaker click while HongMix loads.
-- Lighter MultiCorder ISO rendering and GPU-cached MultiView labels.
-- Per-cell MultiView names, labels on or below the picture, and selectable automatic-name styles.
-- Multiple Scopes windows, hardware-look refinements, optional brushed-metal background and smaller operator touches.
-- Build 187 passed translation, core, MultiView, DMG and signing checks. See [English notes](docs/RELEASE-NOTES-2.3.10.md) or [한국어](docs/RELEASE-NOTES-2.3.10.ko.md).
+### Latest update · 2.4.0
+- Instant Replay with AI slow motion no longer disturbs Program; HongMix automatically falls back to GPU blending when Program is busy.
+- AI slow motion is off by default for new projects, with an explanation in Replay settings.
+- Replay, Scopes, Talent Cue, MultiView, Audio Mixer and display-output windows open faster.
+- The Replay window performs fewer disk checks and redraws; the API adds `OpenWindow` and `CloseWindow`.
+- Build 198 passed translation, core, MultiView, DMG and signing checks. See [English notes](docs/RELEASE-NOTES-2.4.0.md) or [한국어](docs/RELEASE-NOTES-2.4.0.ko.md).
 
 Thanks to [@otiumvisuals](https://github.com/otiumvisuals), who contributed MultiView, Talent Cue and the hardware look in 2.3.7, plus MultiView labels, Scopes windows and hardware-look refinements in 2.3.10. Render-thread improvement ideas came from Hawk_Super on Reddit.
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/en-main.png" alt="HongMix 2.3.10 main switcher" width="100%"><br><sub>Refined hardware look</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/en-multiview.png" alt="HongMix 2.3.10 MultiView editor" width="100%"><br><sub>Per-cell names and label position</sub></td>
-  </tr>
-  <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/en-settings.png" alt="HongMix 2.3.10 appearance settings" width="100%"><br><sub>Optional brushed-metal background</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/en-talentcue.png" alt="HongMix 2.3.10 Talent Cue controls" width="100%"><br><sub>Hardware-style Talent Cue controls</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.4.0/en-replay-settings.png" alt="HongMix 2.4.0 Replay settings" width="100%"><br><sub>AI slow motion is optional and protected from Program load</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/en-main.png" alt="HongMix main switcher" width="100%"><br><sub>Live production switcher</sub></td>
   </tr>
 </table>
 

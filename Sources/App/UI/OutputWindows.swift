@@ -185,6 +185,7 @@ final class OutputWindow: NSWindow {}
 
 /// One place for every output: each connected monitor (on/off + what it shows) and the output windows.
 struct DisplaySettingsPanel: View {
+    @ObservedObject private var displayOutput = FullscreenOutput.shared   // display output state (not via engine refresh)
     @EnvironmentObject var engine: SwitcherEngine
     @ObservedObject private var map = DisplayMap.shared
     @ObservedObject private var windows = OutputWindows.shared

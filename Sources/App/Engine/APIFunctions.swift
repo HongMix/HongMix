@@ -794,6 +794,14 @@ enum APIProcessor {
             guard let w = FullscreenOutput.switcherWindow?.attachedSheet != nil ? FullscreenOutput.switcherWindow
                     : NSApp.windows.first(where: { $0.attachedSheet != nil }), let sh = w.attachedSheet else { return "No sheet" }
             w.endSheet(sh, returnCode: value == "2" ? .alertSecondButtonReturn : .alertFirstButtonReturn)
+        case "openwindow":   // HongMix extension: Value=replay|scopes|audiomixer|talentcue|multiview|rundown|ptz
+            guard let open = ContentView.apiOpenWindow, !value.isEmpty else { return "Value=window id" }
+            open(value.lowercased())
+        case "closewindow":  // HongMix extension: Value=window title (e.g. Replay, Scopes, Audio Mixer) — closes it like ⌘W
+            guard !value.isEmpty, let w = NSApp.windows.first(where: { $0.isVisible && $0.title.lowercased() == value.lowercased() }) else {
+                return "Window not open"
+            }
+            w.performClose(nil)
         case "snapshotallwindows":   // HongMix test hook: Value=folder — PNG of every visible HongMix window
             return snapshotAllWindows(value) ? nil : "Snapshot failed"
         case "snapshotview":         // HongMix test hook: Value=name,path — offscreen render (works on a locked screen)

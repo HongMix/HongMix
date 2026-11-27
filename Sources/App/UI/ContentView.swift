@@ -253,7 +253,42 @@ struct AudioMixerWindow: View {
 ///   [ Preview | Transitions | Output ]
 ///   [ Inputs ......................  | Audio mixer ]
 ///   [ Add Input | Record | External | Stream | Fullscreen ......... status ]
+/// Whether the audio mixer is docked in the main window (see SwitcherEngine.mixerVisible).
+final class MixerDock: ObservableObject {
+    static let shared = MixerDock()
+    @Published var visible = true
+}
+
+/// SwiftUI builds a window's view tree the first time it opens: 0.1–0.3 s on the main thread, during which
+/// monitors and buttons freeze. Once built, it opens in ~15–60 ms. Shortly after launch, build the heavy
+/// secondary windows once, invisibly (alpha 0, closed right away), so the operator never pays the first open.
+/// (The Audio Mixer pops out of the main window: its dock state lives in MixerDock, so the main window only
+/// re-lays out once while it is built here, at launch.)
+enum WindowPrewarm {
+    private static var done = false
+    static func run(_ open: @escaping (String) -> Void) {
+        guard !done, !UserDefaults.standard.bool(forKey: "disableWindowPrewarm") else { return }
+        done = true
+        let windows = [("replay", "Replay"), ("talentcue", "Talent Cue"), ("multiview", "MultiView"), ("scopes", "Scopes"),
+                       ("audiomixer", "Audio Mixer")]
+        for (k, (id, title)) in windows.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0 + Double(k) * 0.5) {
+                // already open (restored by macOS or opened by the operator): leave it alone
+                if NSApp.windows.contains(where: { $0.isVisible && $0.title == title }) { return }
+                open(id)
+                guard let w = NSApp.windows.first(where: { $0.title == title }) else { return }
+                w.alphaValue = 0                      // before the first display: never seen
+                DispatchQueue.main.async {
+                    w.performClose(nil)
+                    w.alphaValue = 1
+                }
+            }
+        }
+    }
+}
+
 struct ContentView: View {
+    @ObservedObject private var mixerDock = MixerDock.shared
     @EnvironmentObject var engine: SwitcherEngine
     @Environment(\.openWindow) private var openWindow
     @ViewState private var sheet: SheetRequest? = nil
@@ -265,6 +300,8 @@ struct ContentView: View {
     @AppStorage(AppSkin.defaultsKey) private var appSkin = AppSkin.mono.rawValue
     @ViewState private var dragStartFraction: Double? = nil
 
+    /// API OpenWindow (HongMix extension): lets the control API open a window by id.
+    static var apiOpenWindow: ((String) -> Void)?
     var body: some View {
         VStack(spacing: 0) {
             TopBar()
@@ -272,7 +309,7 @@ struct ContentView: View {
             SystemHealthBanner()
             GeometryReader { geo in
                 let activeAudioInputs = engine.inputs.filter { $0.hasAudio && $0.audioFX.visibleInMixer }
-                let lay = SwitcherLayout(size: geo.size, mixerVisible: engine.mixerVisible,
+                let lay = SwitcherLayout(size: geo.size, mixerVisible: mixerDock.visible,
                                        strips: 1 + engine.visibleBuses.count + (audioInputStripsCollapsed ? 0 : activeAudioInputs.count),
                                        inputStripsCollapsed: audioInputStripsCollapsed,
                                        topFraction: monitorFraction)
@@ -323,7 +360,7 @@ struct ContentView: View {
                         InputGrid(sheet: $sheet)
                             .frame(maxWidth: inputDockLeft ? nil : .infinity, maxHeight: .infinity, alignment: .topLeading)
                         if inputDockLeft { Spacer(minLength: 0) }
-                        if engine.mixerVisible {
+                        if mixerDock.visible {
                             Rectangle().fill(Color.black).frame(width: 1)
                             AudioMixerPanel(sheet: $sheet, inputStripsCollapsed: $audioInputStripsCollapsed,
                                             onPopOut: { openWindow(id: "audiomixer") })
@@ -342,6 +379,11 @@ struct ContentView: View {
         .background(
             BrushedMetal(base: Theme.window)
         )
+        .onAppear {
+            let open = openWindow
+            ContentView.apiOpenWindow = { open(id: $0) }
+            WindowPrewarm.run { open(id: $0) }
+        }
         .sheet(item: $sheet) { req in SheetRequestView(req: req, sheet: $sheet).environmentObject(engine) }
         .sheet(item: $outputsSheet) { kind in
             OutputsSheet(focusKind: kind)
@@ -672,6 +714,7 @@ struct BrowserBadge: View {
 // MARK: - Bottom bar
 
 struct BottomBar: View {
+    @ObservedObject private var mixerDock = MixerDock.shared
     @EnvironmentObject var engine: SwitcherEngine
     @Environment(\.openWindow) private var openWindow
     @Binding var sheet: SheetRequest?
@@ -717,12 +760,12 @@ struct BottomBar: View {
             ToolBarWindowButton(title: "MultiView", symbol: "rectangle.split.3x3", windowID: "multiview",
                                 help: L("MultiView — 레이아웃 · 칸마다 화면 선택 · 여러 개 만들어 모니터에 보내기"))
             Button {
-                engine.mixerVisible.toggle()
+                mixerDock.visible.toggle()
             } label: {
                 Image(systemName: "slider.vertical.3")
                     .foregroundColor(.white)
                     .frame(width: 30, height: 30)
-                    .background(engine.mixerVisible ? Theme.accent : Theme.button)
+                    .background(mixerDock.visible ? Theme.accent : Theme.button)
                     .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
                     .hmBevel(cornerRadius: Theme.radius)
             }
@@ -931,6 +974,7 @@ struct OutputBarButton: View {
 }
 
 struct FullscreenBarButton: View {
+    @ObservedObject private var displayOutput = FullscreenOutput.shared   // display output state (not via engine refresh)
     @EnvironmentObject var engine: SwitcherEngine
     @ViewState private var showSettings = false
 
