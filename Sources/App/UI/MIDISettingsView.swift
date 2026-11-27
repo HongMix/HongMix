@@ -13,7 +13,7 @@ struct MIDISettingsView: View {
     private static let common = ["PreviewInput", "CutDirect", "Cut", "Fade", "QuickPlay", "FadeToBlack",
                                  "OverlayInput1", "OverlayInput2", "Transition1", "Transition2", "StartStopRecording",
                                  "StartStopStreaming", "Audio", "SetFader", "SetVolume", "SetMasterVolume",
-                                 "ReplayPlay", "NextItem", "NextPicture", "PreviousPicture", "PTZPresetRecall"]
+                                 "ReplayPlay", "VideoCueGo", "VideoCueStop", "NextItem", "NextPicture", "PreviousPicture", "PTZPresetRecall"]
 
     private var device: MIDIControl.Device? { midi.devices.first { $0.id == deviceID } ?? midi.devices.first }
     private var shown: [MIDIMapping] {

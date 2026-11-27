@@ -117,6 +117,13 @@ struct HongMixApp: App {
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1100, height: 720)
+        Window("Video Cue", id: "videocue") {
+            VideoCueWindow()
+                .id(language + skin + look)
+                .environmentObject(engine)
+                .preferredColorScheme(.dark)
+        }
+        .defaultSize(width: 1100, height: 700)
         Window("MultiView", id: "multiview") {
             MultiViewEditor()
                 .id(language + skin + look)

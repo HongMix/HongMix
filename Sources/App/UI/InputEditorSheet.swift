@@ -25,6 +25,7 @@ struct InputEditorSheet: View {
         case videoCall = "Video Call"
         case virtualSet = "Virtual Set"
         case replay = "Instant Replay"
+        case videoCue = "Video Cue"
 
         var id: String { rawValue }
         var available: Bool {
@@ -50,6 +51,7 @@ struct InputEditorSheet: View {
             case .videoCall: return "phone.connection"
             case .virtualSet: return "cube"
             case .replay: return "gobackward"
+            case .videoCue: return "play.rectangle.on.rectangle"
             }
         }
         static func of(_ k: InputKind) -> Category {
@@ -64,6 +66,7 @@ struct InputEditorSheet: View {
             case .browser: return .browser
             case .audio: return .audio
             case .replay: return .replay
+            case .videoCue: return .videoCue
             case .photos: return .photos            // SlideInputs.swift (editor UI pending)
             case .pdfSlides: return .powerpoint
             case .virtualSet: return .virtualSet
@@ -142,6 +145,7 @@ struct InputEditorSheet: View {
         case .browser: return "Web Browser"
         case .audio: return "Audio Input"
         case .replay: return "Replay A"
+        case .videoCue: return "Video Cue"
         case .photos: return "Photos"                // SlideInputs.swift (editor UI pending)
         case .pdfSlides: return "Slides"
         case .virtualSet: return "Virtual Set"
@@ -161,6 +165,7 @@ struct InputEditorSheet: View {
         case .browser: return .browser
         case .audio: return .audio
         case .replay: return .replay
+        case .videoCue: return .videoCue
         case .photos: return .photos
         case .powerpoint: return .pdfSlides
         case .virtualSet: return .virtualSet
@@ -238,6 +243,11 @@ struct InputEditorSheet: View {
         case .browser: browserSection
         case .audio: audioSection
         case .replay: replaySection
+        case .videoCue:
+            Section("Video Cue") {
+                Text(L("큐 목록 재생 입력입니다. 큐 목록, GO/STOP, 페이드는 Video Cue 창(아래쪽 버튼)에서 다룹니다. 소리는 오디오 믹서의 채널로 나오니 버스로 보내 별도 출력에 연결할 수 있습니다."))
+                    .font(.caption).foregroundColor(.secondary)
+            }
         case .photos: photosSection
         case .powerpoint: pdfSection
         case .virtualSet: virtualSetSection

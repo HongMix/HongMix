@@ -4,6 +4,7 @@ import CoreVideo
 enum InputKind: String, Codable, CaseIterable {
     case camera, media, stream, ndi, decklink, color, image, title, screen, browser, audio, replay
     case photos, pdfSlides, virtualSet      // SlideInputs.swift
+    case videoCue                           // VideoCue.swift
 
     var label: String {
         switch self {
@@ -19,6 +20,7 @@ enum InputKind: String, Codable, CaseIterable {
         case .browser: return L("웹 브라우저")
         case .audio: return L("오디오 입력")
         case .replay: return "Instant Replay"
+        case .videoCue: return "Video Cue"
         case .photos: return L("사진 (슬라이드쇼)")
         case .pdfSlides: return L("PDF 슬라이드")
         case .virtualSet: return L("가상 세트")
@@ -39,6 +41,7 @@ enum InputKind: String, Codable, CaseIterable {
         case .browser: return "globe"
         case .audio: return "mic"
         case .replay: return "gobackward"
+        case .videoCue: return "play.rectangle.on.rectangle"
         case .photos: return "photo.on.rectangle.angled"
         case .pdfSlides: return "doc.richtext"
         case .virtualSet: return "person.crop.rectangle"
@@ -454,6 +457,7 @@ struct InputConfig: Codable, Identifiable, Equatable {
         self.name = name
         collapsed = kind == .audio          // audio-only inputs start collapsed (no empty picture box)
         if kind == .pdfSlides { slides.transition = .cut }   // presentations: Cut by default
+        if kind == .videoCue { audioFollowsVideo = false }  // it often plays straight to a screen/bus, not via Program
     }
 
     private enum LegacyKeys: String, CodingKey { case busMaster }
@@ -981,6 +985,7 @@ class InputSource: ObservableObject, Identifiable {
         case .browser: return BrowserInput(config: config)
         case .audio: return AudioDeviceInput(config: config)
         case .replay: return ReplayInput(config: config)
+        case .videoCue: return VideoCueInput(config: config)
         case .photos: return PhotosInput(config: config)
         case .pdfSlides: return PDFSlidesInput(config: config)
         case .virtualSet: return VirtualSetInput(config: config)
