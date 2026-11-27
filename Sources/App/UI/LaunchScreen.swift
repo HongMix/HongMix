@@ -274,7 +274,7 @@ struct LaunchScreen: View {
         case .running:
             ProgressView().controlSize(.mini).scaleEffect(0.8)
         case .done:
-            Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundColor(Theme.program)
+            Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundColor(Color(red: 0.19, green: 0.82, blue: 0.35))   // "done" = green in every skin (Theme.program is red in Black & White)
         case .warning:
             Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10)).foregroundColor(.orange)
         }
