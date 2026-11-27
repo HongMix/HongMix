@@ -139,8 +139,8 @@ struct MultiLayoutEditor: View {
         .padding(.horizontal, 6).padding(.vertical, 4)
         .background(RoundedRectangle(cornerRadius: 5).fill(isLive ? Theme.live.opacity(0.85) : Color.white.opacity(0.05)))
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { renaming = i }
-        .onTapGesture { ml.take(scene: i) }
+        .onTapGesture { ml.take(scene: i) }                 // at once (no wait for a double-click)
+        .simultaneousGesture(TapGesture(count: 2).onEnded { renaming = i })
         .contextMenu {
             Button(L("이름 바꾸기")) { renaming = i }
             Button(L("복제")) { duplicate(i) }
