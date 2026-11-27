@@ -61,8 +61,12 @@ struct MultiLayoutEditor: View {
     @ViewState private var safeArea = false
     @ViewState private var library = MLLibrary.load()
 
+    /// The scene in preview (being set up, not on air); nil = the live scene.
+    @ViewState private var editing: Int? = nil
     private var live: Int { ml.multiLayout.scene }
-    private var hasScene: Bool { ml.multiLayout.scenes.indices.contains(live) }
+    /// The scene the canvas and settings show: the preview scene, else the live one.
+    private var edited: Int { editing.flatMap { ml.multiLayout.scenes.indices.contains($0) && $0 != live ? $0 : nil } ?? live }
+    private var hasScene: Bool { ml.multiLayout.scenes.indices.contains(edited) }
     /// Inputs that can go in a box (not this MultiLayout itself, no audio-only inputs).
     private var sources: [InputSource] { engine.inputs.filter { $0.id != ml.id && $0.kind != .audio } }
 
@@ -77,7 +81,7 @@ struct MultiLayoutEditor: View {
             .frame(width: 250)
             Divider()
             VStack(spacing: 10) {
-                MLCanvas(ml: ml, box: $box, safeArea: safeArea, onAir: engine.tally(of: ml) == 1)
+                MLCanvas(ml: ml, scene: edited, box: $box, safeArea: safeArea, onAir: engine.tally(of: ml) == 1)
                 if hasScene { layoutBar; animationBar }
                 Spacer(minLength: 0)
             }
@@ -112,6 +116,13 @@ struct MultiLayoutEditor: View {
                 }
             }
             .frame(maxHeight: 300)
+            Button { takePreview() } label: {
+                Text("TAKE").font(.system(size: 15, weight: .heavy)).frame(maxWidth: .infinity, minHeight: 30)
+            }
+            .cueKey(editing != nil && edited != live ? Theme.live : nil, prominent: true, cleanTint: .red)
+            .disabled(edited == live)
+            .keyboardShortcut(.return, modifiers: [])
+            .help(L("미리보기 장면을 방송으로 (Enter)"))
             HStack(spacing: 6) {
                 Button { ml.previous() } label: { Image(systemName: "chevron.left").frame(maxWidth: .infinity) }
                     .cueKey().help(L("이전 장면 (←)"))
@@ -122,7 +133,7 @@ struct MultiLayoutEditor: View {
     }
 
     private func sceneRow(_ i: Int, _ s: MLScene) -> some View {
-        let isLive = i == live
+        let isLive = i == live, isPreview = i == edited && !isLive
         return HStack(spacing: 8) {
             Text("\(i + 1)").font(.system(size: 12, weight: .bold, design: .monospaced))
                 .frame(width: 20).foregroundColor(isLive ? .white : .secondary)
@@ -135,11 +146,16 @@ struct MultiLayoutEditor: View {
                 Text(s.name.isEmpty ? Lf("장면 %@", "\(i + 1)") : s.name).lineLimit(1)
                 Spacer(minLength: 0)
             }
+            if !isLive {
+                Button { take(i) } label: { Image(systemName: "play.fill").font(.system(size: 9)) }
+                    .buttonStyle(.borderless).help(L("바로 방송 (애니메이션)"))
+            }
         }
         .padding(.horizontal, 6).padding(.vertical, 4)
-        .replayKey(isLive ? Theme.live : (AppLook.hardware ? ReplayKey.neutral : Color.white.opacity(0.05)), radius: 5)
+        .replayKey(isLive ? Theme.live : isPreview ? Theme.preview.opacity(0.8)
+                   : (AppLook.hardware ? ReplayKey.neutral : Color.white.opacity(0.05)), radius: 5)
         .contentShape(Rectangle())
-        .onTapGesture { ml.take(scene: i) }                 // at once (no wait for a double-click)
+        .onTapGesture { editing = i == live ? nil : i }      // preview: set it up without going on air
         .simultaneousGesture(TapGesture(count: 2).onEnded { renaming = i })
         .contextMenu {
             Button(L("이름 바꾸기")) { renaming = i }
@@ -148,7 +164,7 @@ struct MultiLayoutEditor: View {
             if i < ml.multiLayout.scenes.count - 1 { Button(L("아래로")) { ml.multiLayout.scenes.swapAt(i, i + 1); fixLive(moved: i, to: i + 1) } }
             if ml.multiLayout.scenes.count > 1 { Button(L("삭제"), role: .destructive) { deleteScene(i) } }
         }
-        .help(L("클릭 = 이 장면으로 (애니메이션) · 더블클릭 = 이름 바꾸기"))
+        .help(L("클릭 = 미리보기에서 설정 · ▶ = 바로 방송 · 더블클릭 = 이름 바꾸기"))
     }
 
     private var inputs: some View {
@@ -168,7 +184,9 @@ struct MultiLayoutEditor: View {
                         .replayKey(AppLook.hardware ? ReplayKey.neutral : Color.white.opacity(0.04), radius: 4)
                         .contentShape(Rectangle())
                         .draggable(i.id.uuidString)
-                        .onTapGesture(count: 2) { ml.setInput(i.id, box: box) }
+                        .onTapGesture(count: 2) {
+                            if edited == live { ml.setInput(i.id, box: box) } else { ml.multiLayout.scenes[edited].boxes[box].input = i.id }
+                        }
                         .help(L("상자에 끌어다 놓기 · 더블클릭 = 선택한 상자에 넣기"))
                     }
                 }
@@ -205,7 +223,7 @@ struct MultiLayoutEditor: View {
     private var animationBar: some View {
         HStack(spacing: 12) {
             Text(L("이 장면으로 바뀔 때")).font(.system(size: 11, weight: .bold)).foregroundColor(.secondary)
-            Picker("", selection: $ml.multiLayout.scenes[live].appear) {
+            Picker("", selection: $ml.multiLayout.scenes[edited].appear) {
                 Text(L("날아오기")).tag(MLAppear.fly)
                 Text(L("커지기")).tag(MLAppear.grow)
                 Text(L("페이드")).tag(MLAppear.fade)
@@ -214,10 +232,10 @@ struct MultiLayoutEditor: View {
             .pickerStyle(.segmented).labelsHidden().frame(width: 300)
             .help(L("새로 나타나거나 사라지는 상자의 움직임"))
             Text(L("시간")).foregroundColor(.secondary)
-            ReplaySlider(value: Binding(get: { ml.multiLayout.scenes[live].seconds },
-                                        set: { ml.multiLayout.scenes[live].seconds = ($0 * 10).rounded() / 10 }), range: 0...3)
+            ReplaySlider(value: Binding(get: { ml.multiLayout.scenes[edited].seconds },
+                                        set: { ml.multiLayout.scenes[edited].seconds = ($0 * 10).rounded() / 10 }), range: 0...3)
                 .frame(width: 140)
-            Text(ml.multiLayout.scenes[live].seconds == 0 ? L("컷") : String(format: "%.1f s", ml.multiLayout.scenes[live].seconds))
+            Text(ml.multiLayout.scenes[edited].seconds == 0 ? L("컷") : String(format: "%.1f s", ml.multiLayout.scenes[edited].seconds))
                 .font(.system(size: 11, design: .monospaced)).frame(width: 40, alignment: .leading)
             Spacer()
             Toggle(L("안전 영역"), isOn: $safeArea).toggleStyle(.checkbox)
@@ -227,7 +245,7 @@ struct MultiLayoutEditor: View {
     // MARK: Right: the selected box, the MultiLayout
 
     private var boxInspector: some View {
-        let sb = $ml.multiLayout.scenes[live].boxes[box]
+        let sb = $ml.multiLayout.scenes[edited].boxes[box]
         let b = $ml.multiLayout.boxes[box]
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -352,22 +370,30 @@ struct MultiLayoutEditor: View {
 
     // MARK: Actions
 
+    private func take(_ i: Int) { ml.take(scene: i); editing = nil }
+
+    private func takePreview() {
+        if let f = typingField() { f.window?.makeFirstResponder(nil); renaming = nil; return }   // Enter ends the typing
+        guard edited != live else { return }
+        take(edited)
+    }
+
     private func applyRects(_ rects: [MLRect]) {
         guard hasScene else { return }
         var m = ml.multiLayout
-        m.scenes[live].apply(rects)
+        m.scenes[edited].apply(rects)
         ml.multiLayout = m
         if box >= rects.count { box = 0 }
     }
 
     private func addScene() {
         var m = ml.multiLayout
-        var s = hasScene ? m.scenes[live] : MLScene(name: "")
+        var s = hasScene ? m.scenes[edited] : MLScene(name: "")
         s.id = UUID()
         s.name = Lf("장면 %@", "\(m.scenes.count + 1)")
         m.scenes.append(s)
         ml.multiLayout = m
-        ml.take(scene: m.scenes.count - 1)
+        editing = m.scenes.count - 1                        // set it up in preview first
     }
 
     private func duplicate(_ i: Int) {
@@ -386,6 +412,7 @@ struct MultiLayoutEditor: View {
         if m.scene > i || m.scene >= m.scenes.count { m.scene = max(0, m.scene - 1) }
         ml.multiLayout = m
         if wasLive { ml.take(scene: m.scene) }
+        editing = nil
     }
 
     private func fixLive(moved i: Int, to j: Int) {
@@ -394,7 +421,7 @@ struct MultiLayoutEditor: View {
 
     private func saveToLibrary() {
         guard hasScene else { return }
-        let s = ml.multiLayout.scenes[live]
+        let s = ml.multiLayout.scenes[edited]
         let rects = s.boxes.prefix { $0.visible }.map(\.rect)
         let all = s.boxes.filter(\.visible).map(\.rect)
         library.append(MLLayout(name: s.name, rects: rects.count == all.count ? rects : all))
@@ -406,7 +433,7 @@ struct MultiLayoutEditor: View {
     private var sceneKeys: some View {
         ZStack {
             ForEach(0..<9, id: \.self) { k in
-                Button("") { key(Character("\(k + 1)")) { ml.take(scene: k) } }
+                Button("") { key(Character("\(k + 1)")) { take(k) } }
                     .keyboardShortcut(KeyEquivalent(Character("\(k + 1)")), modifiers: [])
             }
             Button("") { arrow(left: true) }.keyboardShortcut(.leftArrow, modifiers: [])
@@ -428,6 +455,7 @@ struct MultiLayoutEditor: View {
     private func arrow(left: Bool) {
         if let f = typingField() { if left { f.moveLeft(nil) } else { f.moveRight(nil) }; return }
         if left { ml.previous() } else { ml.next() }
+        editing = nil
     }
 }
 
@@ -436,20 +464,27 @@ struct MultiLayoutEditor: View {
 struct MLCanvas: View {
     @EnvironmentObject var engine: SwitcherEngine
     @ObservedObject var ml: MultiLayoutInput
+    /// The scene shown: the live one (its real picture) or one in preview (drawn from the inputs).
+    var scene: Int
     @Binding var box: Int
     var safeArea: Bool
     var onAir: Bool
     @ViewState private var dragStart: MLRect? = nil
     @ViewState private var dropTarget: Int? = nil
 
-    private var live: Int { ml.multiLayout.scene }
+    private var live: Int { scene }
+    private var isLive: Bool { scene == ml.multiLayout.scene }
 
     var body: some View {
         GeometryReader { geo in
             let size = fitted(geo.size)
             ZStack(alignment: .topLeading) {
-                MonitorView(fps: 30) { [weak ml] in ml?.monitorFrame() }
-                    .frame(width: size.width, height: size.height)
+                if isLive {
+                    MonitorView(fps: 30) { [weak ml] in ml?.monitorFrame() }
+                        .frame(width: size.width, height: size.height)
+                } else {
+                    MLPreviewPicture(ml: ml, scene: scene, size: size)
+                }
                 if safeArea { safeGuides(size) }
                 if ml.multiLayout.scenes.indices.contains(live) {
                     let boxes = ml.multiLayout.scenes[live].boxes
@@ -459,17 +494,25 @@ struct MLCanvas: View {
                 }
             }
             .frame(width: size.width, height: size.height)
+            .overlay(alignment: .topLeading) {
+                if !isLive {
+                    Text(L("미리보기")).font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 2).background(Theme.preview).padding(6)
+                }
+            }
             .overlay(alignment: .topTrailing) {
-                if onAir {
+                if onAir && isLive {
                     Text("LIVE").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
                         .padding(.horizontal, 6).padding(.vertical, 2).background(Theme.live).padding(6)
                 }
             }
-            .overlay(Rectangle().stroke(onAir ? Theme.live : Color.white.opacity(0.2), lineWidth: onAir ? 3 : 1))
+            .overlay(Rectangle().stroke(!isLive ? Theme.preview : onAir ? Theme.live : Color.white.opacity(0.2),
+                                        lineWidth: !isLive || onAir ? 3 : 1))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .aspectRatio(16.0 / 9.0, contentMode: .fit)
-        .help(onAir ? L("이 MultiLayout은 지금 방송 중입니다: 바꾸는 것이 바로 보입니다.") : "")
+        .help(!isLive ? L("미리보기: 방송에는 영향 없음. TAKE로 방송에 보냅니다.")
+              : onAir ? L("이 MultiLayout은 지금 방송 중입니다: 바꾸는 것이 바로 보입니다.") : "")
     }
 
     private func fitted(_ s: CGSize) -> CGSize {
@@ -517,7 +560,8 @@ struct MLCanvas: View {
         .simultaneousGesture(TapGesture().onEnded { box = k })
         .dropDestination(for: String.self) { items, _ in
             guard let s = items.first, let id = UUID(uuidString: s) else { return false }
-            ml.setInput(id, box: k)
+            // live: the box's input; preview: this scene's own input for the box (nothing on air changes)
+            if isLive { ml.setInput(id, box: k) } else { ml.multiLayout.scenes[scene].boxes[k].input = id }
             box = k
             return true
         } isTargeted: { dropTarget = $0 ? k : (dropTarget == k ? nil : dropTarget) }
@@ -703,5 +747,66 @@ struct MLSceneControls: View {
             Button { ml.next() } label: { Image(systemName: "chevron.right") }.buttonStyle(.borderless)
         }
         .padding(.horizontal, 6)
+    }
+}
+
+/// A scene that is not on air, drawn from the inputs' own pictures (background, boxes, foreground). Close to
+/// what goes on air; rounded corners show as the outline only.
+struct MLPreviewPicture: View {
+    @EnvironmentObject var engine: SwitcherEngine
+    @ObservedObject var ml: MultiLayoutInput
+    var scene: Int
+    var size: CGSize
+
+    var body: some View {
+        let m = ml.multiLayout
+        let sc = m.scenes.indices.contains(scene) ? m.scenes[scene] : MLScene(name: "")
+        let px = size.width / max(1, CGFloat(engine.format.width))       // output pixels → canvas points
+        ZStack(alignment: .topLeading) {
+            switch m.background.kind {
+            case .color: MLColor.color(m.background.color)
+            case .image: MLImageCache.image(m.background.path).map { Image(nsImage: $0).resizable().scaledToFill() }
+            case .input: picture(m.background.inputID, fill: true)
+            }
+            ForEach(0..<MLScene.boxCount, id: \.self) { k in
+                let b = sc.boxes[k]
+                if b.visible {
+                    let f = MLBoxFrame(box: k, input: b.input ?? m.boxes[k].inputID, rect: b.rect)
+                    let l = MultiLayoutInput.layer(f, m.boxes[k])
+                    picture(f.input, fill: m.boxes[k].fill, crop: l)
+                        .frame(width: b.rect.w * size.width, height: b.rect.h * size.height)
+                        .overlay(RoundedRectangle(cornerRadius: m.boxes[k].radius * px)
+                            .stroke(MLColor.color(m.boxes[k].borderColor), lineWidth: m.boxes[k].border * px))
+                        .offset(x: b.rect.x * size.width, y: b.rect.y * size.height)
+                }
+            }
+            if let fg = MLImageCache.image(m.foregroundPath) { Image(nsImage: fg).resizable().scaledToFill() }
+        }
+        .frame(width: size.width, height: size.height)
+        .clipped()
+    }
+
+    @ViewBuilder private func picture(_ id: UUID?, fill: Bool, crop l: InputLayer? = nil) -> some View {
+        if let i = engine.input(withID: id) {
+            MonitorView(fps: 15, placement: {
+                var a = VideoAdjust(); a.fitMode = fill ? 1 : 0
+                if let l { a.cropL = l.cropL; a.cropT = l.cropT; a.cropR = l.cropR; a.cropB = l.cropB }
+                return a
+            }) { [weak i] in i?.monitorFrame() }
+        } else {
+            Color.black.opacity(0.5)
+        }
+    }
+}
+
+/// Background / foreground pictures for the preview drawing (read once per path).
+enum MLImageCache {
+    private static var store: [String: NSImage] = [:]
+    static func image(_ path: String) -> NSImage? {
+        guard !path.isEmpty else { return nil }
+        if let i = store[path] { return i }
+        let i = NSImage(contentsOfFile: (path as NSString).expandingTildeInPath)
+        if let i { store[path] = i }
+        return i
     }
 }
