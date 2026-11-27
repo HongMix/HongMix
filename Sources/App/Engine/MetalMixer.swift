@@ -128,6 +128,8 @@ struct TileSpec {
     var borderColor: (Float, Float, Float) = (0, 0, 0)
     var borderWidth: Float = 0
     var label: String? = nil
+    /// Draw the label in a strip under `rect` (MultiView "labels below") instead of on the picture
+    var labelBelow = false
 }
 
 /// Shared Metal objects (device, library, texture cache).
@@ -570,11 +572,17 @@ final class MetalMixer {
             let r = tile.rect
             // CG origin is bottom-left
             let barH = fontSize * 1.5
-            let barRect = CGRect(x: r.minX, y: CGFloat(h) - r.maxY, width: min(r.width, bounds.width + fontSize), height: barH)
-            cg.setFillColor(CGColor(gray: 0, alpha: 0.65))
+            let barRect = tile.labelBelow
+                ? CGRect(x: r.minX, y: CGFloat(h) - r.maxY - barH, width: r.width, height: barH)
+                : CGRect(x: r.minX, y: CGFloat(h) - r.maxY, width: min(r.width, bounds.width + fontSize), height: barH)
+            cg.setFillColor(CGColor(gray: tile.labelBelow ? 0.12 : 0, alpha: tile.labelBelow ? 1 : 0.65))
             cg.fill(barRect)
-            cg.textPosition = CGPoint(x: barRect.minX + fontSize * 0.5, y: barRect.minY + fontSize * 0.4)
+            cg.saveGState()
+            cg.clip(to: barRect)          // long names stop at the cell edge
+            let x = tile.labelBelow ? max(barRect.minX + fontSize * 0.5, barRect.midX - bounds.width / 2) : barRect.minX + fontSize * 0.5
+            cg.textPosition = CGPoint(x: x, y: barRect.minY + fontSize * 0.4)
             CTLineDraw(line, cg)
+            cg.restoreGState()
         }
     }
 

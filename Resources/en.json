@@ -2168,5 +2168,10 @@
  "출력 창 목록": "Windows",
  "클릭해서 이름 바꾸기 — 비우면 원래 이름": "Click to rename — leave empty for the original name",
  "−1분": "−1 min",
- "+1분": "+1 min"
+ "+1분": "+1 min",
+ "화면 안": "On picture",
+ "화면 아래": "Below picture",
+ "화면 아래: 이름이 화면 밖 띠에 표시되고, 화면은 조금 작아져 사이에 여백이 생깁니다": "Below picture: labels go in a strip under each picture; pictures get a little smaller, with space between them",
+ "이름표": "Label",
+ "이 칸에 표시할 이름 (비우면 자동)": "Label shown in this cell (empty = automatic)"
 }

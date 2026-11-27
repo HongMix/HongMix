@@ -92,6 +92,57 @@ struct MultiViewConfig: Codable, Identifiable, Equatable {
     var slots: [MultiViewSlot] = []
     var showLabels = true
     var showTally = true
+    /// Own label per cell ("" = automatic: PREVIEW, PROGRAM, "3  Cam 3" …)
+    var labels: [String] = []
+    /// Labels in a strip under each picture (pictures get a bit smaller, with room around them) instead of on it
+    var labelsBelow = false
+
+    init(id: UUID = UUID(), name: String, layout: MultiViewLayoutKind = .bigTop, slots: [MultiViewSlot] = [],
+         showLabels: Bool = true, showTally: Bool = true, labels: [String] = [], labelsBelow: Bool = false) {
+        self.id = id; self.name = name; self.layout = layout; self.slots = slots
+        self.showLabels = showLabels; self.showTally = showTally; self.labels = labels; self.labelsBelow = labelsBelow
+    }
+
+    private enum K: String, CodingKey { case id, name, layout, slots, showLabels, showTally, labels, labelsBelow }
+
+    // Tolerant: MultiViews saved by an older HongMix miss the newer keys.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: K.self)
+        id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
+        name = (try? c.decode(String.self, forKey: .name)) ?? "MultiView"
+        layout = (try? c.decode(MultiViewLayoutKind.self, forKey: .layout)) ?? .bigTop
+        slots = (try? c.decode([MultiViewSlot].self, forKey: .slots)) ?? []
+        showLabels = (try? c.decode(Bool.self, forKey: .showLabels)) ?? true
+        showTally = (try? c.decode(Bool.self, forKey: .showTally)) ?? true
+        labels = (try? c.decode([String].self, forKey: .labels)) ?? []
+        labelsBelow = (try? c.decode(Bool.self, forKey: .labelsBelow)) ?? false
+    }
+
+    /// Labels below: the picture (cell aspect, centred, a margin all round) and the label strip right under it.
+    static func labelBelowRects(cell r: CGRect, labelHeight: CGFloat) -> (picture: CGRect, label: CGRect) {
+        let m = r.height * 0.04
+        let h = max(1, r.height - 2 * m - labelHeight)
+        let w = h * r.width / max(1, r.height)
+        let pic = CGRect(x: r.midX - w / 2, y: r.minY + m, width: w, height: h)
+        return (pic, CGRect(x: pic.minX, y: pic.maxY, width: w, height: labelHeight))
+    }
+
+    func customLabel(_ i: Int) -> String? {
+        guard labels.indices.contains(i) else { return nil }
+        let t = labels[i].trimmingCharacters(in: .whitespaces)
+        return t.isEmpty ? nil : t
+    }
+
+    /// Automatic label of a cell showing `target` (nil = no label).
+    static func defaultLabel(_ target: MultiViewSlot, number: Int?, name: String?) -> String? {
+        switch target {
+        case .preview: return "PREVIEW"
+        case .program: return "PROGRAM"
+        case .talent: return "TALENT"
+        case .input: return number.map { "\($0)  \(name ?? "")" }
+        case .empty, .auto: return nil
+        }
+    }
 
     func slot(_ i: Int) -> MultiViewSlot { slots.indices.contains(i) ? slots[i] : layout.defaultSlot(i) }
 

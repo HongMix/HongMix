@@ -81,4 +81,28 @@ th.add(ms: 5)
 check(th.evaluate(budgetMs: budget, dropped: 0, active: true) && th.divider == 4, "5 calm seconds: one step back up")
 check(th.evaluate(budgetMs: budget, dropped: 5, active: false) && th.divider == 1, "no MultiView in use: back to full rate")
 
+// Labels: Preview / Program say just that; inputs number + name; a custom label wins
+check(MultiViewConfig.defaultLabel(.preview, number: nil, name: "Cam 1") == "PREVIEW", "preview label without the input name")
+check(MultiViewConfig.defaultLabel(.program, number: nil, name: nil) == "PROGRAM", "program label")
+check(MultiViewConfig.defaultLabel(.input(UUID()), number: 3, name: "Cam 3") == "3  Cam 3", "input label")
+check(MultiViewConfig.defaultLabel(.empty, number: nil, name: nil) == nil, "empty cell: no label")
+var lv = MultiViewConfig.standard()
+lv.labels = ["", "ON AIR"]
+check(lv.customLabel(0) == nil && lv.customLabel(1) == "ON AIR" && lv.customLabel(7) == nil, "custom label per cell, empty = automatic")
+
+// A MultiView saved before labels existed still opens
+let oldMV = #"{"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","name":"Old","layout":"grid9","slots":[],"showLabels":false,"showTally":true}"#
+let dec = try! JSONDecoder().decode(MultiViewConfig.self, from: oldMV.data(using: .utf8)!)
+check(dec.name == "Old" && dec.layout == .grid9 && !dec.showLabels && dec.labels.isEmpty && !dec.labelsBelow, "old MultiView decodes with label defaults")
+check(try! JSONDecoder().decode(MultiViewConfig.self, from: JSONEncoder().encode(lv)) == lv, "round trip")
+
+// Labels below: the picture shrinks (same 16:9), centred, with room around it and the label strip under it
+let cellR = CGRect(x: 960, y: 540, width: 480, height: 270)
+let (pic, strip) = MultiViewConfig.labelBelowRects(cell: cellR, labelHeight: 30)
+check(abs(pic.width / pic.height - 16.0 / 9.0) < 0.01, "picture keeps 16:9 (\(pic))")
+check(pic.width < cellR.width && pic.height < cellR.height - 30, "picture smaller than the cell")
+check(abs(pic.midX - cellR.midX) < 0.5, "picture centred")
+check(pic.minY > cellR.minY && strip.maxY < cellR.maxY, "room above the picture and under the label")
+check(strip.minY == pic.maxY && strip.width == pic.width && strip.minX == pic.minX && strip.height == 30, "label strip right under the picture")
+
 if failures == 0 { print("multiview: all checks passed") } else { print("multiview: \(failures) failed"); exit(1) }

@@ -118,6 +118,13 @@ struct MultiViewEditor: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 260)
                 Toggle(L("이름 표시"), isOn: mv.showLabels)
+                Picker("", selection: mv.labelsBelow) {
+                    Text(L("화면 안")).tag(false)
+                    Text(L("화면 아래")).tag(true)
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
+                .disabled(!mv.wrappedValue.showLabels)
+                .help(L("화면 아래: 이름이 화면 밖 띠에 표시되고, 화면은 조금 작아져 사이에 여백이 생깁니다"))
                 Toggle(L("탈리 테두리 (빨강 = 방송 · 초록 = 미리보기)"), isOn: mv.showTally)
                 Spacer()
             }
@@ -246,12 +253,13 @@ private struct CellCanvas: View {
         return targets.indices.map { k in
             let isAuto = config.slot(k) == .auto
             switch targets[k] {
-            case .preview: return "PREVIEW"
-            case .program: return "OUTPUT"
-            case .talent: return "TALENT DISPLAY"
+            case .preview: return config.customLabel(k) ?? "PREVIEW"
+            case .program: return config.customLabel(k) ?? "PROGRAM"
+            case .talent: return config.customLabel(k) ?? "TALENT DISPLAY"
             case .empty, .auto: return isAuto ? L("자동 (입력 없음)") : L("비어 있음")
             case .input(let id):
                 guard let i = engine.input(withID: id) else { return L("입력 (없음)") }
+                if let own = config.customLabel(k) { return own }
                 return (isAuto ? L("자동") + " · " : "") + "\(engine.number(of: i)). \(i.name)"
             }
         }
@@ -293,6 +301,10 @@ private struct CellCanvas: View {
                  arrowEdge: .bottom) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
+                    TextField(L("이름표"), text: labelBinding(i), prompt: Text(L("자동")))
+                        .textFieldStyle(.roundedBorder)
+                        .help(L("이 칸에 표시할 이름 (비우면 자동)"))
+                    Divider().padding(.vertical, 3)
                     choice(L("자동 (입력 순서대로)"), i, .auto)
                     choice("Preview", i, .preview)
                     choice("Output", i, .program)
@@ -310,6 +322,16 @@ private struct CellCanvas: View {
             .frame(maxHeight: 420)
         }
         .help(L("이 칸에 보여줄 화면 선택"))
+    }
+
+    private func labelBinding(_ i: Int) -> Binding<String> {
+        Binding(get: { config.labels.indices.contains(i) ? config.labels[i] : "" },
+                set: { v in
+                    var c = config
+                    if c.labels.count <= i { c.labels += Array(repeating: "", count: i + 1 - c.labels.count) }
+                    c.labels[i] = v
+                    config = c
+                })
     }
 
     private func choice(_ title: String, _ i: Int, _ s: MultiViewSlot) -> some View {
