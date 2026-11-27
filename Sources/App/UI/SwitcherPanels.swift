@@ -42,6 +42,8 @@ struct FlatButton: View {
 private struct OverlayChannelButton: View {
     let channel: Int
     let active: Bool
+    /// The channel remembers this input (the centre Overlay key brings it back) while it is off air.
+    var linked = false
     var height: CGFloat = 20
     var fontSize: CGFloat = 9
     let action: () -> Void
@@ -64,7 +66,8 @@ private struct OverlayChannelButton: View {
             .background(active ? color : color.opacity(0.24))
             .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                .stroke(color.opacity(active ? 1 : 0.65), lineWidth: active ? 1.2 : 0.8))
+                .strokeBorder(linked && !active ? Color.white.opacity(0.9) : color.opacity(active ? 1 : 0.65),
+                              lineWidth: linked && !active ? 2 : active ? 1.2 : 0.8))
         }
         .buttonStyle(.plain)
     }
@@ -1271,9 +1274,9 @@ struct InputBox: View {
                         HStack(spacing: 2) {
                             ForEach(1...4, id: \.self) { col in
                                 let channel = row * 4 + col
-                                let assigned = overlayChannels.contains(channel)
-                                let onAir = engine.overlayOn[channel - 1] && engine.overlayIDs[channel - 1] == input.id
-                                OverlayChannelButton(channel: channel, active: onAir || assigned, height: 16, fontSize: 8) {
+                                let assigned = engine.overlayIDs[channel - 1] == input.id
+                                let onAir = engine.overlayOn[channel - 1] && assigned
+                                OverlayChannelButton(channel: channel, active: onAir, linked: assigned, height: 16, fontSize: 8) {
                                     engine.toggleOverlay(channel, input.id)
                                 }
                                 .help(Lf("Overlay %@ · %@", "\(channel)", onAir ? L("출력 중 · 클릭해 종료") : assigned ? L("지정됨 · 클릭해 출력") : L("이 입력을 지정하고 출력")))
