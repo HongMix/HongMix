@@ -4,6 +4,7 @@ import SwiftUI
 /// Pick a template (2/3/4/9/16 split, 1+3, 1+5, PIP …), choose the input for each box, then drag the
 /// boxes in the preview to fine-tune (corner = resize).
 struct LayersEditor: View {
+    @Environment(\.openWindow) private var openWindow
     @EnvironmentObject var engine: SwitcherEngine
     @ObservedObject var input: InputSource
     @ViewState private var gap: Double = 0.01
@@ -38,6 +39,14 @@ struct LayersEditor: View {
             // left: list and values (scrolls) · right: the live picture (stays in view)
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
+                    if input is MultiLayoutInput {          // its boxes and scenes live in their own window
+                        HStack {
+                            Text(L("상자와 장면은 MultiLayouts 창에서 편집합니다. 여기 레이어는 상자 위에 그려집니다."))
+                                .font(.caption).foregroundColor(.secondary)
+                            Button(L("MultiLayouts에서 편집")) { openWindow(id: "multilayouts") }
+                        }
+                        Divider()
+                    }
                     HStack {
                         Text(Lf("레이어 (%@/10)", "\(input.layers.count)")).font(.subheadline.bold())
                         Spacer()

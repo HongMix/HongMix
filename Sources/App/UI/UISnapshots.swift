@@ -31,6 +31,9 @@ enum UISnapshots {
         case "replaysettings":
             return view(ReplaySettingsSheet().environmentObject(engine).background(Color(white: 0.12)),
                         size: NSSize(width: 720, height: 980), to: path)
+        case "multilayouts":
+            return view(MultiLayoutWindow().environmentObject(engine).background(Color(white: 0.12)),
+                        size: NSSize(width: 1400, height: 820), to: path)
         case "multiview":
             return view(MultiViewEditor().environmentObject(engine).background(Color(white: 0.12)),
                         size: NSSize(width: 980, height: 720), to: path)

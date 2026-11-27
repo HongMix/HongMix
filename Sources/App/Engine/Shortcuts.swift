@@ -42,6 +42,7 @@ final class ShortcutManager: ObservableObject {
         "Play", "Pause", "PlayPause", "Restart", "NextPicture", "PreviousPicture",
         "SetText", "StartCountdown", "StopCountdown",
         "DataSourceNextRow", "DataSourcePreviousRow", "DataSourceSelectRow",
+        "MultiLayoutScene", "MultiLayoutNext", "MultiLayoutPrevious", "MultiLayoutBoxInput", "MultiLayoutBoxOn", "MultiLayoutBoxOff",
     ]
 
     private static let specialKeys: [UInt16: String] = [
