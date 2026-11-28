@@ -87,6 +87,7 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `MarkIn / MarkOut / MarkReset / MarkResetIn / MarkResetOut` | Input | 현재 위치를 구간 시작·끝으로 지정하거나 해제합니다. 반복 재생은 이 구간 안에서 돕니다. |
 | `AutoPlayOn/Off, AutoPauseOn/Off, AutoRestartOn/Off` | Input | Output에 들어가거나 빠질 때의 자동 동작을 정합니다. |
 | `AddInput` | Value=Type|경로 | 입력을 추가합니다. Type은 Video, Image, Colour, NDI, Stream, Title, Browser, DesktopCapture, Audio, VideoCue, MultiLayout 중 하나입니다 (예: Title|lowerThird, Browser|https://…). |
+| `ShowInputProperties` | Input, Value=탭 번호(0~9) | 메인 창에서 해당 입력의 설정을 지정한 탭으로 엽니다. |
 | `CreateVirtualInput` | Input | 원본을 다시 디코딩하지 않고 위치·자르기·레이어가 독립된 가상 입력을 만듭니다. 오디오 전용 입력에는 사용할 수 없습니다. 원격 제어가 꺼져 있으면 API 자체가 열리지 않습니다. |
 | `RemoveInput / MoveInput / SetInputName` | Input [Value] | 입력을 삭제하거나, 순서를 옮기거나, 이름을 바꿉니다. |
 | `SetZoom / SetZoomX / SetZoomY / SetPanX / SetPanY` | Input, Value | 위치와 줌을 바꿉니다. 줌은 0.01~5, 팬은 -2~2입니다. `SetZoom`은 X/Y를 다시 비례 줌으로 맞춥니다. |

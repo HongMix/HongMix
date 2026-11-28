@@ -1,4 +1,4 @@
-# HongMix 2.4.1 사용 설명서
+# HongMix 2.4.3 사용 설명서
 
 HongMix는 Apple Silicon 맥용 라이브 프로덕션 스위처입니다. 화면 구성·단축키·원격 API가 vMix와 같아서 vMix 사용자, Bitfocus Companion, Stream Deck 환경을 그대로 쓸 수 있습니다.
 
@@ -31,13 +31,13 @@ FFmpeg, SRT, NDI 런타임, Chromium 웹 엔진이 모두 앱 안에 들어 있�
 
 ### 방법 A: PKG 설치 파일 (권장)
 
-1. **HongMix-2.4.1.pkg**를 더블클릭합니다.
+1. **HongMix-2.4.3.pkg**를 더블클릭합니다.
 2. "확인되지 않은 개발자" 경고가 뜨면 파일을 우클릭 → **열기** → **열기**를 누릅니다. (또는 **시스템 설정 › 개인정보 보호 및 보안**에서 **그래도 열기**)
 3. **계속** → **설치**를 누릅니다. **응용 프로그램** 폴더에 HongMix가 설치됩니다.
 
 ### 방법 B: DMG
 
-1. **HongMix-2.4.1.dmg**를 엽니다.
+1. **HongMix-2.4.3.dmg**를 엽니다.
 2. **HongMix**를 **Applications** 폴더로 드래그합니다.
 
 ### 처음 실행
@@ -97,6 +97,8 @@ HongMix는 아직 Apple 공증을 받지 않아 macOS가 한 번 확인합니다
 | 모니터 아이콘 | 별도 창으로 크게 보기 |
 | 스피커 | 입력 소리 끄기/켜기 |
 | **1–8** | 오버레이 1~8에 넣기/빼기 |
+
+입력 헤더의 **타일 펼치기** 옆 커서 아이콘이나 타일 우클릭 메뉴에서 **타일 버튼은 마우스를 올렸을 때만**을 켤 수 있습니다. 그러면 평소에는 그림과 이름만 보이고 마우스를 올렸을 때 버튼이 나타납니다. 음소거·반복은 작은 표시로 남습니다. 기본은 꺼짐입니다.
 
 ### 아래쪽 바 **도구** 메뉴
 
@@ -190,6 +192,13 @@ MP4, MOV(ProRes 4444 알파 포함), MXF, TS, MKV, AVI, MP3, WAV 등을 지원�
 1. 입력 타일을 우클릭합니다.
 2. **가상 입력 복사**를 고릅니다.
 
+### Video Cue와 MultiLayouts
+
+- **Video Cue**: 큐 목록을 만들고 **GO**, **STOP**, **PANIC**으로 재생합니다. 페이드, 모니터 출력, 배경과 테스트 화면을 설정합니다. 소리는 다른 입력처럼 Program을 따릅니다.
+- **MultiLayout**: 최대 8개 소스 상자를 배치하고 장면을 저장하며 날아오기·커지기·페이드 효과와 둥근 모서리를 사용합니다. 입력 목록에서 원하는 상자로 끌어 놓아 지정합니다. **방송에 나갈 때 애니메이션**은 기본으로 꺼져 있어 CUT은 즉시 됩니다.
+
+두 기능은 전용 창이 있고, API에서도 `AddInput Value=VideoCue` 또는 `AddInput Value=MultiLayout`으로 추가할 수 있습니다. 두 입력이 들어 있는 프로젝트는 HongMix 2.4.3 이상이 필요하며 2.4.1 이하에서는 열리지 않습니다.
+
 ### 그 밖의 종류
 
 **Virtual Set**(앞쪽 이미지와 진행자 위치를 정하는 가상 세트)과 **Instant Replay**도 입력 추가에 있습니다.
@@ -264,7 +273,7 @@ MP4, MOV(ProRes 4444 알파 포함), MXF, TS, MKV, AVI, MP3, WAV 등을 지원�
 
 ## 6. 입력 설정
 
-입력 타일을 더블클릭하거나 ⚙ 메뉴의 **속성…**으로 입력 설정을 엽니다. 탭: **일반**, **색 보정**, **Key / Fill & Key**, **위치**, **레이어**, **오디오 설정**, 입력에 따라 **재생 설정**, **목록**, **트리거**, **PTZ**. Program과 같은 실시간 미리보기가 오른쪽에 고정되고 왼쪽 설정만 스크롤됩니다.
+입력 타일을 더블클릭하거나 ⚙ 메뉴의 **속성…**으로 입력 설정을 엽니다. 탭: **일반**, **색 보정**, **Key / Fill & Key**, **위치**, **레이어**, **오디오 설정**, 입력에 따라 **재생 설정**, **목록**, **트리거**, **PTZ**. 색 보정·Key·재생·목록 옆에는 실시간 미리보기가 나오고, Program과 같은 위치·레이어 편집 미리보기는 오른쪽에 고정된 채 왼쪽 설정만 스크롤됩니다.
 
 ### 위치
 
@@ -457,6 +466,8 @@ API 예: `SetText Input=3 SelectedName=Headline.Text Value=안녕하세요`
 
 ### 그 밖의 도구
 
+- **도구 › Video Cue…**: GO / STOP / PANIC, 페이드, 모니터 출력, 배경과 테스트 화면으로 큐 목록을 편집·운영합니다.
+- **도구 › MultiLayouts…**: 8상자 레이아웃과 장면을 편집하고, 입력을 상자에 끌어 놓아 지정하며 장면 전환 효과를 고릅니다.
 - **도구 › 스케줄러…**: 정한 시각·요일에 송출 시작·녹화·컷 등 어떤 기능이든 자동 실행.
 - **도구 › Rundown / 큐시트**: 방송 순서와 항목별 실행 기능. **NEXT**로 다음 항목 실행.
 - **도구 › 스냅샷 저장**: 현재 Program을 PNG로 저장.
@@ -647,9 +658,10 @@ http://192.0.2.10:8088/api/?Function=SetText&Input=3&SelectedName=Headline.Text&
 http://192.0.2.10:8088/api/?Function=LayerPreset&Input=4&Value=1,Interview
 http://192.0.2.10:8088/api/?Function=OpenWindow&Value=replay
 http://192.0.2.10:8088/api/?Function=CloseWindow&Value=Replay
+http://192.0.2.10:8088/api/?Function=ShowInputProperties&Input=2&Value=3
 ```
 
-HongMix 전용 함수: `SetFitMode`, `SetZoomX` / `SetZoomY`, `LayerLayout`, `SetLayer`, `LayerPreset` / `LayerPresetSave`, `SetLUT`, `SetDelay` / `DelayDump`, `RundownNext`, `OpenWindow`, `CloseWindow`, 더킹 함수 등. `OpenWindow`의 Value는 `replay`, `scopes`, `audiomixer`, `talentcue`, `multiview`, `rundown`, `ptz` 중 하나이며, `CloseWindow`의 Value에는 창 제목을 넣습니다. 함수 없이 `/api/`를 부르면 vMix 형식 XML 상태를 돌려주며, SRT 입력마다 `<inputSrtStats>`가 들어 있습니다.
+HongMix 전용 함수: `SetFitMode`, `SetZoomX` / `SetZoomY`, `LayerLayout`, `SetLayer`, `LayerPreset` / `LayerPresetSave`, `SetLUT`, `SetDelay` / `DelayDump`, `RundownNext`, `OpenWindow`, `CloseWindow`, `ShowInputProperties`, Video Cue·MultiLayout 함수, 더킹 함수 등. `ShowInputProperties`는 고른 입력의 설정을 탭 0~9 중 지정한 탭으로 엽니다. 함수 없이 `/api/`를 부르면 vMix 형식 XML 상태를 돌려주며, SRT 입력마다 `<inputSrtStats>`가 들어 있습니다.
 
 전체 목록: [docs/FUNCTIONS.md](../FUNCTIONS.md)
 

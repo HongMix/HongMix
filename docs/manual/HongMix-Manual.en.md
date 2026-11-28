@@ -1,4 +1,4 @@
-# HongMix 2.4.1 User Manual
+# HongMix 2.4.3 User Manual
 
 HongMix is a live production switcher for Apple Silicon Macs. Its layout, keyboard shortcuts and remote API follow vMix, so vMix operators, Bitfocus Companion and Stream Deck setups feel at home.
 
@@ -31,13 +31,13 @@ Everything HongMix needs (FFmpeg, SRT, the NDI runtime and the Chromium web engi
 
 ### Option A: PKG installer (recommended)
 
-1. Double-click **HongMix-2.4.1.pkg**.
+1. Double-click **HongMix-2.4.3.pkg**.
 2. If macOS says the file is from an **unidentified developer**, right-click the file and choose **Open**, then **Open** again. (Alternatively: **System Settings › Privacy & Security**, then **Open Anyway**.)
 3. Click **Continue**, then **Install**. HongMix is installed in **Applications**.
 
 ### Option B: DMG
 
-1. Open **HongMix-2.4.1.dmg**.
+1. Open **HongMix-2.4.3.dmg**.
 2. Drag **HongMix** into the **Applications** folder.
 
 ### First launch
@@ -97,6 +97,8 @@ Notes:
 | Monitor icon | Show the input in its own window |
 | Speaker | Mute / unmute the input |
 | **1–8** | Put the input on overlay 1–8, or take it off |
+
+Turn on **Tile buttons on hover only** with the cursor icon beside **Expand tile** in the Inputs header, or from a tile's right-click menu. Tiles then show only picture and name until the pointer is over them; mute and loop remain visible as small badges. The option is off by default.
 
 ### Bottom bar **Tools** menu
 
@@ -190,6 +192,13 @@ A virtual input shows the same picture as another input without decoding it agai
 1. Right-click the input tile.
 2. Choose **Create Virtual Input**.
 
+### Video Cue and MultiLayouts
+
+- **Video Cue**: build a cue list and run it with **GO**, **STOP** and **PANIC**. Set fades, route the cue output to monitors, and choose a background or test card. Its audio follows Program like any other input.
+- **MultiLayout**: arrange up to eight source boxes, save scenes and change scenes with fly-in, grow or fade effects and optional rounded corners. Drag an input from the list onto the required box. **Animate when going on air** is off by default, so CUT stays instant.
+
+Both have their own windows and can also be added through the API with `AddInput Value=VideoCue` or `AddInput Value=MultiLayout`. Projects containing either input require HongMix 2.4.3 or newer and do not open in 2.4.1 or older.
+
 ### Other categories
 
 **Virtual Set** (presenter in a set with a foreground image) and **Instant Replay** are also in Add Input.
@@ -264,7 +273,7 @@ Each button puts the input you last assigned to that channel back on, or takes i
 
 ## 6. Input settings
 
-Double-click an input tile (or use the ⚙ menu, **Properties…**) to open its settings. Tabs: **General**, **Color Adjust**, **Key / Fill & Key**, **Position**, **Layers**, **Audio Settings**, and depending on the input **Playback**, **List**, **Triggers** and **PTZ**. A live preview matched to Program stays fixed on the right while the controls scroll on the left.
+Double-click an input tile (or use the ⚙ menu, **Properties…**) to open its settings. Tabs: **General**, **Color Adjust**, **Key / Fill & Key**, **Position**, **Layers**, **Audio Settings**, and depending on the input **Playback**, **List**, **Triggers** and **PTZ**. A live preview sits beside Color Adjust, Key, Playback and List, and the Program-matching position/layer editor stays fixed on the right while the controls scroll on the left.
 
 ### Position
 
@@ -457,6 +466,8 @@ For a moderator, copy the protected phone link shown in Talent Cue. It has its o
 
 ### Other tools
 
+- **Tools › Video Cue…**: edit and operate the cue list with GO / STOP / PANIC, fades, monitor outputs, background and test card.
+- **Tools › MultiLayouts…**: edit eight-box layouts and scenes, assign inputs by dragging them onto boxes and choose scene-change effects.
 - **Tools › Scheduler…**: run any function (start streaming, record, cut …) at set times or days.
 - **Tools › Rundown / Cue Sheet**: the show's running order with actions per item; **NEXT** runs the next item.
 - **Tools › Save Snapshot**: saves the current Program as PNG.
@@ -647,9 +658,10 @@ http://192.0.2.10:8088/api/?Function=SetText&Input=3&SelectedName=Headline.Text&
 http://192.0.2.10:8088/api/?Function=LayerPreset&Input=4&Value=1,Interview
 http://192.0.2.10:8088/api/?Function=OpenWindow&Value=replay
 http://192.0.2.10:8088/api/?Function=CloseWindow&Value=Replay
+http://192.0.2.10:8088/api/?Function=ShowInputProperties&Input=2&Value=3
 ```
 
-HongMix-specific functions include `SetFitMode`, `SetZoomX` / `SetZoomY`, `LayerLayout`, `SetLayer`, `LayerPreset` / `LayerPresetSave`, `SetLUT`, `SetDelay` / `DelayDump`, `RundownNext`, `OpenWindow`, `CloseWindow` and the ducking functions. `OpenWindow` accepts `replay`, `scopes`, `audiomixer`, `talentcue`, `multiview`, `rundown` or `ptz`; `CloseWindow` takes the window title. Calling `/api/` without a function returns the vMix-style XML state, including `<inputSrtStats>` per SRT input.
+HongMix-specific functions include `SetFitMode`, `SetZoomX` / `SetZoomY`, `LayerLayout`, `SetLayer`, `LayerPreset` / `LayerPresetSave`, `SetLUT`, `SetDelay` / `DelayDump`, `RundownNext`, `OpenWindow`, `CloseWindow`, `ShowInputProperties`, the Video Cue and MultiLayout functions, and the ducking functions. `ShowInputProperties` opens the selected input's settings at tab 0–9. Calling `/api/` without a function returns the vMix-style XML state, including `<inputSrtStats>` per SRT input.
 
 Full list: [docs/FUNCTIONS.md](../FUNCTIONS.md).
 

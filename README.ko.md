@@ -10,26 +10,30 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.4.1 다운로드</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ HongMix 2.4.3 다운로드</b></a>
   &nbsp;·&nbsp; <a href="README.md">English</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">의견 남기기</a>
 </p>
 
 > **처음 실행할 때 “열지 않음” 또는 “휴지통으로 이동”만 보이면:** **시스템 설정 › 개인정보 보호 및 보안**의 아래쪽에서 **그래도 열기**를 누르세요. 고급 사용자는 `xattr -dr com.apple.quarantine /Applications/HongMix.app`을 실행해도 됩니다. HongMix는 공개용 임시 서명이며 아직 Apple 공증 전입니다.
 
-### 최신 업데이트 · 2.4.1
-- 2.4.0에서 AUTO 트랜지션 중 Preview/Program 모니터가 끊기던 문제를 고쳤습니다. 실제 Program 송출 프레임은 빠지지 않았습니다.
-- T바를 움직이거나 AUTO를 시작할 때 화면 전체를 다시 그리지 않습니다.
-- 트랜지션을 부드럽게 유지하려고 창 미리 만들기를 제거했습니다. 보조 창을 처음 열 때는 0.1~0.4초 걸릴 수 있습니다.
-- 2.4.0의 리플레이 보호도 포함됩니다. Program이 바쁘면 AI 슬로모션이 GPU 블렌딩으로 자동 전환합니다.
-- 빌드 202의 번역·핵심·MultiView·DMG·서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.4.1.ko.md) · [English](docs/RELEASE-NOTES-2.4.1.md)
+### 최신 업데이트 · 2.4.3
+- 관계없는 엔진 값이 바뀔 때 모든 화면을 다시 그리지 않습니다. 마스터 음소거·페이드·슬라이더가 밀리초 단위로 반응합니다.
+- Video Cue, 장면이 있는 8상자 MultiLayouts, 입력 설정 실시간 미리보기를 추가했습니다.
+- MultiLayouts 끌어 놓기와, 미리보기가 영역 밖으로 나갔을 때 입력 설정 ↺·슬라이더가 안 먹던 문제를 고쳤습니다.
+- 큰 입력 목록을 차분하게 만드는 **타일 버튼은 마우스를 올렸을 때만** 옵션을 추가했습니다. 기본은 꺼짐입니다.
+- 2.4.2는 건너뛰었습니다. 빌드 207의 번역·MultiView·MultiLayout·Video Cue·DMG·서명 검사를 통과했습니다. [한국어 릴리스 노트](docs/RELEASE-NOTES-2.4.3.ko.md) · [English](docs/RELEASE-NOTES-2.4.3.md)
 
-2.3.7의 MultiView·Talent Cue·하드웨어 룩과 2.3.10의 MultiView 이름표·스코프 창·하드웨어 룩 개선을 기여해 주신 [@otiumvisuals](https://github.com/otiumvisuals) 님께 감사드립니다. 렌더 스레드 개선 아이디어는 Reddit의 Hawk_Super 님께 받았습니다.
+2.3.7의 MultiView·Talent Cue·하드웨어 룩, 2.3.10의 MultiView 이름표·스코프 창·하드웨어 룩 개선, 2.4.3의 Video Cue·MultiLayouts·입력 설정 미리보기를 기여해 주신 [@otiumvisuals](https://github.com/otiumvisuals) 님께 감사드립니다. 렌더 스레드 개선 아이디어는 Reddit의 Hawk_Super 님께 받았습니다.
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.4.0/ko-replay-settings.png" alt="HongMix 리플레이 설정" width="100%"><br><sub>AI 슬로모션 선택과 송출 부하 보호</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/ko-main.png" alt="HongMix 메인 스위처" width="100%"><br><sub>라이브 프로덕션 스위처</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.4.2/ko-main-videocue.png" alt="HongMix 2.4.3 Video Cue" width="100%"><br><sub>Video Cue 재생과 제어</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.4.2/ko-main-multilayout.png" alt="HongMix 2.4.3 MultiLayouts" width="100%"><br><sub>8상자 MultiLayouts와 장면</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/2.4.3/ko-tiles-always.png" alt="버튼이 항상 보이는 입력 타일" width="100%"><br><sub>타일 버튼 항상 표시</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.4.3/ko-tiles-hover.png" alt="마우스를 올릴 때만 버튼이 보이는 입력 타일" width="100%"><br><sub>선택형 마우스 오버 버튼</sub></td>
   </tr>
 </table>
 

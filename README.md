@@ -10,26 +10,30 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.4.1</b></a>
+  <a href="https://github.com/HongMix/HongMix/releases/latest"><b>⬇️ Download HongMix 2.4.3</b></a>
   &nbsp;·&nbsp; <a href="README.ko.md">한국어</a>
   &nbsp;·&nbsp; <a href="https://github.com/HongMix/HongMix/issues">Feedback</a>
 </p>
 
 > **If macOS shows “Move to Trash” or “Cancel” on first launch:** open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**. Advanced users can instead run `xattr -dr com.apple.quarantine /Applications/HongMix.app`. HongMix is ad-hoc signed and not yet notarized.
 
-### Latest update · 2.4.1
-- Fixes Preview/Program monitor stutter during AUTO transitions introduced in 2.4.0. Program output itself was not dropping frames.
-- Moving the T-bar or starting AUTO no longer redraws the whole interface.
-- Window prewarming was removed to keep transitions smooth; opening a secondary window for the first time can take 0.1–0.4 seconds.
-- Includes the 2.4.0 Replay protection: AI slow motion falls back to GPU blending whenever Program is busy.
-- Build 202 passed translation, core, MultiView, DMG and signing checks. See [English notes](docs/RELEASE-NOTES-2.4.1.md) or [한국어](docs/RELEASE-NOTES-2.4.1.ko.md).
+### Latest update · 2.4.3
+- The switcher no longer redraws every screen for unrelated engine changes: master mute, fades and slider drags respond in milliseconds.
+- Adds Video Cue, eight-box MultiLayouts with scenes, and live previews in Input Settings.
+- Fixes MultiLayouts drag-and-drop and Input Settings reset/slider clicks when a preview extends outside its canvas.
+- New optional **Tile buttons on hover only** mode keeps large input grids calm; it is off by default.
+- 2.4.2 was skipped. Build 207 passed translation, MultiView, MultiLayout, Video Cue, DMG and signing checks. See [English notes](docs/RELEASE-NOTES-2.4.3.md) or [한국어](docs/RELEASE-NOTES-2.4.3.ko.md).
 
-Thanks to [@otiumvisuals](https://github.com/otiumvisuals), who contributed MultiView, Talent Cue and the hardware look in 2.3.7, plus MultiView labels, Scopes windows and hardware-look refinements in 2.3.10. Render-thread improvement ideas came from Hawk_Super on Reddit.
+Thanks to [@otiumvisuals](https://github.com/otiumvisuals), who contributed MultiView, Talent Cue and the hardware look in 2.3.7; MultiView labels, Scopes windows and hardware-look refinements in 2.3.10; and Video Cue, MultiLayouts and the Input Settings preview in 2.4.3. Render-thread improvement ideas came from Hawk_Super on Reddit.
 
 <table>
   <tr>
-    <td width="50%" align="center"><img src="docs/screenshots/2.4.0/en-replay-settings.png" alt="HongMix Replay settings" width="100%"><br><sub>AI slow motion is optional and protected from Program load</sub></td>
-    <td width="50%" align="center"><img src="docs/screenshots/2.3.10/en-main.png" alt="HongMix main switcher" width="100%"><br><sub>Live production switcher</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.4.2/en-main-videocue.png" alt="HongMix 2.4.3 Video Cue" width="100%"><br><sub>Video Cue playback and control</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.4.2/en-main-multilayout.png" alt="HongMix 2.4.3 MultiLayouts" width="100%"><br><sub>Eight-box MultiLayouts and scenes</sub></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/2.4.3/en-tiles-always.png" alt="Input tiles with controls always visible" width="100%"><br><sub>Tile controls always visible</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/2.4.3/en-tiles-hover.png" alt="Calmer input tiles with controls on hover" width="100%"><br><sub>Optional controls-on-hover mode</sub></td>
   </tr>
 </table>
 
