@@ -205,7 +205,7 @@ struct SheetRequest: Identifiable {
 
 /// The sheet a SheetRequest opens (main window and the detached audio mixer window).
 struct SheetRequestView: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     let req: SheetRequest
     @Binding var sheet: SheetRequest?
 
@@ -232,7 +232,7 @@ struct SheetRequestView: View {
 struct AudioMixerWindow: View {
     /// Open mixer windows (a language/skin/look change rebuilds the window: new onAppear can come first)
     static var open = 0
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ViewState private var sheet: SheetRequest? = nil
     @AppStorage("audioInputStripsCollapsed") private var collapsed = false
 
@@ -245,7 +245,7 @@ struct AudioMixerWindow: View {
                 AudioMixerWindow.open -= 1
                 if AudioMixerWindow.open <= 0 { AudioMixerWindow.open = 0; engine.mixerVisible = true }
             }
-            .sheet(item: $sheet) { req in SheetRequestView(req: req, sheet: $sheet).environmentObject(engine) }
+            .sheet(item: $sheet) { req in SheetRequestView(req: req, sheet: $sheet).environment(engine) }
     }
 }
 
@@ -261,7 +261,7 @@ final class MixerDock: ObservableObject {
 ///   [ Add Input | Record | External | Stream | Fullscreen ......... status ]
 struct ContentView: View {
     @ObservedObject private var mixerDock = MixerDock.shared
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.openWindow) private var openWindow
     @ViewState private var sheet: SheetRequest? = nil
     @ViewState private var outputsSheet: OutputKind? = nil
@@ -273,6 +273,7 @@ struct ContentView: View {
     @ViewState private var dragStartFraction: Double? = nil
 
     /// API OpenWindow (HongMix extension): lets the control API open a window by id.
+    static var apiShowProperties: ((InputSource, Int) -> Void)?
     static var apiOpenWindow: ((String) -> Void)?
     var body: some View {
         VStack(spacing: 0) {
@@ -354,11 +355,15 @@ struct ContentView: View {
         .onAppear {
             let open = openWindow
             ContentView.apiOpenWindow = { open(id: $0) }
+            // API ShowInputProperties: the same Input Settings sheet as the tile's gear › Properties…
+            ContentView.apiShowProperties = { [sheet = $sheet] input, tab in
+                sheet.wrappedValue = SheetRequest(kind: input.kind, editing: input, mode: .properties, tab: tab)
+            }
         }
-        .sheet(item: $sheet) { req in SheetRequestView(req: req, sheet: $sheet).environmentObject(engine) }
+        .sheet(item: $sheet) { req in SheetRequestView(req: req, sheet: $sheet).environment(engine) }
         .sheet(item: $outputsSheet) { kind in
             OutputsSheet(focusKind: kind)
-                .environmentObject(engine)
+                .environment(engine)
         }
         .background(KeyboardShortcuts())
     }
@@ -407,7 +412,7 @@ extension OutputKind: Identifiable {
 // MARK: - Top status bar
 
 struct TopBar: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
 
     var body: some View {
         HStack(spacing: 14) {
@@ -482,7 +487,7 @@ struct TopBar: View {
 
 /// "● ON AIR 00:41:07" — time since the first stream output went live.
 struct OnAirChip: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
@@ -499,7 +504,7 @@ struct OnAirChip: View {
 
 /// FPS / Render / Max / Drop — redrawn once a second without touching the rest of the window.
 struct EngineStatsChips: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var stats: EngineStats
 
     var body: some View {
@@ -558,7 +563,7 @@ struct StatusChip: View {
 // MARK: - Monitors
 
 struct MonitorPane: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     let title: String
     let color: Color
     let input: InputSource?
@@ -686,7 +691,7 @@ struct BrowserBadge: View {
 
 struct BottomBar: View {
     @ObservedObject private var mixerDock = MixerDock.shared
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.openWindow) private var openWindow
     @Binding var sheet: SheetRequest?
     @Binding var outputsSheet: OutputKind?
@@ -816,13 +821,13 @@ struct BottomBar: View {
         .padding(.bottom, AppSkin.isMono ? 6 : 0)
         .sheet(item: $utilitySheet) { destination in
             switch destination {
-            case .overlay: OverlaySettingsSheet().environmentObject(engine)
-            case .scheduler: SchedulerSheet(scheduler: engine.scheduler).environmentObject(engine)
-            case .captions: CaptionsSheet(captions: engine.captions).environmentObject(engine)
-            case .preflight: PreflightSheet().environmentObject(engine)
-            case .monitoring: MonitoringSheet(srt: engine.srtMonitor, box: engine.blackbox).environmentObject(engine)
-            case .multiCorder: MultiCorderSheet().environmentObject(engine)
-            case .allOutputs: OutputsSheet().environmentObject(engine)
+            case .overlay: OverlaySettingsSheet().environment(engine)
+            case .scheduler: SchedulerSheet(scheduler: engine.scheduler).environment(engine)
+            case .captions: CaptionsSheet(captions: engine.captions).environment(engine)
+            case .preflight: PreflightSheet().environment(engine)
+            case .monitoring: MonitoringSheet(srt: engine.srtMonitor, box: engine.blackbox).environment(engine)
+            case .multiCorder: MultiCorderSheet().environment(engine)
+            case .allOutputs: OutputsSheet().environment(engine)
             }
         }
     }
@@ -830,7 +835,7 @@ struct BottomBar: View {
 
 /// "Record ⚙" style toggle: main part starts/stops, gear opens settings.
 struct OutputBarButton: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     let title: String
     let kind: OutputKind
     var alsoKind: OutputKind? = nil
@@ -848,6 +853,7 @@ struct OutputBarButton: View {
             // idle: no 1 s timer
             Text(short).foregroundColor(.white)
                 .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1).fixedSize()        // never wraps ("STREA/M") when the bar gets crowded
                 .padding(.horizontal, 14)
                 .frame(height: 30)
                 .background(Color.white.opacity(0.07))
@@ -932,7 +938,7 @@ struct OutputBarButton: View {
                 }
                 .buttonStyle(.plain)
                 .help(L("송출 모니터"))
-                .popover(isPresented: $streamMonitor, arrowEdge: .top) { StreamMonitorView().environmentObject(engine) }
+                .popover(isPresented: $streamMonitor, arrowEdge: .top) { StreamMonitorView().environment(engine) }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: AppSkin.isMono ? 15 : 3, style: .continuous))
@@ -943,14 +949,14 @@ struct OutputBarButton: View {
             PreflightSheet(proceedTitle: L("그래도 송출 시작"), onProceed: {
                 for k in kinds { engine.setOutputs(kind: k, running: true) }
             })
-            .environmentObject(engine)
+            .environment(engine)
         }
     }
 }
 
 struct FullscreenBarButton: View {
     @ObservedObject private var displayOutput = FullscreenOutput.shared   // display output state (not via engine refresh)
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ViewState private var showSettings = false
 
     var body: some View {
@@ -960,7 +966,7 @@ struct FullscreenBarButton: View {
         HStack(spacing: 0) {
             Button {
                 output.toggle(engine: engine)
-                engine.objectWillChange.send()
+                displayOutput.objectWillChange.send()
             } label: {
                 HStack(spacing: 6) {
                     if mono && on { Text("●").foregroundColor(Color(red: 1, green: 0.42, blue: 0.38)) }
@@ -993,7 +999,7 @@ struct FullscreenBarButton: View {
             .buttonStyle(.plain)
             .help(L("디스플레이 출력 설정"))
             .popover(isPresented: $showSettings, arrowEdge: .top) {
-                DisplaySettingsPanel().environmentObject(engine)
+                DisplaySettingsPanel().environment(engine)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: mono ? 15 : Theme.radius, style: .continuous))
@@ -1017,6 +1023,7 @@ struct ToolBarWindowButton: View {
                 Image(systemName: symbol).font(.system(size: 11, weight: .semibold))
                 Text(title).font(.system(size: 12, weight: .semibold))
             }
+            .lineLimit(1).fixedSize()
             .foregroundColor(.white)
             .padding(.horizontal, 12)
             .frame(height: 30)
@@ -1032,7 +1039,7 @@ struct ToolBarWindowButton: View {
 }
 
 struct MultiCorderBarButton: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ViewState private var showSettings = false
 
     var body: some View {
@@ -1062,13 +1069,13 @@ struct MultiCorderBarButton: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous))
         .sheet(isPresented: $showSettings) {
-            MultiCorderSheet().environmentObject(engine)
+            MultiCorderSheet().environment(engine)
         }
     }
 }
 
 struct MultiCorderSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -1077,7 +1084,7 @@ struct MultiCorderSheet: View {
             Form {
                 Section(L("저장")) {
                     HStack {
-                        TextField(L("폴더"), text: $engine.multiCorderSettings.folder)
+                        TextField(L("폴더"), text: Bindable(engine).multiCorderSettings.folder)
                         Button(L("선택…")) {
                             let p = NSOpenPanel()
                             p.canChooseDirectories = true
@@ -1086,18 +1093,18 @@ struct MultiCorderSheet: View {
                             if p.runModal() == .OK, let u = p.url { engine.multiCorderSettings.folder = u.path }
                         }
                     }
-                    Picker(L("코덱"), selection: $engine.multiCorderSettings.videoCodec) {
+                    Picker(L("코덱"), selection: Bindable(engine).multiCorderSettings.videoCodec) {
                         Text("H.264").tag("h264")
                         Text("HEVC").tag("hevc")
                         Text("ProRes 422").tag("prores")
                     }
-                    Picker(L("컨테이너"), selection: $engine.multiCorderSettings.container) {
+                    Picker(L("컨테이너"), selection: Bindable(engine).multiCorderSettings.container) {
                         Text("MOV").tag("mov")
                         Text("MP4").tag("mp4")
                         Text("MPEG-TS").tag("ts")
                     }
                     .disabled(engine.multiCorderSettings.videoCodec == "prores")
-                    NumberField(L("비트레이트"), value: $engine.multiCorderSettings.videoKbps, in: 2000...150000, unit: "kbps", step: 2000)
+                    NumberField(L("비트레이트"), value: Bindable(engine).multiCorderSettings.videoKbps, in: 2000...150000, unit: "kbps", step: 2000)
                 }
                 Section(L("녹화할 입력")) {
                     ForEach(engine.inputs) { i in
@@ -1132,7 +1139,7 @@ struct MultiCorderInputRow: View {
 
 /// Hidden buttons that provide keyboard shortcuts.
 struct KeyboardShortcuts: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
 
     var body: some View {
         ZStack {
@@ -1180,7 +1187,7 @@ struct SafeAreaGuides: View {
 
 /// vMix-style alerts drawn on the Output monitor only (not in recordings or streams): one at a time.
 struct OutputAlerts: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     var body: some View {
         let text: String? = engine.ftbOn ? "FADE TO BLACK" : (engine.lowVolumeAlert ? "LOW VOLUME" : nil)
         if let t = text {
@@ -1202,7 +1209,7 @@ struct OutputAlerts: View {
 
 /// Top bar: broadcast delay of running outputs + the DUMP button.
 struct DelayStatusChips: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
 
     var body: some View {
         ForEach(engine.outputs.filter { $0.running && $0.config.delaySeconds > 0 }) { o in

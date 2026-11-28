@@ -3,7 +3,7 @@ import AppKit
 
 /// Window "Talent Cue": preview of the Talent Display, prepared messages, timer, look, and the moderator link.
 struct TalentCueWindow: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var cue = TalentCue.shared
     @ViewState private var newText = ""
     @ViewState private var newColor = Color.white

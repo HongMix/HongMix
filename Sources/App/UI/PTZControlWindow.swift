@@ -6,7 +6,7 @@ import AppKit
 /// 1–9 select a PTZ camera (shown as live pictures on top), U I O / J K L / M , . recall presets 1–9,
 /// Tab next camera, Shift = fast. Releasing a key stops; leaving the window stops everything.
 struct PTZControlWindow: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @AppStorage("ptzControlInput") private var selectedID = ""
     @AppStorage("ptzControlFollowPreview") private var followPreview = true
 

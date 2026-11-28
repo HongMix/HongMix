@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Input Settings › Position › AI upscaling (Upscaler.swift): on/off and what it is doing right now.
 struct UpscaleSection: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var input: InputSource
 
     var body: some View {

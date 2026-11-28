@@ -78,7 +78,7 @@ private struct OverlayChannelButton: View {
 
 struct TransitionColumn: View {
     @ObservedObject private var transitionUI = TransitionUI.shared   // AUTO lamp + T-bar (not via engine refresh)
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
 
     var body: some View {
         VStack(spacing: 8) {
@@ -116,7 +116,7 @@ struct TransitionColumn: View {
 
 /// The four transitions as tabs: click = the one AUTO / T-bar use, right-click = change its effect.
 private struct TransitionTabs: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
 
     var body: some View {
         let hw = AppLook.hardware
@@ -186,7 +186,7 @@ struct GrooveSlider: View {
 
 /// Effect and length of the selected transition.
 private struct TransitionLength: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
 
     var body: some View {
         let i = max(0, min(3, engine.autoSlot))
@@ -287,7 +287,7 @@ private struct BigTakeButton: View {
 
 /// Overlay 1–8 as round keys in each channel's colour (filled when on air).
 private struct OverlayBank: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
 
     var body: some View {
         VStack(spacing: 4) {
@@ -328,7 +328,7 @@ private struct OverlayBank: View {
 
 /// Stinger: small picker (media input, cut point) + the STINGER button.
 private struct StingerRow: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     let slot: Int
 
     var body: some View {
@@ -429,7 +429,7 @@ struct HTBar: View {
 
 /// Stinger button: click = run, menu = choose media input and cut point.
 struct StingerButton: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     let slot: Int
 
     var body: some View {
@@ -462,7 +462,7 @@ struct StingerButton: View {
 
 /// One of the 4 transition buttons: click = run, menu = choose effect, field = duration (ms).
 struct TransitionSlotRow: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     let index: Int
 
     var body: some View {
@@ -578,7 +578,7 @@ struct SignalLostBadge: View {
 
 /// Measured format of an input, e.g. "1080p59.94" (refreshed once a second).
 struct InputFormatLabel: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     let slot: VideoSlot
     var size: CGFloat = 9
 
@@ -610,11 +610,12 @@ struct InputFormatLabel: View {
 }
 
 struct InputGrid: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Binding var sheet: SheetRequest?
     /// 0 small, 1 medium, 2 large (input preview size)
     @AppStorage("inputSize") private var inputSize = 1
     @AppStorage("compactInputTiles") private var compactInputTiles = false
+    @AppStorage("tileButtonsOnHover") private var tileButtonsOnHover = false
     @AppStorage("inputDockLeft") private var inputDockLeft = false
     @ViewState private var fileDropTarget = false
 
@@ -658,6 +659,14 @@ struct InputGrid: View {
                     }
                     .buttonStyle(.borderless)
                     .help(L("vMix 스타일의 입력 타일 보기 전환. 접은 상태에서도 미리보기, 컷, 오버레이, 오디오 버튼을 표시합니다."))
+                    Button { tileButtonsOnHover.toggle() } label: {
+                        Image(systemName: tileButtonsOnHover ? "cursorarrow.rays" : "cursorarrow")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(tileButtonsOnHover ? Theme.accent : .primary)
+                    }
+                    .buttonStyle(.borderless)
+                    .help(tileButtonsOnHover ? L("타일 버튼: 마우스를 올렸을 때만 (클릭하면 항상 보이기)")
+                                             : L("타일 버튼: 항상 보이기 (클릭하면 마우스를 올렸을 때만 — 화면이 덜 복잡해집니다)"))
                     Button { withAnimation(.easeInOut(duration: 0.18)) { inputDockLeft.toggle() } } label: {
                         Image(systemName: inputDockLeft ? "rectangle.rightthird.inset.filled" : "sidebar.left")
                             .font(.system(size: 10, weight: .semibold))
@@ -739,6 +748,7 @@ struct InputGrid: View {
                 compactInputTiles.toggle()
                 engine.inputs.forEach { $0.collapsed = compactInputTiles }
             }
+            Toggle(L("타일 버튼은 마우스를 올렸을 때만"), isOn: $tileButtonsOnHover)
             Button(L("오디오 전용 입력만 접기")) {
                 engine.inputs.forEach { if $0.kind == .audio { $0.collapsed = true } }
             }
@@ -748,7 +758,7 @@ struct InputGrid: View {
 
 /// A folded source becomes a narrow vertical tab in the input area's left rail.
 private struct FoldedInputRow: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var input: InputSource
     let number: Int
     @Binding var sheet: SheetRequest?
@@ -856,7 +866,7 @@ enum InputCategory {
 }
 
 struct CategoryBar: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Binding var category: Int
     @Binding var search: String
     @ViewState private var searching = false
@@ -961,11 +971,14 @@ struct RightClickCatcher: NSViewRepresentable {
 struct InputBox: View {
     /// Hardware look: squarer corners (like a hardware multiviewer); the clean look keeps Theme.radius.
     private var tileRadius: CGFloat { AppLook.hardware ? 3 : Theme.radius }
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var input: InputSource
     let number: Int
     @Binding var sheet: SheetRequest?
     var compactDock = false
+    /// Tile buttons only while the pointer is over the tile (Inputs header / right-click menu). Off = as before.
+    @AppStorage("tileButtonsOnHover") private var buttonsOnHover = false
+    @ViewState private var hovering = false
 
     private var isProgram: Bool { engine.programID == input.id }
     private var isPreview: Bool { engine.previewID == input.id }
@@ -1235,15 +1248,47 @@ struct InputBox: View {
         .help(help)
     }
 
-    private var tileBody: some View {
+    @ViewBuilder private var tileBody: some View {
+        if buttonsOnHover {
+            // calm tiles: picture + name; the buttons come up over the picture while the pointer is on the tile
+            VStack(spacing: 3) {
+                inputMonitor.help(L("클릭: Preview · 더블클릭: Input Settings"))
+                    .overlay(alignment: .bottom) {
+                        if hovering {
+                            tileControls.padding(.top, 3)
+                                .background(Color.black.opacity(0.78))
+                        } else if input.muted || input.looping {
+                            HStack(spacing: 4) {
+                                if input.muted { Image(systemName: "speaker.slash.fill").help(L("오디오 끄기")) }
+                                if input.looping { Image(systemName: "repeat").help(L("Loop")) }
+                            }
+                            .font(.system(size: 9, weight: .bold)).foregroundColor(.white)
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(input.muted ? Theme.live : Color.black.opacity(0.7))
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                            .frame(maxWidth: .infinity, alignment: .trailing).padding(4)
+                        }
+                    }
+                listNowPlaying
+                if let deck = input as? SlideDeckInput { TileSlideStrip(deck: deck) }
+                if let ml = input as? MultiLayoutInput { TileSceneStrip(ml: ml) }
+            }
+            .padding(.bottom, 3)
+            .onHover { h in if hovering != h { hovering = h } }
+        } else {
+            VStack(spacing: 3) {
+                inputMonitor.help(L("클릭: Preview · 더블클릭: Input Settings"))
+                listNowPlaying
+                if let deck = input as? SlideDeckInput { TileSlideStrip(deck: deck) }
+                if let ml = input as? MultiLayoutInput { TileSceneStrip(ml: ml) }
+                tileControls
+            }
+        }
+    }
+
+    private var tileControls: some View {
         let transport = input.supportsTransport
         return VStack(spacing: 3) {
-            inputMonitor.help(L("클릭: Preview · 더블클릭: Input Settings"))
-
-            listNowPlaying
-            if let deck = input as? SlideDeckInput { TileSlideStrip(deck: deck) }
-            if let ml = input as? MultiLayoutInput { TileSceneStrip(ml: ml) }
-
             // Row 1: Close · Restart · Play/Pause · Cut · Loop  (Quick Play removed)
             HStack(spacing: 3) {
                 tileIcon("xmark", help: L("입력 닫기")) { InputCloseConfirm.close(input, engine: engine) }
@@ -1297,7 +1342,7 @@ struct InputBox: View {
 // MARK: - Audio mixer (vertical channel strips)
 
 struct AudioMixerPanel: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Binding var sheet: SheetRequest?
     @Binding var inputStripsCollapsed: Bool
     /// Docked mixer only: opens it as a separate window
@@ -1318,7 +1363,7 @@ struct AudioMixerPanel: View {
                         .fixedSize(horizontal: true, vertical: false)
                 }
                 if !inputStripsCollapsed {
-                    Slider(value: $engine.headphonesVolume, in: 0...1)
+                    Slider(value: Bindable(engine).headphonesVolume, in: 0...1)
                         .controlSize(.mini)
                         .frame(width: 54)
                         .help(L("헤드폰 볼륨"))
@@ -1344,7 +1389,7 @@ struct AudioMixerPanel: View {
                 .buttonStyle(.plain)
                 .background(Theme.button.opacity(0.55), in: RoundedRectangle(cornerRadius: 5))
                 .help(L("Audio Outputs — Master, Headphones, Bus A–G의 CoreAudio 장치와 채널 지정"))
-                Toggle(isOn: $engine.monitorOn) {
+                Toggle(isOn: Bindable(engine).monitorOn) {
                     Image(systemName: engine.monitorOn ? "headphones" : "headphones")
                         .font(.system(size: 11, weight: .semibold))
                         .frame(width: 27, height: 24)
@@ -1375,11 +1420,11 @@ struct AudioMixerPanel: View {
             .frame(height: 30)
             .background(LinearGradient(colors: [Theme.panelDark, Theme.panel], startPoint: .top, endPoint: .bottom))
             .overlay(alignment: .bottom) { Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1) }
-            .sheet(isPresented: $showAudioOutputs) { AudioOutputsSheet().environmentObject(engine) }
+            .sheet(isPresented: $showAudioOutputs) { AudioOutputsSheet().environment(engine) }
 
             ScrollView(.horizontal, showsIndicators: true) {
                 HStack(alignment: .top, spacing: 2) {
-                    ChannelStrip(title: "Master", volume: $engine.masterVolume, muted: $engine.masterMuted,
+                    ChannelStrip(title: "Master", volume: Bindable(engine).masterVolume, muted: Bindable(engine).masterMuted,
                                  meter: { engine.audioMixer.master }, highlight: Theme.accent) {
                         Color.clear
                     }
@@ -1407,7 +1452,7 @@ struct AudioMixerPanel: View {
 }
 
 struct AudioOutputsSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.dismiss) private var dismiss
     private let devices = CoreAudioOutputs.devices()
 
@@ -1439,7 +1484,7 @@ struct AudioOutputsSheet: View {
         let selected = devices.first { $0.uid == route.deviceUID }
         GridRow {
             Text(names[index]).font(.system(size: 12, weight: .semibold)).frame(width: 90, alignment: .leading)
-            Toggle("", isOn: index == 8 ? $engine.monitorOn : binding(index, \.enabled)).labelsHidden()
+            Toggle("", isOn: index == 8 ? Bindable(engine).monitorOn : binding(index, \.enabled)).labelsHidden()
             Picker("", selection: binding(index, \.deviceUID)) {
                 Text(L("시스템 기본 출력")).tag("")
                 ForEach(devices) { Text($0.name).tag($0.uid) }
@@ -1463,14 +1508,14 @@ struct AudioOutputsSheet: View {
 }
 
 struct BusChannelStrip: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     let index: Int
 
     var body: some View {
         let mixer = engine.audioMixer
         let b = index
-        ChannelStrip(title: "Bus " + AudioBus.all[b], volume: $engine.busSettings[b].volume,
-                     muted: $engine.busSettings[b].muted, meter: { mixer.busMeter(b) }, highlight: nil) {
+        ChannelStrip(title: "Bus " + AudioBus.all[b], volume: Bindable(engine).busSettings[b].volume,
+                     muted: Bindable(engine).busSettings[b].muted, meter: { mixer.busMeter(b) }, highlight: nil) {
             HStack(spacing: MixerLook.gap) {
                 MixerKey(color: engine.busSettings[b].sendToMaster ? MixerLook.blue : MixerLook.key,
                          action: { engine.busSettings[b].sendToMaster.toggle() }) { Text("M") }
@@ -1492,7 +1537,7 @@ struct BusChannelStrip: View {
 
 /// "+" column after the bus strips: enable another bus (vMix: right-click A/B to enable C–G).
 struct AddBusColumn: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
 
     var body: some View {
         let hidden = (1..<AudioMixer.busCount).filter { !engine.busInUse($0) }
@@ -1519,7 +1564,7 @@ struct AddBusColumn: View {
 
 /// vMix Audio Bus Manager: inputs × buses grid in one window.
 struct BusManagerButton: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ViewState private var show = false
 
     var body: some View {
@@ -1528,12 +1573,12 @@ struct BusManagerButton: View {
         }
         .buttonStyle(.plain)
         .help(L("오디오 버스 매니저 — 입력별 버스 라우팅을 한 화면에서"))
-        .sheet(isPresented: $show) { BusManagerSheet().environmentObject(engine) }
+        .sheet(isPresented: $show) { BusManagerSheet().environment(engine) }
     }
 }
 
 struct BusManagerSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -1558,7 +1603,7 @@ struct BusManagerSheet: View {
                         Text(L("믹서에 항상 표시")).font(.caption).frame(width: 180, alignment: .leading)
                         Text("—").frame(width: 46).foregroundColor(.secondary)
                         ForEach(1..<AudioMixer.busCount, id: \.self) { b in
-                            Toggle("", isOn: $engine.busSettings[b].enabled).labelsHidden().toggleStyle(.checkbox)
+                            Toggle("", isOn: Bindable(engine).busSettings[b].enabled).labelsHidden().toggleStyle(.checkbox)
                                 .frame(width: 46)
                         }
                     }
@@ -1575,7 +1620,7 @@ struct BusManagerSheet: View {
 }
 
 private struct BusManagerRow: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var input: InputSource
     let number: Int
 
@@ -1603,7 +1648,7 @@ private struct BusManagerRow: View {
 }
 
 struct InputChannelStrip: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var input: InputSource
     let number: Int
     let openSettings: () -> Void

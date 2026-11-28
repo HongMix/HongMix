@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Settings › MIDI: devices, mappings (control → function), Learn, built-in templates, LED tally.
 struct MIDISettingsView: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var midi: MIDIControl
     @ViewState private var deviceID = ""
     @ViewState private var function = "PreviewInput"

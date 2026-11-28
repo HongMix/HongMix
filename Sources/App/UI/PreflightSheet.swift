@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Pre-flight checklist (also shown automatically when starting a stream with problems).
 struct PreflightSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.dismiss) private var dismiss
     var proceedTitle: String? = nil
     var onProceed: (() -> Void)? = nil
@@ -63,7 +63,7 @@ struct PreflightSheet: View {
 
 /// Bottom-bar "점검" button.
 struct PreflightButton: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ViewState private var show = false
 
     var body: some View {
@@ -78,6 +78,6 @@ struct PreflightButton: View {
         }
         .buttonStyle(.plain)
         .help(L("송출 전 점검 — 신호·백업·SRT·송출 주소·디스크·오디오·렌더를 한 번에 확인"))
-        .sheet(isPresented: $show) { PreflightSheet().environmentObject(engine) }
+        .sheet(isPresented: $show) { PreflightSheet().environment(engine) }
     }
 }

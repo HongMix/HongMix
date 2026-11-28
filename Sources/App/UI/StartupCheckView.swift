@@ -17,7 +17,7 @@ enum StartupCheckWindow {
         w.title = L("시작 전 점검")
         w.isReleasedWhenClosed = false
         w.appearance = NSAppearance(named: .darkAqua)
-        w.contentView = NSHostingView(rootView: StartupCheckView(onClose: { close() }).environmentObject(engine))
+        w.contentView = NSHostingView(rootView: StartupCheckView(onClose: { close() }).environment(engine))
         w.setContentSize(NSSize(width: 820, height: 700))
         w.minSize = NSSize(width: 760, height: 560)
         if let main = FullscreenOutput.switcherWindow {
@@ -42,7 +42,7 @@ enum StartupCheckWindow {
 }
 
 struct StartupCheckView: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var check = SystemCheck.shared
     @ObservedObject var focus = FocusGuard.shared
     @ViewState private var showAtLaunch = SystemCheck.showAtLaunch

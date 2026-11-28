@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 /// (drag boxes, drop inputs on them), the selected box and the MultiLayout's settings on the right.
 /// Clicking a scene takes it (the boxes animate); keys 1–9 and ← / → do the same while this window is in front.
 struct MultiLayoutWindow: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ViewState private var chosen: UUID? = nil
 
     private var layouts: [MultiLayoutInput] { engine.inputs.compactMap { $0 as? MultiLayoutInput } }
@@ -54,7 +54,7 @@ struct MultiLayoutWindow: View {
 
 /// The editor of one MultiLayout input.
 struct MultiLayoutEditor: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var ml: MultiLayoutInput
     @ViewState private var box = 0
     @ViewState private var renaming: Int? = nil
@@ -249,7 +249,7 @@ struct MultiLayoutEditor: View {
         let b = $ml.multiLayout.boxes[box]
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(L("상자")).font(.headline)
+                Text(L("상자")).font(.headline).lineLimit(1).fixedSize()   // "Box" never wraps
                 Picker("", selection: $box) { ForEach(0..<MLScene.boxCount, id: \.self) { Text("\($0 + 1)").tag($0) } }
                     .pickerStyle(.segmented).labelsHidden()
             }
@@ -478,7 +478,7 @@ struct MultiLayoutEditor: View {
 /// The layout with the MultiLayout's live picture under it: drag a box to move it, its corner to resize
 /// (Shift keeps 16:9), drop an input on a box. Edges snap to the screen, its centre and the other boxes.
 struct MLCanvas: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var ml: MultiLayoutInput
     /// The scene shown: the live one (its real picture) or one in preview (drawn from the inputs).
     var scene: Int
@@ -510,6 +510,11 @@ struct MLCanvas: View {
                 }
             }
             .frame(width: size.width, height: size.height)
+            .contentShape(Rectangle())   // a box dragged past the edge doesn't take clicks outside the canvas
+            // One drop target for the whole picture: the box under the pointer gets the input. (A drop target
+            // per box sat at the box's un-offset place — top left — so drops went to the wrong box.)
+            .onDrop(of: [.utf8PlainText, .plainText], delegate: MLBoxDrop(ml: ml, scene: scene, isLive: isLive, size: size,
+                                                                          box: $box, target: $dropTarget))
             .overlay(alignment: .topLeading) {
                 if !isLive {
                     Text(L("미리보기")).font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
@@ -574,13 +579,6 @@ struct MLCanvas: View {
             .onChanged { g in box = k; move(k, g.translation, size) }
             .onEnded { _ in dragStart = nil })
         .simultaneousGesture(TapGesture().onEnded { box = k })
-        .dropDestination(for: String.self) { items, _ in
-            guard let s = items.first, let id = UUID(uuidString: s) else { return false }
-            // live: the box's input; preview: this scene's own input for the box (nothing on air changes)
-            if isLive { ml.setInput(id, box: k) } else { ml.multiLayout.scenes[scene].boxes[k].input = id }
-            box = k
-            return true
-        } isTargeted: { dropTarget = $0 ? k : (dropTarget == k ? nil : dropTarget) }
     }
 
     private func move(_ k: Int, _ t: CGSize, _ size: CGSize) {
@@ -769,7 +767,7 @@ struct MLSceneControls: View {
 /// A scene that is not on air, drawn from the inputs' own pictures (background, boxes, foreground). Close to
 /// what goes on air; rounded corners show as the outline only.
 struct MLPreviewPicture: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var ml: MultiLayoutInput
     var scene: Int
     var size: CGSize
@@ -824,5 +822,44 @@ enum MLImageCache {
         let i = NSImage(contentsOfFile: (path as NSString).expandingTildeInPath)
         if let i { store[path] = i }
         return i
+    }
+}
+
+/// Drop an input (dragged from the list) on the box under the pointer.
+private struct MLBoxDrop: DropDelegate {
+    let ml: MultiLayoutInput
+    let scene: Int
+    let isLive: Bool
+    let size: CGSize
+    @Binding var box: Int
+    @Binding var target: Int?
+
+    private func boxAt(_ p: CGPoint) -> Int? {
+        guard size.width > 0, size.height > 0, ml.multiLayout.scenes.indices.contains(scene) else { return nil }
+        return ml.multiLayout.scenes[scene].box(atX: Double(p.x / size.width), y: Double(p.y / size.height))
+    }
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.utf8PlainText, .plainText]) }
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        let k = boxAt(info.location)
+        if target != k { target = k }
+        return DropProposal(operation: k == nil ? .forbidden : .copy)
+    }
+    func dropExited(info: DropInfo) { target = nil }
+    func performDrop(info: DropInfo) -> Bool {
+        target = nil
+        guard let k = boxAt(info.location),
+              let provider = info.itemProviders(for: [.utf8PlainText, .plainText]).first else { return false }
+        let ml = ml, scene = scene, isLive = isLive, box = $box
+        _ = provider.loadObject(ofClass: NSString.self) { obj, _ in
+            guard let s = obj as? String, let id = UUID(uuidString: s.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
+            DispatchQueue.main.async {
+                // live: the box's input; preview: this scene's own input for the box (nothing on air changes)
+                if isLive { ml.setInput(id, box: k) } else if ml.multiLayout.scenes.indices.contains(scene) {
+                    ml.multiLayout.scenes[scene].boxes[k].input = id
+                }
+                box.wrappedValue = k
+            }
+        }
+        return true
     }
 }

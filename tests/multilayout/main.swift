@@ -1,5 +1,7 @@
 // Standalone check of the MultiLayout logic (bash tests/multilayout/run.sh).
 import Foundation
+/// The app's L() (Localization.swift) is not part of this standalone test; starter scene names stay Korean.
+func L(_ s: String) -> String { s }
 
 var failures = 0
 func check(_ ok: Bool, _ msg: String) { if !ok { failures += 1; print("FAIL: \(msg)") } }
@@ -162,7 +164,7 @@ near(p.frames(at: 10.5).first { $0.box == 1 }?.rect, pipBR, "and shrinks into it
 check(p.frames(at: 10.5).map(\.box).sorted() == [0, 1], "all boxes in place")
 p.enter(from: slides, at: 20)                       // an input that is in no box: every box comes in
 near(p.frames(at: 20).first { $0.box == 1 }?.rect, MLRect(x: 1, y: 0.6, w: 0.3, h: 0.3), "no box had it: all come in")
-check(set.animateOnAir && (try! JSONDecoder().decode(MultiLayoutSettings.self, from: Data("{}".utf8))).animateOnAir, "on by default")
+check(!set.animateOnAir && !(try! JSONDecoder().decode(MultiLayoutSettings.self, from: Data("{}".utf8))).animateOnAir, "off by default (CUT stays instant)")
 
 // Leaving air to an input that is in a box: that box grows to full screen (on top), the others go;
 // then the switcher cuts. Coming back later starts from the real scene again.
@@ -204,4 +206,13 @@ none.scenes = [scene("New", [full])]
 p.edit(none, at: 1)
 check(p.frames(at: 1).map(\.input) == [cam1], "first scene shows")
 
+
+// Drop target: the visible box under the point, the top one when boxes overlap (2.4.3)
+var dz = MLScene(name: "drop")
+dz.apply(MLPreset.quad.rects)
+check(dz.box(atX: 0.75, y: 0.75) == 3 && dz.box(atX: 0.25, y: 0.25) == 0 && dz.box(atX: 0.75, y: 0.2) == 1, "quad: the box under the point")
+dz.boxes[5].visible = true; dz.boxes[5].rect = MLRect(x: 0.6, y: 0.6, w: 0.2, h: 0.2)
+check(dz.box(atX: 0.7, y: 0.7) == 5, "overlap: the top box")
+dz.boxes[3].visible = false
+check(dz.box(atX: 0.9, y: 0.95) == nil, "hidden box takes no drop")
 if failures == 0 { print("multilayout: all checks passed") } else { print("multilayout: \(failures) failed"); exit(1) }

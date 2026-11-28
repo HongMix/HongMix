@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 struct OutputsSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.dismiss) private var dismiss
     var focusKind: OutputKind? = nil
     @ViewState private var selection: UUID? = nil
@@ -132,7 +132,7 @@ struct OutputsSheet: View {
 
 /// Output 2–4 source selection (SetOutput2/3/4).
 struct BusSourcesBar: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
 
     var body: some View {
         // Fallback to horizontal scrolling instead of overflowing (and clipping) both sheet edges.
@@ -195,7 +195,7 @@ struct BusSourcesBar: View {
 }
 
 struct OutputRow: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var output: OutputChannel
 
     var body: some View {
@@ -247,7 +247,7 @@ struct OutputRow: View {
 }
 
 struct OutputEditor: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var output: OutputChannel
 
     var body: some View {
@@ -546,7 +546,7 @@ struct OutputEditor: View {
 }
 
 struct SettingsView: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @AppStorage("ndiExtraIPs") private var ndiExtraIPs = ""
     @ViewState private var formatMessage = ""
 
@@ -607,7 +607,7 @@ struct SettingsView: View {
 
 /// Settings › Network › Remote control: off by default — ports 8088/8099 open only when turned on.
 struct RemoteControlSection: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @AppStorage(APIAccess.modeKey) private var apiMode = "lan"
     @AppStorage(APIAccess.passwordKey) private var apiPassword = ""
     @AppStorage(APIAccess.allowKey) private var apiAllowed = ""

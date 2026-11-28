@@ -66,7 +66,7 @@ enum RecordingDisk {
 
 /// Popover next to STREAM: per destination bitrate graph (last 60 s), drops, SRT link, uptime.
 struct StreamMonitorView: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
 
     var body: some View {
         let outs = engine.outputs.filter { $0.config.kind == .stream }

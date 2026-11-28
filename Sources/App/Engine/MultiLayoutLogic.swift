@@ -74,6 +74,14 @@ struct MLScene: Codable, Equatable, Identifiable {
     var id = UUID()
     var name: String
     var boxes = Array(repeating: MLSceneBox(), count: MLScene.boxCount)
+
+    /// The visible box under a point (0…1 of the picture), the top one when boxes overlap (later = on top).
+    func box(atX x: Double, y: Double) -> Int? {
+        boxes.indices.reversed().first { k in
+            let b = boxes[k]
+            return b.visible && x >= b.rect.x && x <= b.rect.x + b.rect.w && y >= b.rect.y && y <= b.rect.y + b.rect.h
+        }
+    }
     var seconds = 0.5                       // 0 = cut
     var appear = MLAppear.fly
 
@@ -101,7 +109,7 @@ struct MultiLayoutSettings: Codable, Equatable {
     var inputFade = 0.3                      // a box changing input crossfades (0 = cut)
     var background = MLBackground()
     var foregroundPath = ""                  // a PNG with transparency drawn over the boxes (frame, logo, lower third)
-    var animateOnAir = true                  // going on air plays the live scene's way in (enter(from:))
+    var animateOnAir = false                 // going on air plays the live scene's way in (enter(from:))
 
     init() {}
 
@@ -109,7 +117,7 @@ struct MultiLayoutSettings: Codable, Equatable {
     static var starter: MultiLayoutSettings {
         var s = MultiLayoutSettings()
         func make(_ name: String, _ p: MLPreset) -> MLScene { var sc = MLScene(name: name); sc.apply(p.rects); return sc }
-        s.scenes = [make("Side by side", .sideBySide), make("Full", .full), make("PIP", .pipBR), make("Quad", .quad)]
+        s.scenes = [make(L("나란히"), .sideBySide), make(L("전체 화면"), .full), make("PIP", .pipBR), make(L("4분할"), .quad)]
         return s
     }
 
@@ -124,7 +132,7 @@ struct MultiLayoutSettings: Codable, Equatable {
         inputFade = (try? c.decode(Double.self, forKey: .inputFade)) ?? 0.3
         background = (try? c.decode(MLBackground.self, forKey: .background)) ?? MLBackground()
         foregroundPath = (try? c.decode(String.self, forKey: .foregroundPath)) ?? ""
-        animateOnAir = (try? c.decode(Bool.self, forKey: .animateOnAir)) ?? true
+        animateOnAir = (try? c.decode(Bool.self, forKey: .animateOnAir)) ?? false
     }
 }
 

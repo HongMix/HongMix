@@ -3,12 +3,12 @@ import AppKit
 
 /// "상황판": SRT link dashboard + blackbox (incident) log.
 struct MonitoringButton: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ViewState private var show = false
 
     var body: some View {
         MonitoringButtonLabel(srt: engine.srtMonitor, box: engine.blackbox) { show = true }
-            .sheet(isPresented: $show) { MonitoringSheet(srt: engine.srtMonitor, box: engine.blackbox).environmentObject(engine) }
+            .sheet(isPresented: $show) { MonitoringSheet(srt: engine.srtMonitor, box: engine.blackbox).environment(engine) }
     }
 }
 

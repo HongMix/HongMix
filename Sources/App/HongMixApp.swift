@@ -18,7 +18,8 @@ struct HongMixApp: App {
         return r
     }()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var engine = SwitcherEngine()
+    /// @Observable: views read it with @Environment(SwitcherEngine.self). The App struct is created once.
+    private let engine = SwitcherEngine()
     /// Changing the language rebuilds the window contents (engine and inputs keep running).
     @AppStorage(AppLanguage.defaultsKey) private var language = AppLanguage.current.rawValue
     /// Changing the skin rebuilds every window too, so Replay/Scopes/Statistics/Settings repaint.
@@ -36,7 +37,7 @@ struct HongMixApp: App {
                 ContentView().id(language + skin + look)
                 LaunchOverlay()
             }
-                .environmentObject(engine)
+                .environment(engine)
                 .frame(minWidth: 1280, minHeight: 780)
                 .preferredColorScheme(.dark)
                 .onAppear {
@@ -77,21 +78,21 @@ struct HongMixApp: App {
         Window("Rundown", id: "rundown") {
             RundownView(rundown: engine.rundown)
                 .id(language + skin + look)
-                .environmentObject(engine)
+                .environment(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1120, height: 680)
         Window("Replay", id: "replay") {
             ReplayView()
                 .id(language + skin + look)
-                .environmentObject(engine)
+                .environment(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1200, height: 860)
         Window("Scopes", id: "scopes") {
             ScopesView()
                 .id(language + skin + look)
-                .environmentObject(engine)
+                .environment(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 960, height: 560)
@@ -99,49 +100,49 @@ struct HongMixApp: App {
         WindowGroup("Scopes", id: "scopes-extra") {
             ScopesView(extra: true)
                 .id(language + skin + look)
-                .environmentObject(engine)
+                .environment(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 960, height: 560)
         Window("Audio Mixer", id: "audiomixer") {
             AudioMixerWindow()
                 .id(language + skin + look)
-                .environmentObject(engine)
+                .environment(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 520, height: 640)
         Window("Talent Cue", id: "talentcue") {
             TalentCueWindow()
                 .id(language + skin + look)
-                .environmentObject(engine)
+                .environment(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1100, height: 720)
         Window("Video Cue", id: "videocue") {
             VideoCueWindow()
                 .id(language + skin + look)
-                .environmentObject(engine)
+                .environment(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1100, height: 700)
         Window("MultiLayouts", id: "multilayouts") {
             MultiLayoutWindow()
                 .id(language + skin + look)
-                .environmentObject(engine)
+                .environment(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1400, height: 820)
         Window("MultiView", id: "multiview") {
             MultiViewEditor()
                 .id(language + skin + look)
-                .environmentObject(engine)
+                .environment(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 980, height: 720)
         Window("PTZ Control", id: "ptz") {
             PTZControlWindow()
                 .id(language + skin + look)
-                .environmentObject(engine)
+                .environment(engine)
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 680, height: 520)
@@ -155,7 +156,7 @@ struct HongMixApp: App {
         Settings {
             SettingsView()
                 .id(language + skin + look)
-                .environmentObject(engine)
+                .environment(engine)
                 .preferredColorScheme(.dark)
         }
     }

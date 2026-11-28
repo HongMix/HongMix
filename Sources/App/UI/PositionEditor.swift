@@ -49,7 +49,7 @@ struct EditableLayer: Identifiable {
 /// drag inside a box to move it, drag a corner to resize (aspect kept), green guides snap to the centre,
 /// the frame edges and the 90 % / 80 % safe areas. Values are written to the input's Position settings.
 struct PositionEditLayer: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     let layers: [EditableLayer]          // bottom → top
     @ViewState private var selected: UUID? = nil
     @ViewState private var dragStart: (VideoAdjust, CGRect)? = nil

@@ -16,7 +16,7 @@ enum InputMonitorWindow {
         w.isReleasedWhenClosed = false
         w.appearance = NSAppearance(named: .darkAqua)
         w.title = Lf("입력 %@ · %@", "\(engine.number(of: input))", input.name)
-        w.contentView = NSHostingView(rootView: InputMonitorView(input: input).environmentObject(engine))
+        w.contentView = NSHostingView(rootView: InputMonitorView(input: input).environment(engine))
         w.contentMinSize = NSSize(width: 320, height: 220)
         if let main = FullscreenOutput.switcherWindow {
             let f = main.frame
@@ -36,7 +36,7 @@ enum InputMonitorWindow {
 }
 
 struct InputMonitorView: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var input: InputSource
 
     private var tallyColor: Color? {

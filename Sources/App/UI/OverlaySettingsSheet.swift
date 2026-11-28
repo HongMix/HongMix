@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Bottom-bar "Overlay" button: opens the overlay channel / stinger settings.
 struct OverlaySettingsButton: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ViewState private var show = false
 
     var body: some View {
@@ -21,13 +21,13 @@ struct OverlaySettingsButton: View {
         .buttonStyle(.plain)
         .help(L("오버레이 채널 1~8 / Stinger 설정"))
         .sheet(isPresented: $show) {
-            OverlaySettingsSheet().environmentObject(engine)
+            OverlaySettingsSheet().environment(engine)
         }
     }
 }
 
 struct OverlaySettingsSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.dismiss) private var dismiss
     @ViewState private var number = 1
 
@@ -62,15 +62,15 @@ struct OverlaySettingsSheet: View {
 
     @ViewBuilder private func overlaySection(_ i: Int) -> some View {
         Section("Overlay \(i + 1)") {
-            Picker(L("종류"), selection: $engine.overlaySettings[i].pip) {
+            Picker(L("종류"), selection: Bindable(engine).overlaySettings[i].pip) {
                 Text(L("전체 화면")).tag(false)
                 Text(L("화면 속 화면 (PIP)")).tag(true)
             }
-            Picker(L("전환 효과"), selection: $engine.overlaySettings[i].effect) {
+            Picker(L("전환 효과"), selection: Bindable(engine).overlaySettings[i].effect) {
                 ForEach(OverlayEffect.allCases) { Text($0.label).tag($0) }
             }
-            NumberField("Effect Duration", value: $engine.overlaySettings[i].durationMs, in: 0...5000, unit: "ms", step: 100)
-            DecimalField("Duration", value: $engine.overlaySettings[i].autoCloseSeconds, in: 0...600,
+            NumberField("Effect Duration", value: Bindable(engine).overlaySettings[i].durationMs, in: 0...5000, unit: "ms", step: 100)
+            DecimalField("Duration", value: Bindable(engine).overlaySettings[i].autoCloseSeconds, in: 0...600,
                          unit: engine.overlaySettings[i].autoCloseSeconds == 0 ? L("초 · 0 = 자동으로 닫지 않음") : L("초 후 자동으로 닫힘"),
                          step: 1)
         }
@@ -78,17 +78,17 @@ struct OverlaySettingsSheet: View {
             Section(L("Picture In Picture 위치")) {
                 HStack {
                     Text(L("줌"))
-                    Slider(value: $engine.overlaySettings[i].pipZoom, in: 0.1...1)
+                    Slider(value: Bindable(engine).overlaySettings[i].pipZoom, in: 0.1...1)
                     Text(String(format: "%.2f", engine.overlaySettings[i].pipZoom)).frame(width: 40)
                 }
                 HStack {
                     Text(L("가로 이동"))
-                    Slider(value: $engine.overlaySettings[i].pipX, in: -2...2)
+                    Slider(value: Bindable(engine).overlaySettings[i].pipX, in: -2...2)
                     Text(String(format: "%.2f", engine.overlaySettings[i].pipX)).frame(width: 40)
                 }
                 HStack {
                     Text(L("세로 이동"))
-                    Slider(value: $engine.overlaySettings[i].pipY, in: -2...2)
+                    Slider(value: Bindable(engine).overlaySettings[i].pipY, in: -2...2)
                     Text(String(format: "%.2f", engine.overlaySettings[i].pipY)).frame(width: 40)
                 }
                 HStack {
@@ -108,13 +108,13 @@ struct OverlaySettingsSheet: View {
 
     @ViewBuilder private func stingerSection(_ i: Int) -> some View {
         Section("Stinger \(i + 1)") {
-            Picker(L("Stinger 입력"), selection: $engine.stingers[i].inputID) {
+            Picker(L("Stinger 입력"), selection: Bindable(engine).stingers[i].inputID) {
                 Text(L("없음")).tag(UUID?.none)
                 ForEach(engine.inputs.filter { $0.kind == .media }) { input in
                     Text("\(engine.number(of: input)). \(input.name)").tag(UUID?.some(input.id))
                 }
             }
-            NumberField("Cut Point", value: $engine.stingers[i].cutPointMs, in: 0...10000, unit: "ms", step: 50)
+            NumberField("Cut Point", value: Bindable(engine).stingers[i].cutPointMs, in: 0...10000, unit: "ms", step: 50)
             Text(L("투명 배경 애니메이션(ProRes 4444 MOV 등)을 미디어 입력으로 추가한 뒤 지정하세요. Stinger 1 버튼을 누르면 설정한 컷 지점에서 Preview가 Output으로 전환됩니다."))
                 .font(.caption).foregroundColor(.secondary)
         }

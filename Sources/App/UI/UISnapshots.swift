@@ -10,9 +10,9 @@ enum UISnapshots {
         case "focusapproval": return alert(FocusGuard.approvalAlert(), to: path)
         case "focusinfo": return alert(FocusGuard.infoAlert(), to: path)
         case "startup":
-            return view(StartupCheckView(onClose: {}).environmentObject(engine), size: NSSize(width: 820, height: 700), to: path)
+            return view(StartupCheckView(onClose: {}).environment(engine), size: NSSize(width: 820, height: 700), to: path)
         case "display":
-            return view(DisplaySettingsPanel().environmentObject(engine), size: nil, to: path)
+            return view(DisplaySettingsPanel().environment(engine), size: nil, to: path)
         case "talentframe":     // the frame a MultiView Talent cell gets (TalentFrames)
             guard let pb = TalentFrames.shared.latest else { return "no Talent frame (no MultiView with a Talent cell)" }
             let ci = CIImage(cvPixelBuffer: pb)
@@ -23,31 +23,31 @@ enum UISnapshots {
         case "talent":
             return view(TalentDisplayView(cue: TalentCue.shared), size: NSSize(width: 1280, height: 720), to: path)
         case "talentcue":
-            return view(TalentCueWindow().environmentObject(engine).background(Color(white: 0.12)),
+            return view(TalentCueWindow().environment(engine).background(Color(white: 0.12)),
                         size: NSSize(width: 1100, height: 760), to: path)
         case "replay":
-            return view(ReplayView().environmentObject(engine).background(Color(white: 0.08)),
+            return view(ReplayView().environment(engine).background(Color(white: 0.08)),
                         size: NSSize(width: 1640, height: 1100), to: path)
         case "replaysettings":
-            return view(ReplaySettingsSheet().environmentObject(engine).background(Color(white: 0.12)),
+            return view(ReplaySettingsSheet().environment(engine).background(Color(white: 0.12)),
                         size: NSSize(width: 720, height: 980), to: path)
         case "videocue":
-            return view(VideoCueWindow().environmentObject(engine).background(Color(white: 0.12)),
+            return view(VideoCueWindow().environment(engine).background(Color(white: 0.12)),
                         size: NSSize(width: 1100, height: 720), to: path)
         case "multilayouts":
-            return view(MultiLayoutWindow().environmentObject(engine).background(Color(white: 0.12)),
+            return view(MultiLayoutWindow().environment(engine).background(Color(white: 0.12)),
                         size: NSSize(width: 1400, height: 820), to: path)
         case "multiview":
-            return view(MultiViewEditor().environmentObject(engine).background(Color(white: 0.12)),
+            return view(MultiViewEditor().environment(engine).background(Color(white: 0.12)),
                         size: NSSize(width: 980, height: 720), to: path)
         case "general":
             return view(GeneralSettings().frame(width: 640, height: 900), size: NSSize(width: 640, height: 900), to: path)
         case "topbar":
-            return view(TopBar().environmentObject(engine).padding(4).background(Color(white: 0.09)),
+            return view(TopBar().environment(engine).padding(4).background(Color(white: 0.09)),
                         size: NSSize(width: 1500, height: 44), to: path)
         case "banner":
             return view(VStack(spacing: 0) { TopBar(); ControlFocusBanner(forceShow: true) }
-                            .environmentObject(engine).padding(4).background(Color(white: 0.09)),
+                            .environment(engine).padding(4).background(Color(white: 0.09)),
                         size: NSSize(width: 1500, height: 72), to: path)
         // 2.1.2 / 2.1.3
         case "lang-en", "lang-ko":          // switch the UI language (same as Settings › General)
@@ -56,7 +56,7 @@ enum UISnapshots {
             UserDefaults.standard.set(l.rawValue, forKey: AppLanguage.defaultsKey)
             return nil
         case "remote":          // Settings › Network › Remote control (build 110)
-            return view(Form { RemoteControlSection() }.formStyle(.grouped).environmentObject(engine)
+            return view(Form { RemoteControlSection() }.formStyle(.grouped).environment(engine)
                             .frame(width: 640, height: 460), size: NSSize(width: 640, height: 460), to: path)
         case "cleanup":
             return view(MacCleanupPanel().padding(10).frame(width: 800), size: nil, to: path)
@@ -65,12 +65,12 @@ enum UISnapshots {
                 SystemHealth.Culprit(pid: 0, name: "WidgetRenderer_Activities",
                                      path: "/System/Library/CoreServices/WidgetRenderer_Activities.app/Contents/MacOS/WidgetRenderer_Activities", cpu: 196)])
             return view(VStack(spacing: 0) { TopBar(); SystemHealthBanner(preview: fake) }
-                            .environmentObject(engine).padding(4).background(Color(white: 0.09)),
+                            .environment(engine).padding(4).background(Color(white: 0.09)),
                         size: NSSize(width: 1500, height: 72), to: path)
         case "encoding":
             var c = OutputConfig.defaultConfig(kind: .stream)
             c.proto = .srt; c.srtHost = "203.0.113.10"; c.cbr = true
-            return view(OutputEditor(output: OutputChannel(config: c)).environmentObject(engine).frame(width: 620, height: 1000),
+            return view(OutputEditor(output: OutputChannel(config: c)).environment(engine).frame(width: 620, height: 1000),
                         size: NSSize(width: 620, height: 1000), to: path)
         default:
             // "inputmonitor-<n>": open the monitor window of input n (captured from the screen — it shows video)
@@ -85,36 +85,36 @@ enum UISnapshots {
             // "editor-<n>": the source / connection editor of input n (SRT list, link advice) — 2.2.1
             // "new-<kind>": the Add Input source editor for a new input of that kind (manual screenshots) — 2.2.5
             if parts.count == 2, parts[0] == "new", let k = InputKind.allCases.first(where: { $0.rawValue.lowercased() == parts[1] }) {
-                return window(InputEditorSheet(kind: k, editing: nil).environmentObject(engine)
+                return window(InputEditorSheet(kind: k, editing: nil).environment(engine)
                                 .frame(width: 820, height: 640), size: NSSize(width: 820, height: 640), title: "Snapshot props")
             }
             // "editorview-<n>": the same editor drawn offscreen to `path` (no live video in it, e.g. PDF / PowerPoint
             // slides) — works with the display asleep — 2.3.3
             if parts.count == 2, parts[0] == "editorview", let n = Int(parts[1]), n >= 1, n <= engine.inputs.count {
                 let i = engine.inputs[n - 1]
-                return view(InputEditorSheet(kind: i.kind, editing: i).environmentObject(engine)
+                return view(InputEditorSheet(kind: i.kind, editing: i).environment(engine)
                                 .frame(width: 820, height: 640), size: NSSize(width: 820, height: 640), to: path)
             }
             if parts.count == 2, parts[0] == "editor", let n = Int(parts[1]), n >= 1, n <= engine.inputs.count {
                 let i = engine.inputs[n - 1]
-                return window(InputEditorSheet(kind: i.kind, editing: i).environmentObject(engine)
+                return window(InputEditorSheet(kind: i.kind, editing: i).environment(engine)
                                 .frame(width: 820, height: 640), size: NSSize(width: 820, height: 640), title: "Snapshot props")
             }
             // "props-<n>-6-all": Layers tab with every layer selected (align panel) — 2.1.8
             if parts.count == 4, parts[0] == "props", parts[3] == "all", let n = Int(parts[1]), let t = Int(parts[2]),
                t == 6, n >= 1, n <= engine.inputs.count {
                 LayersEditor.snapshotSelectAll = true
-                return window(InputPropertiesSheet(input: engine.inputs[n - 1], initialTab: t).environmentObject(engine)
+                return window(InputPropertiesSheet(input: engine.inputs[n - 1], initialTab: t).environment(engine)
                                 .frame(width: 1240, height: 860), size: NSSize(width: 1240, height: 860), title: "Snapshot props")
             }
             if parts.count == 3, parts[0] == "props", let n = Int(parts[1]), let t = Int(parts[2]),
                n >= 1, n <= engine.inputs.count {
-                return window(InputPropertiesSheet(input: engine.inputs[n - 1], initialTab: t).environmentObject(engine)
+                return window(InputPropertiesSheet(input: engine.inputs[n - 1], initialTab: t).environment(engine)
                                 .frame(width: 1240, height: 860), size: NSSize(width: 1240, height: 860), title: "Snapshot props")
             }
             // "layers-<n>": Layers editor of input n, layer 1 selected, Crop mode — 2.1.4
             if parts.count == 2, parts[0] == "layers", let n = Int(parts[1]), n >= 1, n <= engine.inputs.count {
-                return window(LayersEditor(input: engine.inputs[n - 1], previewCropMode: true).environmentObject(engine)
+                return window(LayersEditor(input: engine.inputs[n - 1], previewCropMode: true).environment(engine)
                                 .padding(12).frame(width: 1240, height: 860), size: NSSize(width: 1240, height: 860), title: "Snapshot layers")
             }
             if name.lowercased().hasPrefix("inputmonitor-"), let n = Int(name.dropFirst(13)),

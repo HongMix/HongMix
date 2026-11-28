@@ -54,7 +54,7 @@ final class AppFocusWatch: ObservableObject {
 /// HongMix keyboard shortcuts don't reach HongMix then (Companion / MIDI / API still work).
 struct ControlFocusBanner: View {
     @ObservedObject private var displayOutput = FullscreenOutput.shared   // display output state (not via engine refresh)
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var watch = AppFocusWatch.shared
     var forceShow = false       // screenshots
 
@@ -125,7 +125,7 @@ struct SystemHealthBanner: View {
 /// can't fix (another app busy …). Output is unaffected; it disappears after a calm minute. Click → pre-show
 /// check (Mac cleanup).
 struct SystemLagChip: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var health = SystemHealth.shared
 
     var body: some View {

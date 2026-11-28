@@ -7,6 +7,7 @@ import ImageIO
 import UniformTypeIdentifiers
 import QuartzCore
 import Combine
+import Observation
 import IOKit
 
 /// Transition effects.
@@ -188,26 +189,44 @@ final class TransitionUI: ObservableObject {
     @Published var tbar: Double = 0
 }
 
-final class SwitcherEngine: ObservableObject {
+@Observable
+final class SwitcherEngine {
     static let overlayCount = 8
 
     // Published UI state (main thread only)
-    @Published private(set) var inputs: [InputSource] = []
-    @Published private(set) var outputs: [OutputChannel] = []
-    @Published private(set) var programID: UUID? { didSet { if oldValue != programID { programBefore = oldValue } } }
+    /// Reading `inputs` / `outputs` also tracks their children's changes (batched, see `watch`), so views
+    /// that show input or output state through the engine update when one of them changes.
+    private(set) var inputs: [InputSource] {
+        get { _ = inputChildRevision; return inputList }
+        set { inputList = newValue }
+    }
+    private(set) var outputs: [OutputChannel] {
+        get { _ = outputChildRevision; return outputList }
+        set { outputList = newValue }
+    }
+    private var inputList: [InputSource] = [] { didSet { inputsSubject.send(inputList); refreshVisibleBuses() } }
+    private var outputList: [OutputChannel] = [] { didSet { refreshVisibleBuses() } }
+    private var inputChildRevision = 0
+    private var outputChildRevision = 0
+    private(set) var programID: UUID? { didSet { if programID != oldValue { programBefore = oldValue; programIDSubject.send(programID) } } }
     /// What was on Program before (a MultiLayout going on air animates out of it).
-    private var programBefore: UUID?
-    @Published private(set) var previewID: UUID?
-    @Published private(set) var overlayIDs: [UUID?] = Array(repeating: nil, count: overlayCount)
-    @Published private(set) var overlayOn: [Bool] = Array(repeating: false, count: overlayCount)
-    @Published private(set) var ftbOn = false
+    @ObservationIgnored private var programBefore: UUID?
+    private(set) var previewID: UUID? { didSet { if previewID != oldValue { previewIDSubject.send(previewID) } } }
+    /// Combine streams for non-view observers (MIDI tally, PTZ). Like @Published, they send the
+    /// current value on subscribe.
+    @ObservationIgnored let programIDSubject = CurrentValueSubject<UUID?, Never>(nil)
+    @ObservationIgnored let previewIDSubject = CurrentValueSubject<UUID?, Never>(nil)
+    @ObservationIgnored let inputsSubject = CurrentValueSubject<[InputSource], Never>([])
+    private(set) var overlayIDs: [UUID?] = Array(repeating: nil, count: overlayCount)
+    private(set) var overlayOn: [Bool] = Array(repeating: false, count: overlayCount)
+    private(set) var ftbOn = false
     /// AUTO/T-bar state lives in `TransitionUI` (observed by the transition panel only): a transition start
     /// or a T-bar drag used to rebuild every view that observes the engine (~0.3 s, monitors froze).
     private(set) var transitioning: Bool {
         get { TransitionUI.shared.transitioning }
         set { if TransitionUI.shared.transitioning != newValue { TransitionUI.shared.transitioning = newValue } }
     }
-    @Published var transitionSlots: [TransitionSlot] = [
+    var transitionSlots: [TransitionSlot] = [
         TransitionSlot(type: .fade, durationMs: 500),
         TransitionSlot(type: .merge, durationMs: 1000),
         TransitionSlot(type: .wipe, durationMs: 1000),
@@ -215,16 +234,16 @@ final class SwitcherEngine: ObservableObject {
     ]
     var defaultTransition: TransitionSlot { transitionSlots[0] }
     /// Transition the AUTO button and the T-bar use (0–3), picked on the transition tabs. Persisted.
-    @Published var autoSlot: Int = min(3, max(0, UserDefaults.standard.integer(forKey: "autoTransitionSlot"))) {
+    var autoSlot: Int = min(3, max(0, UserDefaults.standard.integer(forKey: "autoTransitionSlot"))) {
         didSet { UserDefaults.standard.set(autoSlot, forKey: "autoTransitionSlot") }
     }
-    @Published var stingers: [StingerConfig] = [StingerConfig()]
-    @Published private(set) var stingerActive: Int? = nil
-    @Published var busSources: [BusSource] = [.preview, .multiview, .clean] {
+    var stingers: [StingerConfig] = [StingerConfig()]
+    private(set) var stingerActive: Int? = nil
+    var busSources: [BusSource] = [.preview, .multiview, .clean] {
         didSet { withState { $0.busSources = busSources } }
     }
     /// User-made MultiViews (layout + what each cell shows). Never empty: the first one is `.multiview`.
-    @Published var multiViews: [MultiViewConfig] = [.standard()] {
+    var multiViews: [MultiViewConfig] = [.standard()] {
         didSet {
             if multiViews.isEmpty { multiViews = [.standard()] }   // didSet does not run again for this
             let mv = multiViews
@@ -233,12 +252,12 @@ final class SwitcherEngine: ObservableObject {
         }
     }
     /// Auto ducking (presenter mic lowers music/VT automatically)
-    @Published var ducking = DuckSettings() { didSet { audioMixer.setDucking(ducking) } }
-    @Published var busSettings: [BusSettings] = [BusSettings](repeating: BusSettings(), count: AudioMixer.busCount) {
-        didSet { for (i, b) in busSettings.enumerated() { audioMixer.setBus(i, b) } }
+    var ducking = DuckSettings() { didSet { audioMixer.setDucking(ducking) } }
+    var busSettings: [BusSettings] = [BusSettings](repeating: BusSettings(), count: AudioMixer.busCount) {
+        didSet { for (i, b) in busSettings.enumerated() { audioMixer.setBus(i, b) }; refreshVisibleBuses() }
     }
-    @Published var headphonesVolume: Float = 1 { didSet { audioMixer.setHeadphones(volume: headphonesVolume) } }
-    @Published var audioOutputRoutes: [AudioOutputRoute] = {
+    var headphonesVolume: Float = 1 { didSet { audioMixer.setHeadphones(volume: headphonesVolume) } }
+    var audioOutputRoutes: [AudioOutputRoute] = {
         if let d = UserDefaults.standard.data(forKey: "audioOutputRoutes"),
            var r = try? JSONDecoder().decode([AudioOutputRoute].self, from: d) {
             if r.count == 8 { r.append(AudioOutputRoute()) }
@@ -255,17 +274,17 @@ final class SwitcherEngine: ObservableObject {
                                            firstChannel: audioOutputRoutes[8].firstChannel)
         }
     }
-    @Published var multiCorderSettings = MultiCorderSettings()
-    @Published var overlaySettings = [OverlaySettings](repeating: OverlaySettings(), count: overlayCount) {
+    var multiCorderSettings = MultiCorderSettings()
+    var overlaySettings = [OverlaySettings](repeating: OverlaySettings(), count: overlayCount) {
         didSet { withState { $0.overlaySettings = overlaySettings } }
     }
-    @Published private(set) var multiCorderOn = false
+    private(set) var multiCorderOn = false
     /// MultiViews render on every n-th frame (1 = full rate); raised automatically when rendering gets tight.
-    @Published private(set) var multiViewDivider = 1
+    private(set) var multiViewDivider = 1
     /// Latest MultiCorder failure ("input: reason"), shown on the button. Before, ISO recordings that
     /// failed to open or hit a write error (disk full) still showed "recording".
-    @Published private(set) var multiCorderError: String?
-    private var multiCorderGen = 0
+    private(set) var multiCorderError: String?
+    @ObservationIgnored private var multiCorderGen = 0
     /// Embedded audio mixer shown in the main window. Lives in `MixerDock` so popping the mixer out (or back)
     /// re-lays out only the main window instead of refreshing every view that observes the engine.
     var mixerVisible: Bool {
@@ -276,29 +295,29 @@ final class SwitcherEngine: ObservableObject {
         get { TransitionUI.shared.tbar }
         set { if TransitionUI.shared.tbar != newValue { TransitionUI.shared.tbar = newValue } }
     }
-    @Published private(set) var format: VideoFormat
+    private(set) var format: VideoFormat
     /// Per-second statistics live in their own observable so updating them doesn't redraw the window.
     let stats = EngineStats()
     let scheduler = Scheduler()
     let rundown = Rundown()
     let captions = CaptionEngine()
     let midi = MIDIControl()   // MIDI controllers (MIDIControl.swift)
-    private var appActivity: NSObjectProtocol?
-    private var pendingSwitchToken = UUID()
+    @ObservationIgnored private var appActivity: NSObjectProtocol?
+    @ObservationIgnored private var pendingSwitchToken = UUID()
     let srtMonitor = SRTMonitor()
     let recordingSafety = RecordingSafety()   // [Recording safety hook] disk time left / warnings (Outputs.swift)
     let blackbox = Blackbox()
     /// Recording: "≈ 3.2 h left" on the disk of the record folder (updated every second).
-    @Published private(set) var recordRemaining: String = ""
-    private var lastDropForBlackbox = 0
+    private(set) var recordRemaining: String = ""
+    @ObservationIgnored private var lastDropForBlackbox = 0
     /// vMix Data Sources (Google Sheets / CSV → title fields)
     let dataSources = DataSourceManager()
-    private(set) var renderMs: Double = 0
-    private(set) var droppedTicks: Int = 0
+    @ObservationIgnored private(set) var renderMs: Double = 0
+    @ObservationIgnored private(set) var droppedTicks: Int = 0
     /// When the program last dropped a frame or a tick used more than 70 % of its frame time (render thread
     /// writes, any thread reads). Optional GPU work — replay AI slow motion — backs off while this is recent.
     private let stressLock = NSLock()
-    private var lastStress: CFTimeInterval = 0
+    @ObservationIgnored private var lastStress: CFTimeInterval = 0
     func programStressed(within seconds: Double) -> Bool {
         stressLock.lock(); defer { stressLock.unlock() }
         return lastStress > 0 && CACurrentMediaTime() - lastStress < seconds
@@ -306,26 +325,26 @@ final class SwitcherEngine: ObservableObject {
     private func noteStress() { stressLock.lock(); lastStress = CACurrentMediaTime(); stressLock.unlock() }
     /// When renderer drops happened (last 10 min) — the pre-show check judges the recent ones, not the
     /// launch hiccup counted since start.
-    private var dropTimes: [(t: Date, n: Int)] = []
+    @ObservationIgnored private var dropTimes: [(t: Date, n: Int)] = []
     private let launchedAt = Date()
     func recentDrops(within seconds: TimeInterval) -> Int {
         let from = max(Date().addingTimeInterval(-seconds), launchedAt.addingTimeInterval(60))
         return dropTimes.filter { $0.t >= from }.reduce(0) { $0 + $1.n }
     }
     /// Slowest frame in the last stats window (ms).
-    private(set) var renderMsPeak: Double = 0
+    @ObservationIgnored private(set) var renderMsPeak: Double = 0
     /// Longest main-thread (UI) stall in the last second — monitors and buttons stutter when this is high.
-    private(set) var uiStallMs: Double = 0
-    private var uiLastTick: CFTimeInterval = 0
-    private var uiMaxGap: Double = 0
-    @Published var monitorOn = false { didSet {
+    @ObservationIgnored private(set) var uiStallMs: Double = 0
+    @ObservationIgnored private var uiLastTick: CFTimeInterval = 0
+    @ObservationIgnored private var uiMaxGap: Double = 0
+    var monitorOn = false { didSet {
         let hp = audioOutputRoutes[8]
         audioMixer.setMonitoringDevice(uid: hp.deviceUID, firstChannel: hp.firstChannel)
         audioMixer.setMonitoring(monitorOn)
         if monitorOn && !audioMixer.monitoring { monitorOn = false }
     } }
-    @Published var apiStatus: String = ""
-    @Published var lastMessage: String = ""
+    var apiStatus: String = ""
+    var lastMessage: String = ""
 
     var masterVolume: Float {
         get { busSettings[0].volume }
@@ -345,12 +364,12 @@ final class SwitcherEngine: ObservableObject {
         get { previewComposedLock.lock(); defer { previewComposedLock.unlock() }; return _previewComposed }
         set { previewComposedLock.lock(); _previewComposed = newValue; previewComposedLock.unlock() }
     }
-    private var _previewComposed = false
+    @ObservationIgnored private var _previewComposed = false
     private let previewComposedLock = NSLock()
     /// Drag-to-position mode on the monitors.
-    @Published var positionEdit = false
+    var positionEdit = false
     /// Trigger recursion guard (main thread).
-    var triggerDepth = 0
+    @ObservationIgnored var triggerDepth = 0
 
     /// vMix-style: an aux bus (1…7 = A…G) is shown when it was enabled, or something routes to / records it.
     func busInUse(_ b: Int) -> Bool {
@@ -361,7 +380,13 @@ final class SwitcherEngine: ObservableObject {
         if outputs.contains(where: { $0.config.audioBus.uppercased() == letter || $0.config.extraAudioBuses.uppercased().contains(letter) }) { return true }
         return false
     }
-    var visibleBuses: [Int] { (1..<AudioMixer.busCount).filter { busInUse($0) } }
+    /// Buses A–G shown in the mixer. Stored and only replaced when the list changes, so a volume or
+    /// mute change on a bus doesn't re-run every channel strip and the main window (they read this).
+    private(set) var visibleBuses: [Int] = []
+    private func refreshVisibleBuses() {
+        let v = (1..<AudioMixer.busCount).filter { busInUse($0) }
+        if v != visibleBuses { visibleBuses = v }
+    }
 
     /// Layers visible in the Output monitor, bottom → top, for the position editor.
     func outputEditLayers() -> [EditableLayer] {
@@ -387,36 +412,36 @@ final class SwitcherEngine: ObservableObject {
     let switchEvents = PassthroughSubject<Void, Never>()
 
     private let stateLock = NSLock()
-    private var rs = RenderState()
-    private var renderInputs: [InputSource] = []      // stateLock
-    private var renderOutputs: [OutputChannel] = []   // stateLock
-    private var isoOutputs: [UUID: OpaquePointer] = [:] // stateLock (MultiCorder)
-    private var isoBoxes: [UUID: Unmanaged<IsoStatusBox>] = [:] // stateLock — status callback contexts
-    private var mixer: MetalMixer?
-    private var renderThread: Thread?
-    private var running = false
-    private var renderFormat: VideoFormat
-    private var audioAccumulator: Int = 0
-    private var statsTimer: Timer?
-    private var mediaTimer: Timer?
+    @ObservationIgnored private var rs = RenderState()
+    @ObservationIgnored private var renderInputs: [InputSource] = []      // stateLock
+    @ObservationIgnored private var renderOutputs: [OutputChannel] = []   // stateLock
+    @ObservationIgnored private var isoOutputs: [UUID: OpaquePointer] = [:] // stateLock (MultiCorder)
+    @ObservationIgnored private var isoBoxes: [UUID: Unmanaged<IsoStatusBox>] = [:] // stateLock — status callback contexts
+    @ObservationIgnored private var mixer: MetalMixer?
+    @ObservationIgnored private var renderThread: Thread?
+    @ObservationIgnored private var running = false
+    @ObservationIgnored private var renderFormat: VideoFormat
+    @ObservationIgnored private var audioAccumulator: Int = 0
+    @ObservationIgnored private var statsTimer: Timer?
+    @ObservationIgnored private var mediaTimer: Timer?
     private let childChangeSubject = PassthroughSubject<UUID, Never>()
-    private var childChangeBatch: AnyCancellable?
-    private var renderMsAccum: Double = 0
-    private var renderMsCount = 0
-    private var renderMsMax: Double = 0
-    private var droppedCount = 0
+    @ObservationIgnored private var childChangeBatch: AnyCancellable?
+    @ObservationIgnored private var renderMsAccum: Double = 0
+    @ObservationIgnored private var renderMsCount = 0
+    @ObservationIgnored private var renderMsMax: Double = 0
+    @ObservationIgnored private var droppedCount = 0
     // MultiView frame skipping under load (render thread only)
-    private var mvThrottle = MultiViewThrottle()
-    private var mvLastFrames: [BusSource: CVPixelBuffer] = [:]
-    private var mvUsed: Set<BusSource> = []
-    private var mvTicks = 0
-    private var mvDroppedSeen = 0
+    @ObservationIgnored private var mvThrottle = MultiViewThrottle()
+    @ObservationIgnored private var mvLastFrames: [BusSource: CVPixelBuffer] = [:]
+    @ObservationIgnored private var mvUsed: Set<BusSource> = []
+    @ObservationIgnored private var mvTicks = 0
+    @ObservationIgnored private var mvDroppedSeen = 0
     /// Mac sleep (lid closed …): frames missed while asleep and shortly after waking are not drops (stateLock).
-    private var systemAsleep = false
-    private var ignoreDropsUntil: Double = 0       // CACurrentMediaTime
-    private var sleepStarted: Date?
-    private var sleepByLid = false
-    private var sleepObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var systemAsleep = false
+    @ObservationIgnored private var ignoreDropsUntil: Double = 0       // CACurrentMediaTime
+    @ObservationIgnored private var sleepStarted: Date?
+    @ObservationIgnored private var sleepByLid = false
+    @ObservationIgnored private var sleepObservers: [NSObjectProtocol] = []
     func resetDrops() {
         stateLock.lock(); droppedCount = 0; stateLock.unlock()
         droppedTicks = 0
@@ -424,10 +449,10 @@ final class SwitcherEngine: ObservableObject {
         lastDropForBlackbox = 0
         lastDroppedForHistory = 0
     }
-    private var volumeFades: [UUID: (from: Float, to: Float, start: CFTimeInterval, duration: Double)] = [:]
+    @ObservationIgnored private var volumeFades: [UUID: (from: Float, to: Float, start: CFTimeInterval, duration: Double)] = [:]
     let api = HTTPAPIServer()
     let tcpAPI = TCPAPIServer()
-    private var childSubscriptions: [UUID: AnyCancellable] = [:]
+    @ObservationIgnored private var childSubscriptions: [UUID: AnyCancellable] = [:]
 
     init(format: VideoFormat = .defaultFormat) {
         self.format = format
@@ -439,7 +464,7 @@ final class SwitcherEngine: ObservableObject {
         MultiLayoutInput.cancelExit = { [weak self] in self?.cancelLayoutExit() }
     }
 
-    private func watch(_ id: UUID, _ publisher: ObservableObjectPublisher) {
+    private func watch(_ id: UUID, _ publisher: ObservableObjectPublisher, output: Bool = false) {
         // Child views observe their own input/output directly. Only invalidate the parent switcher
         // for dependent controls, and batch all children together so N active sources cannot cause
         // N × 10 full-window updates per second.
@@ -448,20 +473,29 @@ final class SwitcherEngine: ObservableObject {
                 .collect(.byTime(DispatchQueue.main, .milliseconds(100)))
                 .sink { [weak self] ids in
                     guard let self else { return }
-                    for childID in Set(ids) { self.childChanges[childID, default: 0] += 1 }
-                    self.objectWillChange.send()
+                    var inChanged = false, outChanged = false
+                    for childID in Set(ids) {
+                        self.childChanges[childID, default: 0] += 1
+                        if self.outputWatchIDs.contains(childID) { outChanged = true } else { inChanged = true }
+                    }
+                    if inChanged { self.inputChildRevision &+= 1 }
+                    if outChanged { self.outputChildRevision &+= 1 }
+                    self.refreshVisibleBuses()
+                    self.engineChangeCount += 1
                 }
         }
+        if output { outputWatchIDs.insert(id) } else { outputWatchIDs.remove(id) }
         childSubscriptions[id] = publisher.sink { [weak self] _ in
             self?.childChangeSubject.send(id)
         }
     }
     /// Diagnostics: how often each child forced a window update (per second, reset in publishStats).
-    var childChanges: [UUID: Int] = [:]
-    private(set) var uiUpdateReport = ""
-    private var engineChangeCount = 0
-    private var engineChangeSub: AnyCancellable?
-    private var audioOutputSub: AnyCancellable?
+    @ObservationIgnored var childChanges: [UUID: Int] = [:]
+    @ObservationIgnored private var outputWatchIDs = Set<UUID>()
+    @ObservationIgnored private(set) var uiUpdateReport = ""
+    @ObservationIgnored private var engineChangeCount = 0
+    @ObservationIgnored private var engineChangeSub: AnyCancellable?
+    @ObservationIgnored private var audioOutputSub: AnyCancellable?
 
     private func unwatch(_ id: UUID) {
         childSubscriptions[id] = nil
@@ -740,7 +774,7 @@ final class SwitcherEngine: ObservableObject {
 
     /// Layer media currently shown on air, so a child already running (e.g. the same loop on every
     /// camera) is not restarted or re-animated when the parent changes.
-    private var onAirLayerIDs: Set<UUID> = []
+    @ObservationIgnored private var onAirLayerIDs: Set<UUID> = []
 
     private func layerEnteredAir(_ child: InputSource) {
         if let t = child as? TitleInput { t.setOffAir(false) }
@@ -803,9 +837,9 @@ final class SwitcherEngine: ObservableObject {
     // paused again 0.5 s later, (2) it is playing but its position hasn't moved for 1.5 s (stuck decoder).
     // Both are recovered automatically, shown in the message bar and kept in the incident recorder.
     // A clip the operator paused, or one that simply reached its end without Loop, is left alone.
-    private var autoPlayExpect: [UUID: CFTimeInterval] = [:]
-    private var lastMove: [UUID: (pos: Double, time: CFTimeInterval)] = [:]
-    private var freezeFixes: [UUID: CFTimeInterval] = [:]
+    @ObservationIgnored private var autoPlayExpect: [UUID: CFTimeInterval] = [:]
+    @ObservationIgnored private var lastMove: [UUID: (pos: Double, time: CFTimeInterval)] = [:]
+    @ObservationIgnored private var freezeFixes: [UUID: CFTimeInterval] = [:]
 
     private func onAirMedia() -> [InputSource] {
         var roots: [UUID?] = [programID]
@@ -937,7 +971,7 @@ final class SwitcherEngine: ObservableObject {
         }
     }
 
-    private var layoutExitToken: UUID?
+    @ObservationIgnored private var layoutExitToken: UUID?
 
     /// [MultiLayout] Program is a MultiLayout and `incoming` shows in one of its boxes: that box grows to
     /// full screen first (the other boxes go), then `action` switches. A second switch during it goes at once.
@@ -1109,8 +1143,8 @@ final class SwitcherEngine: ObservableObject {
         transitioning = true
     }
 
-    private var stingerRestoreLoop: (UUID, Bool)?
-    private var stingerStoppedAt: CFTimeInterval?
+    @ObservationIgnored private var stingerRestoreLoop: (UUID, Bool)?
+    @ObservationIgnored private var stingerStoppedAt: CFTimeInterval?
     private func finishStinger() {
         withState { $0.stinger = nil }
         stingerActive = nil
@@ -1231,7 +1265,7 @@ final class SwitcherEngine: ObservableObject {
     }
 
     /// Display slots in use by monitor outputs and output windows (main thread).
-    private var claimedDisplaySlots = Set<Int>()
+    @ObservationIgnored private var claimedDisplaySlots = Set<Int>()
 
     func claimDisplaySlot() -> Int? {
         guard let k = (0..<SwitcherEngine.displaySlotCount).first(where: { !claimedDisplaySlots.contains($0) }) else { return nil }
@@ -1259,7 +1293,7 @@ final class SwitcherEngine: ObservableObject {
     func addOutput(_ config: OutputConfig) {
         let o = OutputChannel(config: config)
         outputs.append(o)
-        watch(o.id, o.objectWillChange)
+        watch(o.id, o.objectWillChange, output: true)
         syncRenderLists()
     }
 
@@ -1499,9 +1533,9 @@ final class SwitcherEngine: ObservableObject {
     // MARK: Main-thread media tick (positions, stinger end, volume fades)
 
     /// original input → backup it was failed over to
-    private var failovers: [UUID: UUID] = [:]
+    @ObservationIgnored private var failovers: [UUID: UUID] = [:]
     /// Inputs currently without signal (for the bottom-bar warning).
-    @Published private(set) var lostInputs: [UUID] = []
+    private(set) var lostInputs: [UUID] = []
 
     /// Close an input, asking first if it is on air (program / overlay) or recording in the MultiCorder.
     /// Close button: like vMix there is no confirmation — the last closed input can be brought back
@@ -1524,8 +1558,8 @@ final class SwitcherEngine: ObservableObject {
         input.start()
         switchEvents.send()
     }
-    private var lastClosed: (InputConfig, Int)?
-    @Published private(set) var undoTitle: String?
+    @ObservationIgnored private var lastClosed: (InputConfig, Int)?
+    private(set) var undoTitle: String?
 
     private func checkSignals() {
         let now = CACurrentMediaTime()
@@ -1633,9 +1667,9 @@ final class SwitcherEngine: ObservableObject {
             }
         }
     }
-    private var programChangeHandled = false
-    private var overlayOnSince: [CFTimeInterval] = Array(repeating: 0, count: overlayCount)
-    private var multiCorderStarted: CFTimeInterval = 0
+    @ObservationIgnored private var programChangeHandled = false
+    @ObservationIgnored private var overlayOnSince: [CFTimeInterval] = Array(repeating: 0, count: overlayCount)
+    @ObservationIgnored private var multiCorderStarted: CFTimeInterval = 0
 
     // MARK: Render loop (render thread)
 
@@ -2326,7 +2360,6 @@ final class SwitcherEngine: ObservableObject {
                                                   streamKbps: kbps, srtRttMs: rtt, srtLossPct: loss,
                                                   uiStallMs: uiStallMs, lostInputs: lostInputs.count))
         lastDroppedForHistory = dropped
-        if engineChangeSub == nil { engineChangeSub = objectWillChange.sink { [weak self] in self?.engineChangeCount += 1 } }
         if audioOutputSub == nil {
             // bus routes / headphones that lost their device (or came back) → message bar
             audioOutputSub = audioMixer.$outputStatus.removeDuplicates().receive(on: DispatchQueue.main)
@@ -2349,7 +2382,7 @@ final class SwitcherEngine: ObservableObject {
         monitorTick(droppedTotal: dropped)
         stats.tick &+= 1
     }
-    private var lastDroppedForHistory = 0
+    @ObservationIgnored private var lastDroppedForHistory = 0
 
     /// Once a second: SRT link history, blackbox, recording disk estimate.
     private func monitorTick(droppedTotal: Int) {
@@ -2379,12 +2412,12 @@ final class SwitcherEngine: ObservableObject {
             }
         }
     }
-    private var tickMarks: [(String, CFTimeInterval)] = []      // render thread
-    private var slowTickBreakdown = ""                          // stateLock
-    private(set) var slowTickReport = ""                        // main
-    private var quietSeconds = 0
+    @ObservationIgnored private var tickMarks: [(String, CFTimeInterval)] = []      // render thread
+    @ObservationIgnored private var slowTickBreakdown = ""                          // stateLock
+    @ObservationIgnored private(set) var slowTickReport = ""                        // main
+    @ObservationIgnored private var quietSeconds = 0
     /// Shown on the Output monitor only (never in recordings/streams), like vMix Alerts.
-    @Published private(set) var lowVolumeAlert = false
+    private(set) var lowVolumeAlert = false
 
     // MARK: Project files
 
@@ -2471,7 +2504,7 @@ final class SwitcherEngine: ObservableObject {
         for c in project.outputs {
             let o = OutputChannel(config: c)
             outputs.append(o)
-            watch(o.id, o.objectWillChange)
+            watch(o.id, o.objectWillChange, output: true)
         }
         if let bs = project.busSources, bs.count == 3 { busSources = bs } else { busSources = [.preview, .multiview, .clean] }
         multiViews = (project.multiViews?.isEmpty == false) ? project.multiViews! : [.standard()]

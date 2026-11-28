@@ -107,7 +107,6 @@ final class OutputWindows: NSObject, ObservableObject, NSWindowDelegate {
             openWindow(item, slot: slot, engine: engine)
         }
         objectWillChange.send()
-        engine.objectWillChange.send()
     }
 
     /// App quit: close without turning them off, so they come back at the next launch.
@@ -186,7 +185,7 @@ final class OutputWindow: NSWindow {}
 /// One place for every output: each connected monitor (on/off + what it shows) and the output windows.
 struct DisplaySettingsPanel: View {
     @ObservedObject private var displayOutput = FullscreenOutput.shared   // display output state (not via engine refresh)
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject private var map = DisplayMap.shared
     @ObservedObject private var windows = OutputWindows.shared
 
@@ -269,7 +268,7 @@ struct DisplaySettingsPanel: View {
                     .help(DesktopPin.help)
                 }
                 Toggle("", isOn: Binding(get: { on }, set: { want in
-                    if foHere { if !want { fo.hide(); engine.objectWillChange.send() } }
+                    if foHere { if !want { fo.hide(); displayOutput.objectWillChange.send() } }
                     else { map.set(source: want ? source : nil, for: s) }
                 }))
                 .toggleStyle(.switch).labelsHidden().controlSize(.small)
@@ -283,17 +282,17 @@ struct DisplaySettingsPanel: View {
         let fo = FullscreenOutput.shared
         let custom = OutputWindows.windowOneName
         return row(icon: AnyView(WindowBadge(on: fo.showsWindow)),
-                   name: NameField(text: custom, placeholder: L("출력 창 1")) { OutputWindows.windowOneName = $0; engine.objectWillChange.send() },
+                   name: NameField(text: custom, placeholder: L("출력 창 1")) { OutputWindows.windowOneName = $0; displayOutput.objectWillChange.send() },
                    detail: (custom.isEmpty ? "" : L("출력 창 1") + " · ") + L("하단 Display 버튼")) {
             sourcePicker(fo.source) { fo.setSource($0, engine: engine) }
             Menu {
-                Toggle(L("항상 위에 표시"), isOn: Binding(get: { fo.alwaysOnTop }, set: { fo.alwaysOnTop = $0; engine.objectWillChange.send() }))
-                Toggle(L("16:9 비율 고정"), isOn: Binding(get: { fo.lockAspect }, set: { fo.lockAspect = $0; engine.objectWillChange.send() }))
+                Toggle(L("항상 위에 표시"), isOn: Binding(get: { fo.alwaysOnTop }, set: { fo.alwaysOnTop = $0; displayOutput.objectWillChange.send() }))
+                Toggle(L("16:9 비율 고정"), isOn: Binding(get: { fo.lockAspect }, set: { fo.lockAspect = $0; displayOutput.objectWillChange.send() }))
             } label: { Image(systemName: "ellipsis.circle") }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             Toggle("", isOn: Binding(get: { fo.showsWindow }, set: { want in
                 if want { fo.open(.window, engine: engine) } else { fo.hide() }
-                engine.objectWillChange.send()
+                displayOutput.objectWillChange.send()
             }))
             .toggleStyle(.switch).labelsHidden().controlSize(.small)
         }

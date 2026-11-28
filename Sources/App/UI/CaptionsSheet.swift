@@ -4,12 +4,12 @@ import UniformTypeIdentifiers
 
 /// Live captions control (bottom bar "CC").
 struct CaptionsButton: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ViewState private var show = false
 
     var body: some View {
         CaptionsButtonLabel(captions: engine.captions) { show = true }
-            .sheet(isPresented: $show) { CaptionsSheet(captions: engine.captions).environmentObject(engine) }
+            .sheet(isPresented: $show) { CaptionsSheet(captions: engine.captions).environment(engine) }
     }
 }
 
@@ -33,7 +33,7 @@ private struct CaptionsButtonLabel: View {
 }
 
 struct CaptionsSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var captions: CaptionEngine
 

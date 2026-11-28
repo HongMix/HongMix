@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 /// "Add Input" window: category list on the left, options on the right, OK / Cancel at the bottom.
 /// Also used to change the source of an existing input.
 struct InputEditorSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.dismiss) private var dismiss
 
     enum Category: String, CaseIterable, Identifiable {

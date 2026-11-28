@@ -3,7 +3,7 @@ import SwiftUI
 /// Rundown (cue sheet) window: the show's running order. NEXT runs the next step's actions
 /// (cuts, overlays, titles, audio, recording …) and times each step against its planned length.
 struct RundownView: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var rundown: Rundown
     @ViewState private var selected: UUID? = nil
 

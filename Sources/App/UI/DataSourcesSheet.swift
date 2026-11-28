@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 
 /// vMix-style Data Sources manager: Google Sheets / CSV → title fields, row selection, auto next.
 struct DataSourcesButton: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ViewState private var show = false
 
     var body: some View {
@@ -19,12 +19,12 @@ struct DataSourcesButton: View {
         }
         .buttonStyle(.plain)
         .help(L("데이터 소스 — Google Sheets/CSV를 자막에 연결"))
-        .sheet(isPresented: $show) { DataSourcesSheet(manager: engine.dataSources).environmentObject(engine) }
+        .sheet(isPresented: $show) { DataSourcesSheet(manager: engine.dataSources).environment(engine) }
     }
 }
 
 struct DataSourcesSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var manager: DataSourceManager
     @ViewState private var selected: UUID? = nil
@@ -118,7 +118,7 @@ private struct SourceRow: View {
 }
 
 private struct SourceDetail: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var source: DataSource
     @ObservedObject var manager: DataSourceManager
     @ViewState private var bindInput: UUID? = nil

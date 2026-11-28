@@ -233,7 +233,7 @@ final class ScopeAnalyzer: ObservableObject {
 
 /// Scopes window (Window id "scopes").
 struct ScopesView: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.openWindow) private var openWindow
     @StateObject private var scopes = ScopeAnalyzer()
     /// An extra window (the "+"): its own layout, so two cameras can show different scopes

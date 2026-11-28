@@ -465,7 +465,6 @@ struct InputConfig: Codable, Identifiable, Equatable {
         self.name = name
         collapsed = kind == .audio          // audio-only inputs start collapsed (no empty picture box)
         if kind == .pdfSlides { slides.transition = .cut }   // presentations: Cut by default
-        if kind == .videoCue { audioFollowsVideo = false }  // it often plays straight to a screen/bus, not via Program
     }
 
     private enum LegacyKeys: String, CodingKey { case busMaster }

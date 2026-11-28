@@ -60,7 +60,7 @@ private struct PlaylistMediaSpec: Sendable {
 
 /// Input Properties › Triggers (vMix Triggers): run functions on air / off air / at the end / at countdown 0.
 struct TriggersEditor: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var input: InputSource
 
     static let common = ["Fade", "Cut", "CutDirect", "PreviewInput", "OverlayInput1In", "OverlayInput1Out", "OverlayInput2In",
@@ -262,27 +262,27 @@ struct LUTSection: View {
 
 /// Audio tab: auto ducking.
 struct DuckingSection: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var input: InputSource
 
     var body: some View {
         Section(L("자동 더킹 (Ducking)")) {
             Toggle(L("이 입력이 말하면 다른 소리를 줄임 (진행자 마이크)"), isOn: $input.audioFX.duckTrigger)
             Toggle(L("다른 입력이 말할 때 이 입력을 줄임 (음악, 영상)"), isOn: $input.audioFX.ducked)
-            Toggle(L("더킹 사용 (전체)"), isOn: $engine.ducking.enabled)
+            Toggle(L("더킹 사용 (전체)"), isOn: Bindable(engine).ducking.enabled)
             HStack {
                 Text(L("줄이는 양"))
-                Slider(value: $engine.ducking.amountDB, in: -40...(-3))
+                Slider(value: Bindable(engine).ducking.amountDB, in: -40...(-3))
                 Text(String(format: "%.0f dB", engine.ducking.amountDB)).frame(width: 52).monospacedDigit()
             }
             HStack {
                 Text(L("감지 레벨"))
-                Slider(value: $engine.ducking.thresholdDB, in: -60...(-10))
+                Slider(value: Bindable(engine).ducking.thresholdDB, in: -60...(-10))
                 Text(String(format: "%.0f dB", engine.ducking.thresholdDB)).frame(width: 52).monospacedDigit()
             }
             HStack {
                 Text(L("복귀 시간"))
-                Slider(value: $engine.ducking.releaseMs, in: 100...3000)
+                Slider(value: Bindable(engine).ducking.releaseMs, in: 100...3000)
                 Text(String(format: "%.1f s", engine.ducking.releaseMs / 1000)).frame(width: 52).monospacedDigit()
             }
             Text(L("설정(양·레벨·시간)은 모든 입력에 공통입니다. 줄어드는 중에는 믹서 제목 옆에 DUCK 표시가 나옵니다."))
@@ -294,7 +294,7 @@ struct DuckingSection: View {
 
 /// Key tab: where this input's transparency comes from (built-in alpha / opaque / key from another input).
 struct AlphaKeySection: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var input: InputSource
 
     private var builtIn: String {

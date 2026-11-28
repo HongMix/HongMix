@@ -7,7 +7,7 @@ import AVFoundation
 /// Window "Video Cue": the cue list (drop files), GO / STOP / PANIC, what plays and what's next, and the
 /// selected cue's settings. Space = GO and Esc = STOP while this window is in front.
 struct VideoCueWindow: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var cue = VideoCueEngine.shared
     @ViewState private var editing: Int? = nil
 
@@ -294,7 +294,7 @@ private struct CueInspector: View {
                 ForEach(VideoCue.EndAction.allCases, id: \.self) { Text($0.label).tag($0) }
             }
             if playing {
-                Text(L("재생 중인 큐의 시작·끝·페이드 변경은 다음 GO부터 적용됩니다.")).font(.caption).foregroundColor(.secondary)
+                Text(L("재생 중인 큐의 시작·끝·페이드 변경은 다음 GO부터, 화면 설정은 바로 적용됩니다.")).font(.caption).foregroundColor(.secondary)
             }
             if c.kind != .audio {
                 Section(L("화면")) {
@@ -538,7 +538,7 @@ private struct CuePreview: View {
 /// Window › Outputs: every Video Cue input is an output. Name it, put it on a monitor, show a test card.
 /// The monitor goes through the same per-monitor outputs as Display ⚙ (DisplayMap).
 private struct CueOutputsPanel: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject private var map = DisplayMap.shared
     @ObservedObject private var cue = VideoCueEngine.shared
 
@@ -571,7 +571,7 @@ private struct CueOutputsPanel: View {
 
     private func row(_ o: InputSource) -> some View {
         HStack(spacing: 6) {
-            TextField("", text: Binding(get: { o.name }, set: { o.name = $0; engine.objectWillChange.send() }))
+            TextField("", text: Binding(get: { o.name }, set: { o.name = $0 }))
                 .textFieldStyle(.roundedBorder).frame(width: 120)
             Menu {
                 Button(L("화면 없음")) { put(o, on: nil) }

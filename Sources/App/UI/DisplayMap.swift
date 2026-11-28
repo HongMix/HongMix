@@ -177,7 +177,6 @@ final class DisplayMap: ObservableObject {
         // monitors showing the Talent Display: Backstage keeps drawing them if HongMix crashes
         BackstageLink.setScreens(windows.keys.filter { assignments[$0]?.source == .talent }.sorted())
         objectWillChange.send()
-        engine.objectWillChange.send()
     }
 
     private func open(_ a: Assignment, on screen: NSScreen, slot: Int, engine: SwitcherEngine) {

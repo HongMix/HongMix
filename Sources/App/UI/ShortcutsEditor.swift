@@ -3,7 +3,7 @@ import AppKit
 
 /// Settings → 단축키: vMix-style shortcut list. "키 입력" captures the next key press.
 struct ShortcutsEditor: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var manager = ShortcutManager.shared
     @ViewState private var recordingID: UUID? = nil
 

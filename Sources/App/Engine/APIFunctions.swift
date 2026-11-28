@@ -810,6 +810,40 @@ enum APIProcessor {
             let p = value.split(separator: ",", maxSplits: 1).map { String($0) }
             guard p.count == 2 else { return "Value=startup|display|general|topbar|banner|focusapproval|focusinfo,path" }
             return UISnapshots.render(p[0], to: (p[1] as NSString).expandingTildeInPath, engine: e)
+        case "showinputproperties":   // HongMix extension: Input=… Value=tab (0 General … 3 Position … 6 Layers)
+            guard let i = input else { return needInput() }
+            ContentView.apiShowProperties?(i, Int(value) ?? 0)
+        case "clickwindow", "dragwindow":
+            // HongMix test hook: Value=title|sheet,x,y[,x2,y2] — a click (or a drag to x2,y2) sent to that window
+            // from inside the app (points from the content's top-left). Never moves the real pointer.
+            let p = value.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+            guard p.count >= 3, let x = Double(p[1]), let y = Double(p[2]),
+                  let w = NSApp.windows.first(where: { $0.isVisible && (p[0] == "sheet" ? $0.isSheet : $0.title.localizedCaseInsensitiveContains(p[0])) }),
+                  let cv = w.contentView else { return "Value=title,x,y[,x2,y2]" }
+            func at(_ x: Double, _ y: Double) -> NSPoint { cv.convert(NSPoint(x: x, y: cv.isFlipped ? y : cv.bounds.height - y), to: nil) }
+            func ev(_ t: NSEvent.EventType, _ pt: NSPoint) -> NSEvent? {
+                NSEvent.mouseEvent(with: t, location: pt, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                   windowNumber: w.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
+            }
+            // a drag is posted to the app's event queue, so controls that track the mouse in their own loop (sliders)
+            // see the drag and the release as from a real mouse; a click goes straight to the window
+            let start = at(x, y)
+            var events: [NSEvent?] = [ev(.leftMouseDown, start)]
+            var end = start
+            if fn == "dragwindow", p.count >= 5, let x2 = Double(p[3]), let y2 = Double(p[4]) {
+                end = at(x2, y2)
+                for k in 1...10 {
+                    let f = Double(k) / 10
+                    events.append(ev(.leftMouseDragged, NSPoint(x: start.x + (end.x - start.x) * f, y: start.y + (end.y - start.y) * f)))
+                }
+            }
+            events.append(ev(.leftMouseUp, end))
+            if fn == "dragwindow" {
+                for e in events.compactMap({ $0 }) { NSApp.postEvent(e, atStart: false) }
+            } else {
+                for e in events.compactMap({ $0 }) { w.sendEvent(e) }
+            }
+            return nil
         case "snapshotwindow":   // HongMix extension: PNG of the main window (UI layout check)
             return snapshotWindow(value) ? nil : "Snapshot failed"
         case "resizewindow":     // HongMix extension: Value=width,height

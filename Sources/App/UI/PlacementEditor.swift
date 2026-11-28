@@ -70,10 +70,23 @@ struct NudgeField: NSViewRepresentable {
 
     func updateNSView(_ tf: NSTextField, context: Context) {
         context.coordinator.parent = self
+        let s = format(value)
         if tf.currentEditor() == nil {
-            let s = format(value)
             if tf.stringValue != s { tf.stringValue = s }
+        } else if let typed = parse(tf.stringValue), abs(typed - value) < pow(10, -Double(decimals)) / 2 {
+            // being typed in and it already says this value: leave the text (and the caret) alone
+        } else {
+            // focused (e.g. the first field of a sheet) but the value changed elsewhere — a ↺ reset, the
+            // slider, a drag on the preview: show it, or the field keeps the old number and the reset looks dead
+            tf.stringValue = s
+            tf.currentEditor()?.selectedRange = NSRange(location: (s as NSString).length, length: 0)
         }
+    }
+
+    func parse(_ text: String) -> Double? {
+        let t = text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: CharacterSet(charactersIn: " %°px"))
+        guard let v = Double(t), v.isFinite else { return nil }
+        return v
     }
 
     func format(_ v: Double) -> String { String(format: "%.\(decimals)f", v) }
@@ -169,7 +182,7 @@ struct StepperField: View {
 /// A grey margin around the picture keeps handles of boxes that stick out of the frame reachable.
 /// Arrow keys move the selection by 1 px (⇧ = 10 px); ⌘Z undoes.
 struct PlacementCanvas: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var input: InputSource
     @Binding var target: PlacementTarget
     /// true = the input's own picture with its layers (Layers tab); false = the input as placed in Program.
@@ -206,6 +219,9 @@ struct PlacementCanvas: View {
                 }
                 .coordinateSpace(name: "placement")
                 .clipped()
+                // clipped() only hides what sticks out; without this a box moved past the canvas edge (Pan X far
+                // left, a big zoom) still took the clicks over the form beside it — sliders and ↺ went dead
+                .contentShape(Rectangle())
             }
             .aspectRatio((1 + 2 * Self.margin) / (9.0 / 16 + 2 * Self.margin), contentMode: .fit)
             .focusable()

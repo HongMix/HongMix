@@ -980,14 +980,14 @@ final class PTZManager {
         guard engine !== e else { return }
         engine = e
         subs.removeAll()
-        e.$previewID
+        e.previewIDSubject
             .removeDuplicates()
             .sink { [weak self] id in
                 // @Published fires in willSet; act on the next run-loop turn when the switch is complete.
                 DispatchQueue.main.async { self?.previewChanged(id) }
             }
             .store(in: &subs)
-        e.$inputs
+        e.inputsSubject
             .sink { [weak self] list in
                 DispatchQueue.main.async {
                     guard let self else { return }

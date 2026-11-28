@@ -1043,9 +1043,9 @@ final class MIDIControl: ObservableObject {
         if st != noErr { status = Lf("MIDI를 시작할 수 없음 (%@)", String(st)) }
         refreshDevices()
 
-        // LED tally: program/preview/input-list changes, throttled; @Published fires in willSet, so the
+        // LED tally: program/preview/input-list changes, throttled; the subjects fire in didSet; still
         // frame is computed on the next main-queue turn when the new values are in place.
-        Publishers.Merge3(e.$programID.map { _ in () }, e.$previewID.map { _ in () }, e.$inputs.map { _ in () })
+        Publishers.Merge3(e.programIDSubject.map { _ in () }, e.previewIDSubject.map { _ in () }, e.inputsSubject.map { _ in () })
             .throttle(for: .milliseconds(40), scheduler: RunLoop.main, latest: true)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.router.updateLEDs() }

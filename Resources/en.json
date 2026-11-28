@@ -63,7 +63,7 @@
  "시작 지점을 여기로": "Start here",
  "끝 지점을 여기로": "End here",
  "이 큐 반복 재생 (끄면 마지막 화면 유지)": "Loop this cue (off = hold the last frame)",
- "큐가 없을 때 보이는 화면: 색, 이미지 또는 반복 영상": "What shows when no cue does: a colour, an image or a looping video",
+ "큐가 없을 때 보이는 화면: 색, 이미지 또는 반복 영상": "What shows when no cue does: a color, an image or a looping video",
  "배경 없음 (검은 화면)": "No background (black)",
  "이 큐를 보여줄 출력": "Show this cue on",
  "이전 큐 선택": "Select the previous cue",
@@ -80,7 +80,7 @@
  "페이드 인": "Fade in",
  "페이드 아웃": "Fade out",
  "끝나면": "At the end",
- "재생 중인 큐의 시작·끝·페이드 변경은 다음 GO부터 적용됩니다.": "Changes to start, end and fades of a playing cue apply from its next GO; the picture settings apply at once.",
+ "재생 중인 큐의 시작·끝·페이드 변경은 다음 GO부터, 화면 설정은 바로 적용됩니다.": "Changes to start, end and fades of a playing cue apply from its next GO; the picture settings apply at once.",
  "Talent Display 미리보기": "Talent Display preview",
  "디스플레이 출력 ⚙ 또는 모니터별 출력에서 'Talent Display'를 고르면 이 화면이 그 모니터에 나갑니다.": "Choose 'Talent Display' in Display output ⚙ or Monitor outputs to show this screen on that monitor.",
  "설정 › 네트워크가 '이 맥에서만'이라 다른 기기에서는 열리지 않습니다.": "Settings › Network is set to 'This Mac only', so other devices can't open it.",
@@ -2272,5 +2272,10 @@
  "배경에 금속 질감 (브러시드 메탈)": "Brushed-metal background",
  "입력 이름 포함": "With input name",
  "자동 이름: 'PREVIEW 카메라 이름' · 'OUTPUT' 또는 간단히 'PREVIEW' · 'PROGRAM'. 칸마다 직접 쓴 이름이 우선합니다": "Automatic names: 'PREVIEW camera name' · 'OUTPUT', or just 'PREVIEW' · 'PROGRAM'. A name typed for a cell always wins",
- "GPU를 많이 씁니다. 송출 프레임이 밀리면 자동으로 GPU 블렌딩으로 바꾸고, 클립 AI 작업도 잠시 멈춥니다. 방송 중 끊김이 보이면 꺼 두세요.": "Uses a lot of GPU. If program frames start to slip, HongMix switches to GPU blending and pauses AI clip rendering. Turn it off if you see stutter on air."
+ "GPU를 많이 씁니다. 송출 프레임이 밀리면 자동으로 GPU 블렌딩으로 바꾸고, 클립 AI 작업도 잠시 멈춥니다. 방송 중 끊김이 보이면 꺼 두세요.": "Uses a lot of GPU. If program frames start to slip, HongMix switches to GPU blending and pauses AI clip rendering. Turn it off if you see stutter on air.",
+ "나란히": "Side by side",
+ "4분할": "Quad",
+ "타일 버튼: 마우스를 올렸을 때만 (클릭하면 항상 보이기)": "Tile buttons: on hover only (click to always show them)",
+ "타일 버튼: 항상 보이기 (클릭하면 마우스를 올렸을 때만 — 화면이 덜 복잡해집니다)": "Tile buttons: always shown (click to show them on hover only, for a calmer screen)",
+ "타일 버튼은 마우스를 올렸을 때만": "Tile buttons on hover only"
 }

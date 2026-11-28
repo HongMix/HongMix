@@ -20,7 +20,7 @@ extension SwitcherEngine {
 /// and send one straight to a monitor.
 struct MultiViewEditor: View {
     @ObservedObject private var displayOutput = FullscreenOutput.shared   // display output state (not via engine refresh)
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var map = DisplayMap.shared
     @ViewState private var selected: UUID? = nil
 
@@ -237,7 +237,7 @@ struct LayoutThumb: View {
 
 /// The layout at full size; each cell is a menu to choose what it shows.
 private struct CellCanvas: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Binding var config: MultiViewConfig
     @ViewState private var editing: Int? = nil
 

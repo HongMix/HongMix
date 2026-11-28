@@ -5,7 +5,7 @@ import SwiftUI
 /// boxes in the preview to fine-tune (corner = resize).
 struct LayersEditor: View {
     @Environment(\.openWindow) private var openWindow
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var input: InputSource
     @ViewState private var gap: Double = 0.01
     @ViewState private var border: Double = 0

@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 /// Live input properties (changes apply immediately): position/crop, colour, audio, playback, recording.
 struct InputPropertiesSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var input: InputSource
     @ObservedObject private var transport: InputTransportState
@@ -217,10 +217,14 @@ struct InputPropertiesSheet: View {
                          range: Double(range.lowerBound) * k...Double(range.upperBound) * k, unit: percent ? "%" : "",
                          onEdit: { PlacementHistory.push(input, coalesce: true) })
             Button {
+                NSApp.keyWindow?.makeFirstResponder(nil)   // a number field being edited shows the reset value too
                 PlacementHistory.push(input)
                 value.wrappedValue = reset
             } label: {
+                // the whole 24×24 square clicks, not just the arrow's pixels (looks the same)
                 Image(systemName: "arrow.counterclockwise")
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
             .help(L("초기값"))
@@ -459,7 +463,7 @@ struct InputPropertiesSheet: View {
 
 /// Live title editor (GT): edit texts/colours/visibility, countdown, presets.
 struct TitleEditorSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var title: TitleInput
     @ViewState private var countdownText = "05:00"

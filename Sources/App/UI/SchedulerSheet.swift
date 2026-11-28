@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SchedulerButton: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ViewState private var show = false
 
     var body: some View {
@@ -20,12 +20,12 @@ struct SchedulerButton: View {
         }
         .buttonStyle(.plain)
         .help(L("스케줄러 — 정해진 시각/요일에 송출 시작·녹화·컷·오버레이 등 아무 기능이나 자동 실행"))
-        .sheet(isPresented: $show) { SchedulerSheet(scheduler: engine.scheduler).environmentObject(engine) }
+        .sheet(isPresented: $show) { SchedulerSheet(scheduler: engine.scheduler).environment(engine) }
     }
 }
 
 struct SchedulerSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var scheduler: Scheduler
     @ViewState private var selected: UUID? = nil

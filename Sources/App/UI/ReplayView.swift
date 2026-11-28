@@ -23,7 +23,7 @@ struct ReplayLive<Content: View>: View {
 }
 
 struct ReplayView: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var replay = ReplayEngine.shared
     @ViewState private var showSettings = false
     @ViewState private var message: String? = nil
@@ -51,7 +51,7 @@ struct ReplayView: View {
         .padding(12)
         .background(BrushedMetal(base: AppLook.hardware ? Theme.window : Color(white: 0.08)))
         .frame(minWidth: 1200, minHeight: 820)
-        .sheet(isPresented: $showSettings) { ReplaySettingsSheet().environmentObject(engine) }
+        .sheet(isPresented: $showSettings) { ReplaySettingsSheet().environment(engine) }
         .sheet(isPresented: Binding(get: { !exportEvents.isEmpty }, set: { if !$0 { exportEvents = [] } })) {
             ReplayExportSheet(events: exportEvents, fps: replay.frameRate)
         }
@@ -564,7 +564,7 @@ struct ReplayView: View {
 /// Input tile chip: which replay CAM (R1–R4) this input records as; click to assign.
 struct ReplaySlotChip: View {
     @ObservedObject var replay = ReplayEngine.shared
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     let input: InputSource
 
     var body: some View {
@@ -596,7 +596,7 @@ struct ReplaySlotChip: View {
 
 /// Replay settings: sources, recording format, slow motion, folder, disk limit.
 struct ReplaySettingsSheet: View {
-    @EnvironmentObject var engine: SwitcherEngine
+    @Environment(SwitcherEngine.self) var engine
     @ObservedObject var replay = ReplayEngine.shared
     @Environment(\.dismiss) private var dismiss
 
