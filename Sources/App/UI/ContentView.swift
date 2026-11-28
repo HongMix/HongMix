@@ -730,6 +730,8 @@ struct BottomBar: View {
                                 help: L("Talent Cue — 발표자 화면: 메시지 · 타이머 · 사회자 원격"))
             ToolBarWindowButton(title: "Video Cue", symbol: "play.rectangle.on.rectangle", windowID: "videocue",
                                 help: L("Video Cue — 큐 목록 재생: GO · STOP · 페이드"))
+            ToolBarWindowButton(title: "MultiLayouts", symbol: "rectangle.3.group", windowID: "multilayouts",
+                                help: L("MultiLayouts — 상자 8개 레이아웃 · 장면 · 애니메이션 (SuperSource)"))
             ToolBarWindowButton(title: "MultiView", symbol: "rectangle.split.3x3", windowID: "multiview",
                                 help: L("MultiView — 레이아웃 · 칸마다 화면 선택 · 여러 개 만들어 모니터에 보내기"))
             Button {

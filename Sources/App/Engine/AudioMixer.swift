@@ -612,7 +612,7 @@ final class AudioMixer: ObservableObject {
     private static func isLiveClocked(_ kind: InputKind) -> Bool {
         switch kind {
         case .camera, .stream, .ndi, .decklink, .screen, .browser, .audio: return true
-        case .media, .replay, .videoCue, .color, .image, .title, .photos, .pdfSlides, .virtualSet: return false
+        case .media, .replay, .videoCue, .color, .image, .title, .photos, .pdfSlides, .virtualSet, .multiLayout: return false
         }
     }
 

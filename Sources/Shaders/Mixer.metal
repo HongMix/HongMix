@@ -313,6 +313,7 @@ struct ComposeParams {
     float borderR, borderG, borderB;
     float bw, bh;         // drawn area (bounding box of the rotated rect), pixels
     float cosA, sinA;     // rotation, clockwise
+    float radius;         // rounded corners, px (0 = square)
 };
 
 
@@ -381,9 +382,19 @@ fragment float4 composeFragment(VOut in [[stage_in]],
     // 1 px soft edge (anti-aliased rotated edges); 1 everywhere inside an unrotated rect
     float edge = min(min(px.x, px.y), min(cp.w - px.x, cp.h - px.y));
     float cover = cp.sinA == 0.0 ? 1.0 : clamp(edge + 0.5, 0.0, 1.0);
+    // rounded corners (MultiLayout boxes): signed distance to the rounded rect, 1 px soft edge
+    float sd = -edge;
+    if (cp.radius > 0.0) {
+        float2 hs = float2(cp.w, cp.h) * 0.5;
+        float r = min(cp.radius, min(hs.x, hs.y));
+        float2 d = abs(px - hs) - (hs - r);
+        sd = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r;
+        cover = min(cover, clamp(0.5 - sd, 0.0, 1.0));
+    }
     if (cover <= 0.0) return float4(0.0);
     float op = clamp(L.mixAlpha, 0.0, 1.0) * cover;
-    if (cp.border > 0.0 && (px.x < cp.border || px.y < cp.border || px.x >= cp.w - cp.border || px.y >= cp.h - cp.border)) {
+    if (cp.border > 0.0 && (cp.radius > 0.0 ? sd > -cp.border :
+        (px.x < cp.border || px.y < cp.border || px.x >= cp.w - cp.border || px.y >= cp.h - cp.border))) {
         return float4(float3(cp.borderR, cp.borderG, cp.borderB) * op, op);
     }
     float2 uv = px / float2(cp.w, cp.h);

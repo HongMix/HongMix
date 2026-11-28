@@ -5,6 +5,7 @@ enum InputKind: String, Codable, CaseIterable {
     case camera, media, stream, ndi, decklink, color, image, title, screen, browser, audio, replay
     case photos, pdfSlides, virtualSet      // SlideInputs.swift
     case videoCue                           // VideoCue.swift
+    case multiLayout                        // MultiLayout.swift
 
     var label: String {
         switch self {
@@ -24,6 +25,7 @@ enum InputKind: String, Codable, CaseIterable {
         case .photos: return L("사진 (슬라이드쇼)")
         case .pdfSlides: return L("PDF 슬라이드")
         case .virtualSet: return L("가상 세트")
+        case .multiLayout: return "MultiLayout"
         }
     }
 
@@ -45,6 +47,7 @@ enum InputKind: String, Codable, CaseIterable {
         case .photos: return "photo.on.rectangle.angled"
         case .pdfSlides: return "doc.richtext"
         case .virtualSet: return "person.crop.rectangle"
+        case .multiLayout: return "rectangle.3.group"
         }
     }
 }
@@ -241,6 +244,8 @@ struct InputLayer: Codable, Equatable, Identifiable {
     var opacity: Float = 1
     /// degrees, clockwise, around the box centre
     var rotation: Double = 0
+    /// rounded corners, px at output size (MultiLayout boxes)
+    var radius: Double = 0
     /// locked layers can't be moved / resized / cropped in the editor
     var locked = false
     /// Saved by 2.1.7+: the cropped part fills the box (vMix). Older files hid the cropped part inside
@@ -264,6 +269,7 @@ struct InputLayer: Codable, Equatable, Identifiable {
         borderColor = c.value(.borderColor, "#FFFFFF")
         opacity = c.value(.opacity, Float(1))
         rotation = c.value(.rotation, 0)
+        radius = c.value(.radius, 0)
         locked = c.value(.locked, false)
         cropFills = true
         if !c.contains(.cropFills), cropL > 0 || cropT > 0 || cropR > 0 || cropB > 0 {
@@ -447,6 +453,8 @@ struct InputConfig: Codable, Identifiable, Equatable {
     var slides = SlideSettings()
     /// Virtual Set settings (SlideInputs.swift)
     var virtualSet = VirtualSetSettings()
+    /// MultiLayout boxes, scenes, background (MultiLayoutLogic.swift)
+    var multiLayout = MultiLayoutSettings()
     /// PTZ camera control (PTZ.swift); nil = not configured
     var ptz: PTZCameraConfig? = nil
     /// Virtual input (vMix Virtual Input, VirtualInput.swift): id of the input whose picture it shares; "" = normal input
@@ -528,6 +536,7 @@ struct InputConfig: Codable, Identifiable, Equatable {
         replayChannel = c.value(.replayChannel, d.replayChannel)
         slides = c.value(.slides, d.slides)
         virtualSet = c.value(.virtualSet, d.virtualSet)
+        multiLayout = c.value(.multiLayout, d.multiLayout)
         ptz = c.value(.ptz, d.ptz)
         virtualOf = c.value(.virtualOf, d.virtualOf)
         if let b: String = try? c.decodeIfPresent(String.self, forKey: .buses) {
@@ -864,7 +873,7 @@ class InputSource: ObservableObject, Identifiable {
         syncAudioParams()
         syncVideoParams()
         // rendered on demand → reported at the program rate (vMix shows these at the output frame rate)
-        video.followsProgramRate = [.color, .image, .title, .browser, .photos, .pdfSlides, .virtualSet].contains(config.kind)
+        video.followsProgramRate = [.color, .image, .title, .browser, .photos, .pdfSlides, .virtualSet, .multiLayout].contains(config.kind)
     }
 
     var busMaster: Bool {
@@ -989,6 +998,7 @@ class InputSource: ObservableObject, Identifiable {
         case .photos: return PhotosInput(config: config)
         case .pdfSlides: return PDFSlidesInput(config: config)
         case .virtualSet: return VirtualSetInput(config: config)
+        case .multiLayout: return MultiLayoutInput(config: config)
         }
     }
 }

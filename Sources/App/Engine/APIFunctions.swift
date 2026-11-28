@@ -92,6 +92,7 @@ enum APIProcessor {
         }
         if fn.hasPrefix("replay") { return ReplayEngine.shared.api(fn, value, q) }
         if fn.hasPrefix("videocue") { return VideoCueEngine.shared.api(fn, value) }
+        if fn.hasPrefix("multilayout") { return MultiLayoutInput.api(fn, value, input, e) }
 
         // --- Transitions by effect name: Fade, Merge, Wipe, Slide, Fly, CrossZoom, Zoom
         if let t = TransitionType.named(function), t != .dip {
@@ -1090,10 +1091,10 @@ enum APIProcessor {
     }
 
     /// AddInput Value="Type|Path", e.g. "Video|/Users/me/a.mp4", "Image|…", "Colour|#FF0000", "NDI|MACHINE (Src)",
-    /// "Stream|srt://…", "Title|LowerThird", "VideoCue"
+    /// "Stream|srt://…", "Title|LowerThird", "VideoCue", "MultiLayout"
     private static func addInput(_ value: String, _ e: SwitcherEngine) -> String? {
         var parts = value.split(separator: "|", maxSplits: 1).map(String.init)
-        if parts.count == 1, parts[0].lowercased() == "videocue" { parts.append("") }    // no path needed
+        if parts.count == 1, ["videocue", "multilayout"].contains(parts[0].lowercased()) { parts.append("") }    // no path needed
         guard parts.count == 2 else { return "Value=Type|Path" }
         let type = parts[0].lowercased(), arg = parts[1]
         var c: InputConfig
@@ -1108,6 +1109,9 @@ enum APIProcessor {
         case "pdf", "slides", "powerpoint":    // PDF Slides (vMix PowerPoint): a PDF, or a PowerPoint / Keynote deck (2.3.3)
             c = InputConfig(kind: .pdfSlides, name: ((arg as NSString).lastPathComponent as NSString).deletingPathExtension)
             c.slides.path = arg
+        case "multilayout":                    // Value=MultiLayout|name (boxes and scenes: MultiLayouts window / MultiLayout… functions)
+            c = InputConfig(kind: .multiLayout, name: arg.isEmpty ? "MultiLayout" : arg)
+            c.multiLayout = MultiLayoutSettings.starter
         case "virtualset":                     // Value=VirtualSet|background picture (presenter: VirtualSetPresenter)
             c = InputConfig(kind: .virtualSet, name: arg.isEmpty ? "Virtual Set" : ((arg as NSString).lastPathComponent as NSString).deletingPathExtension)
             c.virtualSet.backgroundPath = arg
@@ -1229,6 +1233,7 @@ enum APIProcessor {
         case .photos: return "Photos"
         case .pdfSlides: return "PowerPoint"
         case .virtualSet: return "VirtualSet"
+        case .multiLayout: return "MultiLayout"
         }
     }
 

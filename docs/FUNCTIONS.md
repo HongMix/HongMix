@@ -86,7 +86,7 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `SetRate / SetRateSlowMotion` | Input, Value=0.05~4 | 재생 속도를 바꿉니다. 1이 아니면 오디오는 음소거됩니다. |
 | `MarkIn / MarkOut / MarkReset / MarkResetIn / MarkResetOut` | Input | 현재 위치를 구간 시작·끝으로 지정하거나 해제합니다. 반복 재생은 이 구간 안에서 돕니다. |
 | `AutoPlayOn/Off, AutoPauseOn/Off, AutoRestartOn/Off` | Input | Output에 들어가거나 빠질 때의 자동 동작을 정합니다. |
-| `AddInput` | Value=Type|경로 | 입력을 추가합니다. Type은 Video, Image, Colour, NDI, Stream, Title, Browser, DesktopCapture, Audio, VideoCue 중 하나입니다 (예: Title|lowerThird, Browser|https://…). |
+| `AddInput` | Value=Type|경로 | 입력을 추가합니다. Type은 Video, Image, Colour, NDI, Stream, Title, Browser, DesktopCapture, Audio, VideoCue, MultiLayout 중 하나입니다 (예: Title|lowerThird, Browser|https://…). |
 | `CreateVirtualInput` | Input | 원본을 다시 디코딩하지 않고 위치·자르기·레이어가 독립된 가상 입력을 만듭니다. 오디오 전용 입력에는 사용할 수 없습니다. 원격 제어가 꺼져 있으면 API 자체가 열리지 않습니다. |
 | `RemoveInput / MoveInput / SetInputName` | Input [Value] | 입력을 삭제하거나, 순서를 옮기거나, 이름을 바꿉니다. |
 | `SetZoom / SetZoomX / SetZoomY / SetPanX / SetPanY` | Input, Value | 위치와 줌을 바꿉니다. 줌은 0.01~5, 팬은 -2~2입니다. `SetZoom`은 X/Y를 다시 비례 줌으로 맞춥니다. |
@@ -109,6 +109,17 @@ HongMix는 HTTP(`http://<IP>:8088/api/?Function=이름&Input=…&Value=…`)와 
 | `NDISelectSourceByName / NDISelectSourceByIndex` | Input, Value | NDI 입력의 소스를 바꿉니다. |
 | `BackgroundRemovalOn / BackgroundRemovalOff / BackgroundRemovalOnOff` | Input | AI 배경 제거를 켜고 끕니다. |
 | `SetBackgroundRemoval` | Input, Value=transparent\|blur\|image[,fast\|balanced\|accurate] | 배경과 처리 품질을 설정합니다. |
+
+## MultiLayout (SuperSource)
+
+Input을 생략하면 Program의 MultiLayout, 없으면 Preview, 없으면 첫 번째 MultiLayout을 씁니다.
+
+| 함수 | 파라미터 | 동작 |
+|---|---|---|
+| `MultiLayoutScene` | Input, Value=장면 번호(1부터) 또는 이름 | 장면으로 바꿉니다. 상자들이 그 장면의 시간과 방식으로 움직입니다. |
+| `MultiLayoutNext / MultiLayoutPrevious` | Input | 다음·이전 장면으로 바꿉니다. |
+| `MultiLayoutBoxInput` | Input, Value=상자(1~8),입력 | 상자의 입력을 바꿉니다 (크로스페이드). 입력이 비었거나 0이면 비웁니다. |
+| `MultiLayoutBoxOn / MultiLayoutBoxOff` | Input, Value=상자(1~8) | 지금 장면에서 상자를 애니메이션으로 보이거나 숨깁니다. |
 
 ## 리플레이·자막
 

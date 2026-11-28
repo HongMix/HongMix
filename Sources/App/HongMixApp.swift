@@ -124,6 +124,13 @@ struct HongMixApp: App {
                 .preferredColorScheme(.dark)
         }
         .defaultSize(width: 1100, height: 700)
+        Window("MultiLayouts", id: "multilayouts") {
+            MultiLayoutWindow()
+                .id(language + skin + look)
+                .environmentObject(engine)
+                .preferredColorScheme(.dark)
+        }
+        .defaultSize(width: 1400, height: 820)
         Window("MultiView", id: "multiview") {
             MultiViewEditor()
                 .id(language + skin + look)
