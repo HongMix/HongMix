@@ -91,6 +91,7 @@ enum APIProcessor {
             return nil
         }
         if fn.hasPrefix("replay") { return ReplayEngine.shared.api(fn, value, q) }
+        if fn.hasPrefix("videocue") { return VideoCueEngine.shared.api(fn, value) }
 
         // --- Transitions by effect name: Fade, Merge, Wipe, Slide, Fly, CrossZoom, Zoom
         if let t = TransitionType.named(function), t != .dip {
@@ -1089,9 +1090,10 @@ enum APIProcessor {
     }
 
     /// AddInput Value="Type|Path", e.g. "Video|/Users/me/a.mp4", "Image|…", "Colour|#FF0000", "NDI|MACHINE (Src)",
-    /// "Stream|srt://…", "Title|LowerThird"
+    /// "Stream|srt://…", "Title|LowerThird", "VideoCue"
     private static func addInput(_ value: String, _ e: SwitcherEngine) -> String? {
-        let parts = value.split(separator: "|", maxSplits: 1).map(String.init)
+        var parts = value.split(separator: "|", maxSplits: 1).map(String.init)
+        if parts.count == 1, parts[0].lowercased() == "videocue" { parts.append("") }    // no path needed
         guard parts.count == 2 else { return "Value=Type|Path" }
         let type = parts[0].lowercased(), arg = parts[1]
         var c: InputConfig
@@ -1109,6 +1111,8 @@ enum APIProcessor {
         case "virtualset":                     // Value=VirtualSet|background picture (presenter: VirtualSetPresenter)
             c = InputConfig(kind: .virtualSet, name: arg.isEmpty ? "Virtual Set" : ((arg as NSString).lastPathComponent as NSString).deletingPathExtension)
             c.virtualSet.backgroundPath = arg
+        case "videocue":                       // Value=VideoCue| (the cue list is in the Video Cue window / VideoCueAdd)
+            c = InputConfig(kind: .videoCue, name: "Video Cue")
         case "image", "photos":
             c = InputConfig(kind: .image, name: (arg as NSString).lastPathComponent)
             c.imagePath = arg
@@ -1221,6 +1225,7 @@ enum APIProcessor {
         case .browser: return "Browser"
         case .audio: return "Audio"
         case .replay: return "Replay"
+        case .videoCue: return "VideoCue"
         case .photos: return "Photos"
         case .pdfSlides: return "PowerPoint"
         case .virtualSet: return "VirtualSet"

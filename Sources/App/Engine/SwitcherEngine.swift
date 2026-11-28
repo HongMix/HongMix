@@ -1824,6 +1824,12 @@ final class SwitcherEngine: ObservableObject {
             jobs.removeAll()
         }
         for i in ins {
+            if i is VideoCueInput {              // [Video Cue] its two decks, each at its fade level
+                let parts = VideoCueEngine.shared.layers(width: W, height: H, output: i.id)
+                if let k = i.composeKey, i.composed != nil, k.count == parts.count, zip(k, parts).allSatisfy({ $0.same(as: $1) }) { continue }
+                jobs.append((i, parts))
+                continue
+            }
             let ls = i.layersSnapshot.filter { $0.visible && $0.inputID != nil }
             // nested layers: an input waiting in this batch is used as a layer here — compose it first so
             // this frame shows its new composition (not last frame's)
@@ -2124,6 +2130,8 @@ final class SwitcherEngine: ObservableObject {
         audioAccumulator -= frames * fmt.fpsNum
         tickMarks.append(("tally", CACurrentMediaTime()))
         let replayAudioIDs = ReplayEngine.shared.sourceAudioIDs
+        let cueRings = ins.compactMap { i in (i as? VideoCueInput).map { (output: $0.id, ring: $0.audio) } }
+        VideoCueEngine.shared.pumpAudio(into: cueRings, frames: frames)   // also with no output: the decks never back up
         let n = audioMixer.mix(inputs: ins, weights: weights, frames: frames, isoIDs: Set(isos.keys).union(replayAudioIDs))
         tickMarks.append(("audio", CACurrentMediaTime()))
         captions.feed(UnsafePointer(audioMixer.bus(captions.feedBus)), frames: n)
@@ -2345,6 +2353,7 @@ final class SwitcherEngine: ObservableObject {
         p.busSettings = busSettings
         p.ducking = ducking
         p.replay = ReplayEngine.shared.settings
+        p.videoCue = VideoCueEngine.shared.list
         p.busSources = busSources
         p.multiViews = multiViews
         p.stingers = stingers
@@ -2378,6 +2387,7 @@ final class SwitcherEngine: ObservableObject {
         if let b = project.busSettings, b.count == AudioMixer.busCount { busSettings = b }
         ducking = project.ducking ?? DuckSettings()
         if let r = project.replay { ReplayEngine.shared.settings = r }
+        VideoCueEngine.shared.load(project.videoCue ?? VideoCueList())
         masterVolume = project.masterVolume ?? masterVolume
         if let s = project.stingers, let first = s.first { stingers = [first] }
         else { stingers = [StingerConfig()] }
@@ -2446,6 +2456,7 @@ struct ProjectFile: Codable {
     var rundown: [RundownItem]? = nil
     var ducking: DuckSettings? = nil
     var replay: ReplaySettings? = nil
+    var videoCue: VideoCueList? = nil
 
     static var autosaveURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!

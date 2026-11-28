@@ -728,6 +728,8 @@ struct BottomBar: View {
                                 help: L("PTZ 컨트롤 — 1~9 카메라 · WASD 이동 · Q/E 줌 · Z/X 포커스"))
             ToolBarWindowButton(title: "Talent Cue", symbol: "timer", windowID: "talentcue",
                                 help: L("Talent Cue — 발표자 화면: 메시지 · 타이머 · 사회자 원격"))
+            ToolBarWindowButton(title: "Video Cue", symbol: "play.rectangle.on.rectangle", windowID: "videocue",
+                                help: L("Video Cue — 큐 목록 재생: GO · STOP · 페이드"))
             ToolBarWindowButton(title: "MultiView", symbol: "rectangle.split.3x3", windowID: "multiview",
                                 help: L("MultiView — 레이아웃 · 칸마다 화면 선택 · 여러 개 만들어 모니터에 보내기"))
             Button {
